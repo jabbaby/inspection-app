@@ -18,3 +18,5 @@ Format: `YYYY-MM-DD | decision | why | changed in SPEC section`
 2026-10-01 | POC hosted on GitHub Pages from David's personal GitHub account; local git with GitHub remote | free HTTPS hosting, no company host yet; site is public but holds no user data | 15
 2026-10-01 | Synthetic data only until IT approves hosting; revisit before real project material or wider sharing | public link, personal account | 15
 2026-10-01 | Figtree self-hosted under SIL OFL | free licence, works offline | 15
+2026-10-01 | Hash routing (/#/settings) instead of path routing | GitHub Pages has no SPA fallback; every route is served by the one precached index.html | n/a
+2026-10-01 | Automated offline test runs in Chromium at iPad viewport; other e2e tests in WebKit | Playwright's WebKit cannot reload offline through a service worker; real iPad offline check stays in the manual test plan | n/a
