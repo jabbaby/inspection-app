@@ -3,6 +3,7 @@ import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
+import { pdfjsAssets } from "./pdfjs-assets.plugin.ts";
 import { northrop } from "./src/brand/northrop.ts";
 
 const pkg = JSON.parse(readFileSync("./package.json", "utf8")) as {
@@ -32,6 +33,7 @@ export default defineConfig({
   },
   plugins: [
     react(),
+    pdfjsAssets(),
     VitePWA({
       strategies: "generateSW",
       // Never reload on its own: an update could interrupt an inspection.
@@ -62,8 +64,11 @@ export default defineConfig({
       },
       workbox: {
         // Precache everything the app needs, including fonts, so it runs
-        // with no network at all. TTFs are the fonts embedded in exported PDFs.
-        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2,woff,ttf,json}"],
+        // with no network at all. TTFs are the fonts embedded in exported PDFs;
+        // mjs/bcmap/pfb/wasm/icc are the pdf.js worker and its runtime data.
+        globPatterns: [
+          "**/*.{js,mjs,css,html,ico,png,svg,woff2,woff,ttf,json,bcmap,pfb,wasm,icc}",
+        ],
         navigateFallback: "index.html",
         cleanupOutdatedCaches: true,
       },
