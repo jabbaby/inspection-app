@@ -13,7 +13,8 @@
     "format:check": "prettier --check .",
     "icons:build": "pwa-assets-generator",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "snippets:build": "node scripts/build-snippets.ts"
   },
   "dependencies": {
     "@fontsource/figtree": "^5.3.0",

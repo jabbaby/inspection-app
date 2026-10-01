@@ -1,0 +1,50 @@
+[
+  {
+    "id": "body-works-generally-in-accordance",
+    "kind": "body",
+    "label": "Works generally in accordance",
+    "text": "At the time of the inspection the works were generally in accordance with the structural design except for the items noted in the attachment."
+  },
+  {
+    "id": "body-works-in-accordance",
+    "kind": "body",
+    "label": "Works in accordance",
+    "text": "At the time of the inspection the works were generally in accordance with the structural design."
+  },
+  {
+    "id": "body-not-in-accordance-re-inspection",
+    "kind": "body",
+    "label": "Not in accordance – re-inspection",
+    "text": "At the time of the inspection the works were not in accordance with the structural design. The hold point is not released. Rectify the items noted in the attachment and arrange a re-inspection prior to proceeding."
+  },
+  {
+    "id": "body-not-in-accordance-photo-confirmation",
+    "kind": "body",
+    "label": "Not in accordance – photo confirmation",
+    "text": "At the time of the inspection the works were not in accordance with the structural design. The hold point is not released. Rectify the items noted in the attachment and provide photos confirming completion prior to proceeding."
+  },
+  {
+    "id": "condition-complete-listed-items",
+    "kind": "condition",
+    "label": "Complete listed items",
+    "text": "Complete items [letters] listed below."
+  },
+  {
+    "id": "condition-photo-confirmation",
+    "kind": "condition",
+    "label": "Photo confirmation",
+    "text": "Confirm completion of items via photos prior to proceeding."
+  },
+  {
+    "id": "heading-noted-for-information",
+    "kind": "heading",
+    "label": "Noted for information",
+    "text": "Noted for information:"
+  },
+  {
+    "id": "heading-noted-for-information-long",
+    "kind": "heading",
+    "label": "Noted for information (long)",
+    "text": "The following items are noted for information only and do not form conditions of this instruction:"
+  }
+]
