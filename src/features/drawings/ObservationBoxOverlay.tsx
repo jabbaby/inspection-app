@@ -6,7 +6,7 @@ import { useViewerCoords } from "./viewer/viewerCoords";
 
 interface Props {
   box: ObservationBox;
-  /** From boxLines(): header, then instruction and observation sections. */
+  /** From boxLines(): header, then observation and instruction sections. */
   lines: BoxLine[];
   onMoveEnd: (to: Point) => void;
 }

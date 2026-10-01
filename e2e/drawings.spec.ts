@@ -194,7 +194,7 @@ test("the notes box lists instructions, then observations", async ({
   const obsBox = page.getByTestId("observation-box");
   await expect(obsBox).toContainText(HEADER);
   await expect(obsBox).toContainText(
-    "INSTRUCTIONS:A. ADD BARNOTED FOR INFORMATION:B. EXISTING CRACK NOTED AT GRID 4",
+    "NOTED FOR INFORMATION:B. EXISTING CRACK NOTED AT GRID 4INSTRUCTIONS:A. ADD BAR",
   );
 
   await sheet(page).getByRole("button", { name: "Instruction" }).click();

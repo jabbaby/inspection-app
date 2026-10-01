@@ -627,6 +627,7 @@ button.danger-outline {
 }
 
 .observation-box-header {
+  color: var(--markup-header);
   font-weight: 700;
 }
 

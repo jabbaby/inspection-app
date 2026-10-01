@@ -9,5 +9,6 @@ export function applyBrandTokens(root: HTMLElement = document.documentElement) {
   root.style.setProperty("--brand-grey", colours.grey);
   root.style.setProperty("--brand-font", `"${font.family}"`);
   root.style.setProperty("--markup-blue", markup.blue);
+  root.style.setProperty("--markup-header", markup.header);
   root.style.setProperty("--notes-font", `"${markup.notesFont}"`);
 }

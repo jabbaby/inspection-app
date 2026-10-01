@@ -105,16 +105,16 @@ export interface BoxLine {
   text: string;
   style: "header" | "heading" | "item";
   /**
-   * Colour group: instruction lines match the red instruction pins; the
-   * header and observation lines use markup blue.
+   * Colour group: the header is black (markup.header); instruction lines
+   * match the red instruction pins; observation lines use markup blue.
    */
-  tone: "instruction" | "observation";
+  tone: "header" | "instruction" | "observation";
 }
 
 /**
- * Everything the box shows, top to bottom, in capitals: the header, then
- * instructions (if any, in red), then observations (if any, in blue). The viewer and the PDF
- * export both draw these lines, so they always match.
+ * Everything the box shows, top to bottom, in capitals: the header (black),
+ * then observations (if any, in blue), then instructions (if any, in red).
+ * The viewer and the PDF export both draw these lines, so they always match.
  */
 export function boxLines(options: {
   header: string;
@@ -122,7 +122,7 @@ export function boxLines(options: {
   items: Item[];
 }): BoxLine[] {
   const lines: BoxLine[] = [
-    { text: options.header, style: "header", tone: "observation" },
+    { text: options.header, style: "header", tone: "header" },
   ];
   const section = (heading: string, items: string[], tone: BoxLine["tone"]) => {
     if (items.length === 0) return;
@@ -130,14 +130,14 @@ export function boxLines(options: {
     for (const text of items) lines.push({ text, style: "item", tone });
   };
   section(
-    INSTRUCTIONS_HEADING,
-    itemLines(options.items, "instruction"),
-    "instruction",
-  );
-  section(
     options.observationHeading,
     itemLines(options.items, "observation"),
     "observation",
+  );
+  section(
+    INSTRUCTIONS_HEADING,
+    itemLines(options.items, "instruction"),
+    "instruction",
   );
   return lines.map((line) => ({ ...line, text: line.text.toUpperCase() }));
 }

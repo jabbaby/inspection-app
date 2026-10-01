@@ -82,7 +82,7 @@ describe("boxLines", () => {
   const item = (letter: string, kind: Item["kind"], text: string) =>
     ({ letter, kind, text }) as Item;
 
-  test("header, then instructions, then observations, all in capitals", () => {
+  test("header, then observations, then instructions, all in capitals", () => {
     expect(
       boxLines({
         header: "NORTHROP INSPECTION | Level 3 slab | T. Engineer | 01/10/2026",
@@ -96,8 +96,14 @@ describe("boxLines", () => {
     ).toEqual([
       {
         style: "header",
-        tone: "observation",
+        tone: "header",
         text: "NORTHROP INSPECTION | LEVEL 3 SLAB | T. ENGINEER | 01/10/2026",
+      },
+      { style: "heading", tone: "observation", text: "NOTED FOR INFORMATION:" },
+      {
+        style: "item",
+        tone: "observation",
+        text: "B. EXISTING CRACK NOTED AT GRID 4",
       },
       { style: "heading", tone: "instruction", text: "INSTRUCTIONS:" },
       {
@@ -109,12 +115,6 @@ describe("boxLines", () => {
         style: "item",
         tone: "instruction",
         text: "C. PROP SPACING PER SHOP DRAWING",
-      },
-      { style: "heading", tone: "observation", text: "NOTED FOR INFORMATION:" },
-      {
-        style: "item",
-        tone: "observation",
-        text: "B. EXISTING CRACK NOTED AT GRID 4",
       },
     ]);
   });
