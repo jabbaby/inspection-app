@@ -2,6 +2,8 @@ import react from "@vitejs/plugin-react";
 import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { defineConfig } from "vite";
+import { VitePWA } from "vite-plugin-pwa";
+import { northrop } from "./src/brand/northrop.ts";
 
 const pkg = JSON.parse(readFileSync("./package.json", "utf8")) as {
   version: string;
@@ -16,11 +18,48 @@ function gitCommit(): string {
 }
 
 export default defineConfig({
-  // GitHub Pages serves the app from /inspection-app/.
+  // GitHub Pages serves the app from /inspection-app/. The manifest and
+  // service worker scope are derived from this, so keep them relative.
   base: "/inspection-app/",
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
     __APP_COMMIT__: JSON.stringify(gitCommit()),
   },
-  plugins: [react()],
+  plugins: [
+    react(),
+    VitePWA({
+      strategies: "generateSW",
+      // Never reload on its own: an update could interrupt an inspection.
+      registerType: "prompt",
+      manifest: {
+        name: "Site Inspection Companion",
+        short_name: "Inspections",
+        description: "Offline site inspection and Site Instruction Memo tool",
+        start_url: ".",
+        scope: ".",
+        display: "standalone",
+        orientation: "any",
+        theme_color: northrop.colours.red,
+        background_color: northrop.colours.cream,
+        icons: [
+          { src: "pwa-64x64.png", sizes: "64x64", type: "image/png" },
+          { src: "pwa-192x192.png", sizes: "192x192", type: "image/png" },
+          { src: "pwa-512x512.png", sizes: "512x512", type: "image/png" },
+          {
+            src: "maskable-icon-512x512.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "maskable",
+          },
+        ],
+      },
+      workbox: {
+        // Precache everything the app needs, including fonts, so it runs
+        // with no network at all.
+        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2,woff,json}"],
+        navigateFallback: "index.html",
+        cleanupOutdatedCaches: true,
+      },
+    }),
+  ],
 });

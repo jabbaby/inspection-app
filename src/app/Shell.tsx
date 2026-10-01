@@ -1,4 +1,5 @@
 import { NavLink, Outlet } from "react-router";
+import { UpdatePrompt } from "./UpdatePrompt";
 import { useOnlineStatus } from "./useOnlineStatus";
 
 export function Shell() {
@@ -22,6 +23,7 @@ export function Shell() {
           {online ? "Online" : "Offline"}
         </span>
       </header>
+      <UpdatePrompt />
       <main className="shell-main">
         <Outlet />
       </main>

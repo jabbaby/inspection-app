@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Placeholder app icon (red/cream map pin). Replaced with brand assets in Spike A. -->
+  <rect width="512" height="512" fill="#DA1A32"/>
+  <path d="M256 104c-62 0-112 50-112 112 0 84 112 192 112 192s112-108 112-192c0-62-50-112-112-112z" fill="#FFF2DF"/>
+  <circle cx="256" cy="216" r="44" fill="#DA1A32"/>
+</svg>
