@@ -1,4 +1,5 @@
 import "fake-indexeddb/auto";
+import { Dexie } from "dexie";
 import { afterEach, describe, expect, test } from "vitest";
 import { InspectionDb, SCHEMA_VERSION } from "./schema";
 
@@ -26,7 +27,7 @@ describe("InspectionDb", () => {
       "settings",
       "snippets",
     ]);
-    expect(SCHEMA_VERSION).toBe(1);
+    expect(SCHEMA_VERSION).toBe(2);
   });
 
   test("finds an item by inspection and letter", async () => {
@@ -51,5 +52,34 @@ describe("InspectionDb", () => {
       .equals(["insp-1", "A"])
       .first();
     expect(item?.id).toBe("item-1");
+  });
+});
+
+describe("upgrade from v1", () => {
+  test("adds itemInspected and continues letters after the highest one", async () => {
+    const name = `test-${crypto.randomUUID()}`;
+    const v1 = new Dexie(name);
+    v1.version(1).stores({
+      inspections: "id, jobNumber, updatedAt",
+      items: "id, inspectionId, [inspectionId+letter], drawingId",
+    });
+    await v1.table("inspections").bulkAdd([
+      { id: "with-items", jobNumber: "SY1", jobName: "Tower" },
+      { id: "empty", jobNumber: "SY2", jobName: "Shed" },
+    ]);
+    await v1.table("items").bulkAdd([
+      { id: "i1", inspectionId: "with-items", letter: "A" },
+      { id: "i2", inspectionId: "with-items", letter: "AB" },
+      { id: "i3", inspectionId: "with-items", letter: "C" },
+    ]);
+    v1.close();
+
+    db = new InspectionDb(name);
+    const withItems = await db.inspections.get("with-items");
+    const empty = await db.inspections.get("empty");
+    expect(withItems?.itemInspected).toBe("");
+    expect(withItems?.nextLetterIndex).toBe(28); // after "AB" (27)
+    expect(empty?.nextLetterIndex).toBe(0);
+    expect(withItems?.jobName).toBe("Tower");
   });
 });

@@ -3,6 +3,7 @@ import type { HTMLAttributes } from "react";
 export interface JobDetailsValues {
   jobNumber: string;
   jobName: string;
+  itemInspected: string;
   clientName: string;
   clientCompany: string;
   address1: string;
@@ -16,12 +17,18 @@ type Field = {
   label: string;
   type?: "text" | "date";
   autoCapitalize?: HTMLAttributes<HTMLInputElement>["autoCapitalize"];
-  hint?: string;
+  placeholder?: string;
 };
 
 const FIELDS: Field[] = [
   { key: "jobNumber", label: "Job number", autoCapitalize: "characters" },
   { key: "jobName", label: "Job name", autoCapitalize: "words" },
+  {
+    key: "itemInspected",
+    label: "Item inspected",
+    autoCapitalize: "sentences",
+    placeholder: "e.g. Level 3 slab reinforcement",
+  },
   { key: "clientName", label: "Client name", autoCapitalize: "words" },
   { key: "clientCompany", label: "Client company", autoCapitalize: "words" },
   { key: "address1", label: "Address line 1", autoCapitalize: "words" },
@@ -52,6 +59,7 @@ export function JobDetailsForm({ values, onChange, onBlur }: Props) {
             type={field.type ?? "text"}
             value={values[field.key]}
             autoCapitalize={field.autoCapitalize}
+            placeholder={field.placeholder}
             autoComplete="off"
             autoCorrect="off"
             spellCheck={false}

@@ -6,6 +6,7 @@ import { SETTINGS_ID, type Client, type Inspection } from "./types";
 export interface InspectionPatch {
   jobNumber?: string;
   jobName?: string;
+  itemInspected?: string;
   date?: string;
   inspector?: string;
   client?: Partial<Client>;
@@ -31,10 +32,12 @@ export async function createInspection(
     id: crypto.randomUUID(),
     jobNumber: "",
     jobName: "",
+    itemInspected: "",
     client: emptyClient(),
     date: todayIso(now),
     inspector: settings?.inspectorName ?? "",
     status: "draft",
+    nextLetterIndex: 0,
     createdAt: now.getTime(),
     updatedAt: now.getTime(),
   };

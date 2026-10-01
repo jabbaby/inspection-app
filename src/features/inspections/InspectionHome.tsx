@@ -17,6 +17,7 @@ function toValues(i: Inspection): JobDetailsValues {
   return {
     jobNumber: i.jobNumber,
     jobName: i.jobName,
+    itemInspected: i.itemInspected,
     clientName: i.client.name,
     clientCompany: i.client.company,
     address1: i.client.address1,

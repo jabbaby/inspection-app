@@ -14,6 +14,7 @@ async function newInspection(page: Page) {
 async function fillJob(page: Page) {
   await field(page, "Job number").fill("SY000001");
   await field(page, "Job name").fill("Example Apartments");
+  await field(page, "Item inspected").fill("Level 3 slab reinforcement");
   await field(page, "Client name").fill("Alex Example");
   await field(page, "Client company").fill("Example Builders Pty Ltd");
   await field(page, "Address line 1").fill("1 Sample Street");
@@ -47,6 +48,9 @@ test("creates an inspection, autosaves every field and keeps it after reload", a
   );
   await expect(field(page, "Address line 2")).toHaveValue(
     "Exampleville NSW 2000",
+  );
+  await expect(field(page, "Item inspected")).toHaveValue(
+    "Level 3 slab reinforcement",
   );
 
   await page.getByRole("link", { name: "‹ Inspections" }).click();

@@ -1,4 +1,5 @@
 import { Dexie, type EntityTable } from "dexie";
+import { indexForLetter } from "../features/items/letters";
 import type {
   Drawing,
   Inspection,
@@ -17,7 +18,7 @@ import type {
  * Version of the inspection data format. The inspection file (SPEC section 9)
  * writes this as `schemaVersion`; bump it when stored records change shape.
  */
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export const DB_NAME = "inspection-app";
 
@@ -53,6 +54,25 @@ export class InspectionDb extends Dexie {
       snippets: "id, kind",
       settings: "id",
       observationBoxes: "id, [drawingId+page]",
+    });
+    // v2: inspections gain itemInspected and the letter counter. Existing
+    // inspections continue after their highest letter so none is reused.
+    this.version(2).upgrade(async (tx) => {
+      const highest = new Map<string, number>();
+      await tx.table<Item>("items").each((item) => {
+        const index = indexForLetter(item.letter);
+        highest.set(
+          item.inspectionId,
+          Math.max(highest.get(item.inspectionId) ?? -1, index),
+        );
+      });
+      await tx
+        .table<Inspection>("inspections")
+        .toCollection()
+        .modify((inspection) => {
+          inspection.itemInspected ??= "";
+          inspection.nextLetterIndex ??= (highest.get(inspection.id) ?? -1) + 1;
+        });
     });
   }
 }

@@ -14,12 +14,16 @@ export interface Inspection {
   id: string;
   jobNumber: string;
   jobName: string;
+  /** e.g. "Level 3 slab reinforcement". Prefills the memo and heads the observations box. */
+  itemInspected: string;
   client: Client;
   /** ISO date (YYYY-MM-DD). */
   date: string;
   inspector: string;
   /** Workflow status. Values are settled in build step 4 (inspection CRUD). */
   status: string;
+  /** Letter counter: index of the next item letter. Only ever increases. */
+  nextLetterIndex: number;
   createdAt: number;
   updatedAt: number;
 }
