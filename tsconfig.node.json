@@ -20,5 +20,10 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["vite.config.ts", "pwa-assets.config.ts", "src/brand"]
+  "include": [
+    "vite.config.ts",
+    "vitest.config.ts",
+    "pwa-assets.config.ts",
+    "src/brand"
+  ]
 }
