@@ -2,6 +2,7 @@ import { createHashRouter } from "react-router";
 import { RouterProvider } from "react-router/dom";
 import { InspectionsPage } from "../features/inspections/InspectionsPage";
 import { SettingsPage } from "../features/settings/SettingsPage";
+import { ViewerSpikePage } from "../features/drawings/spike/ViewerSpikePage";
 import { Shell } from "./Shell";
 
 // Hash routing: GitHub Pages has no SPA fallback, and every route is served
@@ -12,6 +13,8 @@ const router = createHashRouter([
     children: [
       { index: true, element: <InspectionsPage /> },
       { path: "settings", element: <SettingsPage /> },
+      // Spike B, temporary until build step 5.
+      { path: "spike/viewer", element: <ViewerSpikePage /> },
     ],
   },
 ]);

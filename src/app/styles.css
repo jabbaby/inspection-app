@@ -16,7 +16,7 @@ body {
 }
 
 .shell {
-  min-height: 100dvh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
 }
@@ -69,6 +69,10 @@ body {
 
 .shell-main {
   flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
   padding: 1.5rem calc(env(safe-area-inset-right) + 1.25rem)
     calc(env(safe-area-inset-bottom) + 1.5rem)
     calc(env(safe-area-inset-left) + 1.25rem);
@@ -157,4 +161,120 @@ dl.facts dd {
 
 .error {
   color: var(--brand-red);
+}
+
+/* Drawing viewer */
+.viewer-spike {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.viewer-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.viewer-toolbar a {
+  color: var(--brand-maroon);
+  margin-right: 0.5rem;
+}
+
+.toolbar-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+button.toggle-on {
+  background: var(--brand-red);
+  border-color: var(--brand-red);
+  color: #fff;
+}
+
+/* Fixed height so changing stats never shift the drawing. */
+.viewer-hud {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.2;
+  height: 3.6em;
+  overflow: hidden;
+  opacity: 0.8;
+}
+
+.viewer {
+  position: relative;
+  flex: 1;
+  min-height: 300px;
+  overflow: hidden;
+  background: #d9d6d1;
+  border-radius: 0.375rem;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.viewer-add-pin {
+  cursor: crosshair;
+  outline: 3px solid var(--brand-red);
+  outline-offset: -3px;
+}
+
+.viewer-stage {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  background: #fff;
+  box-shadow: 0 2px 12px rgb(0 0 0 / 0.25);
+}
+
+.viewer-layer {
+  position: absolute;
+  inset: 0;
+}
+
+.viewer-layer canvas {
+  position: absolute;
+}
+
+.viewer-layer canvas.viewer-base {
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.viewer-pins {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.viewer-pin {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 32px;
+  height: 32px;
+  min-height: 0;
+  margin: -16px 0 0 -16px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: var(--brand-red);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.4);
+  pointer-events: auto;
+  touch-action: none;
 }
