@@ -435,3 +435,15 @@ button.danger-outline {
   justify-content: flex-end;
   margin-bottom: 0;
 }
+
+.viewer-pin-observation {
+  background: #fff;
+  color: var(--brand-red);
+  border: 3px solid var(--brand-red);
+}
+
+.viewer-pin-selected {
+  box-shadow:
+    0 0 0 3px #fff,
+    0 0 0 6px var(--brand-maroon);
+}

@@ -1,4 +1,11 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import type { PDFPageProxy, RenderTask } from "../pdf/pdfjs";
 import {
   clampNormalised,
@@ -16,6 +23,7 @@ import {
   type Size,
   type ViewTransform,
 } from "./viewTransform";
+import { ViewerCoordsContext, type ViewerCoords } from "./viewerCoords";
 
 export interface ViewerPin {
   id: string;
@@ -23,6 +31,9 @@ export interface ViewerPin {
   /** Normalised page position (0..1). */
   x: number;
   y: number;
+  /** Instructions are filled red; observations are outlined. */
+  kind?: "instruction" | "observation";
+  selected?: boolean;
 }
 
 export interface ViewerStats {
@@ -42,10 +53,20 @@ interface Props {
   /** While true, the next tap (finger, Pencil or mouse) places a pin. */
   addPinMode: boolean;
   onPlacePin: (at: Point) => void;
+  /** Called while a pin is dragged (for live feedback). */
   onMovePin: (id: string, to: Point) => void;
+  /** Called once when a pin drag ends, with its final position. */
+  onMovePinEnd?: (id: string, to: Point) => void;
+  /** Called when a pin is tapped without dragging. */
+  onSelectPin?: (id: string) => void;
   onStats?: (stats: ViewerStats) => void;
   /** Change this number to fit the page to the view again. */
   fitRequest?: number;
+  /**
+   * Content drawn on the page itself, in page units (1 CSS px = 1 point), so
+   * it zooms with the drawing. Use useViewerCoords() inside it for dragging.
+   */
+  overlay?: ReactNode;
 }
 
 // iPad Safari limits canvas memory; stay well inside it.
@@ -88,7 +109,7 @@ function releaseCanvas(canvas: HTMLCanvasElement) {
  * with a CSS transform, then the visible area is re-rendered sharp.
  */
 export function DrawingViewer(props: Props) {
-  const { page, pins, addPinMode, fitRequest } = props;
+  const { page, pins, addPinMode, fitRequest, overlay } = props;
   const latest = useRef(props);
   useLayoutEffect(() => {
     latest.current = props;
@@ -342,7 +363,13 @@ export function DrawingViewer(props: Props) {
   const pointers = useRef(new Map<number, Tracked>());
   const tap = useRef<{ id: number; start: Point; time: number } | null>(null);
   const pinch = useRef<{ dist: number; mid: Point } | null>(null);
-  const dragging = useRef<{ id: string; pointerId: number } | null>(null);
+  const dragging = useRef<{
+    id: string;
+    pointerId: number;
+    start: Point;
+    moved: boolean;
+    last: Point | null;
+  } | null>(null);
 
   function local(e: { clientX: number; clientY: number }): Point {
     const box = containerRef.current!.getBoundingClientRect();
@@ -484,22 +511,54 @@ export function DrawingViewer(props: Props) {
   function onPinPointerDown(e: React.PointerEvent, id: string) {
     e.stopPropagation();
     capture(e);
-    dragging.current = { id, pointerId: e.pointerId };
+    dragging.current = {
+      id,
+      pointerId: e.pointerId,
+      start: local(e),
+      moved: false,
+      last: null,
+    };
   }
 
   function onPinPointerMove(e: React.PointerEvent) {
     const drag = dragging.current;
     if (!drag || drag.pointerId !== e.pointerId) return;
-    const q = screenToPage(transform.current, local(e));
-    latest.current.onMovePin(
-      drag.id,
-      clampNormalised({ x: q.x / pageSize.width, y: q.y / pageSize.height }),
-    );
+    const p = local(e);
+    if (
+      !drag.moved &&
+      Math.hypot(p.x - drag.start.x, p.y - drag.start.y) < TAP_SLOP
+    )
+      return;
+    drag.moved = true;
+    const q = screenToPage(transform.current, p);
+    drag.last = clampNormalised({
+      x: q.x / pageSize.width,
+      y: q.y / pageSize.height,
+    });
+    latest.current.onMovePin(drag.id, drag.last);
   }
 
   function onPinPointerUp(e: React.PointerEvent) {
-    if (dragging.current?.pointerId === e.pointerId) dragging.current = null;
+    const drag = dragging.current;
+    if (drag?.pointerId !== e.pointerId) return;
+    dragging.current = null;
+    if (e.type !== "pointerup") return;
+    if (drag.moved && drag.last)
+      latest.current.onMovePinEnd?.(drag.id, drag.last);
+    else if (!drag.moved) latest.current.onSelectPin?.(drag.id);
   }
+
+  const coords = useMemo<ViewerCoords>(
+    () => ({
+      pageSize,
+      clientToNormalised: (clientX, clientY) => {
+        const q = screenToPage(transform.current, local({ clientX, clientY }));
+        return { x: q.x / pageSize.width, y: q.y / pageSize.height };
+      },
+    }),
+    // local() and transform only read refs.
+    [pageSize],
+  );
 
   return (
     <div
@@ -520,14 +579,24 @@ export function DrawingViewer(props: Props) {
       >
         <div ref={baseHostRef} className="viewer-layer" />
         <div ref={tileHostRef} className="viewer-layer" />
+        <ViewerCoordsContext.Provider value={coords}>
+          {overlay}
+        </ViewerCoordsContext.Provider>
       </div>
       <div className="viewer-pins">
         {pins.map((pin) => (
           <button
             key={pin.id}
             type="button"
-            className="viewer-pin"
+            className={[
+              "viewer-pin",
+              pin.kind === "observation" ? "viewer-pin-observation" : "",
+              pin.selected ? "viewer-pin-selected" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
             data-testid="viewer-pin"
+            data-kind={pin.kind ?? "instruction"}
             data-letter={pin.letter}
             data-x={pin.x.toFixed(4)}
             data-y={pin.y.toFixed(4)}
