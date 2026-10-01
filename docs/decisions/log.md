@@ -43,3 +43,4 @@ Format: `YYYY-MM-DD | decision | why | changed in SPEC section`
 2026-10-02 | Notes box in Arial capitals (screen); Helvetica in PDF export. ISOCPEUR not bundled: Autodesk copyright, public repo and site | licensing; Helvetica is Arial's metric twin and needs no font file | 5, 8
 2026-10-02 | All of an inspection's drawings shown as one continuous vertical document, pages at equal width; page buttons removed | engineer request (GoodNotes style) | 12
 2026-10-02 | Items tab inside the drawings view (letter order; tap scrolls to the pin) | engineer request: see items without leaving the viewer | 12
+2026-10-02 | Notes box instructions (heading and lines) in red #DA1A32 to match instruction pins; header, observations and border stay blue | engineer request | 5

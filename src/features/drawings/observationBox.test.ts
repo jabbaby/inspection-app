@@ -96,13 +96,26 @@ describe("boxLines", () => {
     ).toEqual([
       {
         style: "header",
+        tone: "observation",
         text: "NORTHROP INSPECTION | LEVEL 3 SLAB | T. ENGINEER | 01/10/2026",
       },
-      { style: "heading", text: "INSTRUCTIONS:" },
-      { style: "item", text: "A. ADD N12 BAR AT GRID C/4" },
-      { style: "item", text: "C. PROP SPACING PER SHOP DRAWING" },
-      { style: "heading", text: "NOTED FOR INFORMATION:" },
-      { style: "item", text: "B. EXISTING CRACK NOTED AT GRID 4" },
+      { style: "heading", tone: "instruction", text: "INSTRUCTIONS:" },
+      {
+        style: "item",
+        tone: "instruction",
+        text: "A. ADD N12 BAR AT GRID C/4",
+      },
+      {
+        style: "item",
+        tone: "instruction",
+        text: "C. PROP SPACING PER SHOP DRAWING",
+      },
+      { style: "heading", tone: "observation", text: "NOTED FOR INFORMATION:" },
+      {
+        style: "item",
+        tone: "observation",
+        text: "B. EXISTING CRACK NOTED AT GRID 4",
+      },
     ]);
   });
 

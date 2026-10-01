@@ -98,7 +98,7 @@ Northrop branding is **hard-coded** for the POC. Brand assets come from the samp
   - The engineer **drags the box into place** in the drawing viewer so it doesn't cover drawing detail. Its position is stored in normalised page coordinates (0..1), like pins. Default spot: top right of the page.
   - Text size and box width are relative to page size, like the markers, so it stays legible on A1/A3 sheets. In the viewer the box is drawn on the page so it looks as it will in the export.
   - The box is removed from a page when its last pin is removed.
-  - Style: text and border in markup blue `#0165FC`, all in capitals, Arial on screen. The PDF export uses Helvetica (Arial's metric twin, built into every PDF viewer) so no font file is bundled. Colour and fonts live in `src/brand/northrop.ts` (`markup`).
+  - Style: border, header and observations in markup blue `#0165FC`; the instructions heading and lines in red `#DA1A32` to match the instruction pins. All in capitals, Arial on screen. The PDF export uses Helvetica (Arial's metric twin, built into every PDF viewer) so no font file is bundled. Colour and fonts live in `src/brand/northrop.ts` (`markup`).
 - **Item sheet:** placing a pin creates an item and opens its sheet. New items start as **instruction** with the cursor in the text box; an Instruction | Observation switch changes the kind at any time. Instructions have the "photo confirmation required before proceeding" option. Text saves as you type. Tapping a pin reopens its sheet.
 - **Pin style:** instructions are filled red circles with a white letter; observations are filled markup-blue (`#0165FC`) circles with a white letter.
 - The inspection keeps a letter counter (the next letter), reset to the item count whenever items are re-lettered.

@@ -630,6 +630,11 @@ button.danger-outline {
   font-weight: 700;
 }
 
+/* Instructions match the red instruction pins. */
+.observation-box-instruction {
+  color: var(--brand-red);
+}
+
 .observation-box-heading {
   margin-top: 0.35em;
   font-weight: 700;

@@ -83,7 +83,10 @@ export function ObservationBoxOverlay({ box, lines, onMoveEnd }: Props) {
       onPointerCancel={onPointerUp}
     >
       {lines.map((line, i) => (
-        <div key={i} className={`observation-box-${line.style}`}>
+        <div
+          key={i}
+          className={`observation-box-${line.style} observation-box-${line.tone}`}
+        >
           {line.text}
         </div>
       ))}
