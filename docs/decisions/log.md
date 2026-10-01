@@ -25,3 +25,7 @@ Format: `YYYY-MM-DD | decision | why | changed in SPEC section`
 2026-10-01 | Static Figtree TTFs (official repo, OFL) committed for PDF embedding; memo sidebar drawn as vector, wordmark and footer icon embedded as PNG from the sample | pdf-lib needs TTF; vector keeps the sidebar crisp and small | 15
 2026-10-01 | Gesture model: one finger pans, two-finger pinch zooms, pins only via an Add pin button (one pin per tap of the button); Apple Pencil reserved for freehand markup in slice 2 | engineer wants GoodNotes-style behaviour and no accidental pins while drawing | 3, 5, 14
 2026-10-01 | Use the standard (non-legacy) pdf.js build | test iPad runs iPadOS 26.5, which supports it | n/a
+2026-10-01 | Job details autosave as you type (no Save button) | nothing lost if the iPad sleeps or the app closes on site | 12
+2026-10-01 | No field blocks saving an inspection; job number and job name flagged and required before a memo | start inspections with partial details on site; SIM reference and filename need them | 12
+2026-10-01 | New inspections take the inspector name from Settings (My details) | engineer request | 12
+2026-10-01 | Deleting an inspection keeps its job's memo counter | SIM references are never reused | 12

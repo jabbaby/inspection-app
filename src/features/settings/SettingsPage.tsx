@@ -8,6 +8,7 @@ import {
 } from "../../db/storage";
 import type { SnippetKind } from "../../db/types";
 import { Link } from "react-router";
+import { MyDetailsForm } from "./MyDetailsForm";
 import { SampleMemoPanel } from "./SampleMemoPanel";
 
 const KINDS: SnippetKind[] = ["body", "condition", "heading"];
@@ -23,6 +24,8 @@ export function SettingsPage() {
   return (
     <section>
       <h1>Settings</h1>
+
+      <MyDetailsForm />
 
       <h2>Storage</h2>
       <dl className="facts">

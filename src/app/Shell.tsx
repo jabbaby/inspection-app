@@ -1,18 +1,24 @@
-import { NavLink, Outlet } from "react-router";
+import { Link, NavLink, Outlet, useLocation } from "react-router";
 import { UpdatePrompt } from "./UpdatePrompt";
 import { useOnlineStatus } from "./useOnlineStatus";
 
 export function Shell() {
   const online = useOnlineStatus();
+  const { pathname } = useLocation();
+  const inInspections = pathname === "/" || pathname.startsWith("/inspections");
 
   return (
     <div className="shell">
       <header className="shell-header">
         <span className="shell-title">Site Inspection Companion</span>
         <nav className="shell-nav">
-          <NavLink to="/" end>
+          <Link
+            to="/"
+            className={inInspections ? "active" : undefined}
+            aria-current={inInspections ? "page" : undefined}
+          >
             Inspections
-          </NavLink>
+          </Link>
           <NavLink to="/settings">Settings</NavLink>
         </nav>
         <span

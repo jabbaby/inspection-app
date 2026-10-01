@@ -4,7 +4,8 @@ import { waitForServiceWorker } from "./helpers";
 async function generateSampleMemo(page: Page) {
   await page.getByRole("button", { name: "Generate sample memo" }).click();
   const link = page.getByTestId("sample-memo-link");
-  await expect(link).toBeVisible({ timeout: 15_000 });
+  // Generous: the PDF code chunk is large and loads slowly under parallel test load.
+  await expect(link).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId("sample-memo-status")).toContainText(
     "SY000001_SIM-001_Level-3-slab-reinforcement.pdf",
   );

@@ -1,6 +1,6 @@
 # Site Inspection Companion: Project Spec
 
-Status: DRAFT v0.8 (planning complete enough to start build)
+Status: DRAFT v0.9 (planning complete enough to start build)
 Owner: [your name]
 Audience: me, Claude Code, and later the digital innovation team (proof of concept review)
 
@@ -184,7 +184,7 @@ Brand tokens from the sample: red `#DA1A32`, cream `#FFF2DF`, dark maroon `#580B
 ## 12. Screens
 
 1. **Inspections list** (new, open, import, back up)
-2. **Inspection home** (job details, drawings, items summary, memo, export)
+2. **Inspection home** (job details, drawings, items summary, memo, export). Job details save automatically as you type (no Save button). Nothing is required to save; a missing job number or job name is flagged, and both are required before a memo is created (step 7). New inspections are dated today and take the inspector name from Settings. Deleting an inspection (after confirmation) removes its drawings, items, photos, memos and observation boxes; memo counters are kept so SIM references are never reused.
 3. **Drawing viewer** (pan/zoom, drop pin, item sheet with instruction + photos)
 4. **Memo editor** (live preview of the branded page, field editing, snippet picker)
 5. **Export** (preview, generate PDF, share sheet)
