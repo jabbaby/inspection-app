@@ -3,7 +3,7 @@ import { RouterProvider } from "react-router/dom";
 import { InspectionHome } from "../features/inspections/InspectionHome";
 import { InspectionsPage } from "../features/inspections/InspectionsPage";
 import { SettingsPage } from "../features/settings/SettingsPage";
-import { DrawingPage } from "../features/drawings/DrawingPage";
+import { DocumentScreen } from "../features/drawings/DocumentScreen";
 import { Shell } from "./Shell";
 
 // Hash routing: GitHub Pages has no SPA fallback, and every route is served
@@ -15,7 +15,7 @@ const router = createHashRouter([
       { index: true, element: <InspectionsPage /> },
       { path: "inspections/:id", element: <InspectionHome /> },
       { path: "settings", element: <SettingsPage /> },
-      { path: "inspections/:id/drawings/:drawingId", element: <DrawingPage /> },
+      { path: "inspections/:id/document", element: <DocumentScreen /> },
     ],
   },
 ]);

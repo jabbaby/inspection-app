@@ -642,3 +642,42 @@ button.danger-outline {
 .confirm-dialog .field input {
   width: 100%;
 }
+
+/* Continuous inspection document (document units: page width = 1000). */
+.doc-stage {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+}
+
+.doc-page {
+  position: absolute;
+  left: 0;
+  width: 1000px;
+  background: #fff;
+  box-shadow: 0 2px 12px rgb(0 0 0 / 0.25);
+  overflow: hidden;
+}
+
+.doc-page-inner {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+}
+
+.doc-label {
+  position: absolute;
+  left: 0;
+  width: 1000px;
+  display: flex;
+  align-items: flex-end;
+  padding-bottom: 12px;
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--brand-maroon);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

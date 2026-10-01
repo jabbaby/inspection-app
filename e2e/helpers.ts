@@ -11,10 +11,23 @@ export async function waitForServiceWorker(page: Page) {
     .toBe(true);
 }
 
-export async function stageBox(page: Page) {
-  const box = await page.getByTestId("viewer-stage").boundingBox();
-  if (!box) throw new Error("No stage");
+/** Screen box of a page in the inspection document (0 = first page). */
+export async function stageBox(page: Page, index = 0) {
+  const box = await page.getByTestId("doc-page").nth(index).boundingBox();
+  if (!box) throw new Error("No page");
   return box;
+}
+
+/** Scrolls the document by dragging with the mouse (positive dy = down). */
+export async function scrollDocument(page: Page, dy: number) {
+  const viewer = (await page.getByTestId("drawing-viewer").boundingBox())!;
+  // Start in the margin beside the pages so no pin or box is grabbed.
+  const x = viewer.x + 6;
+  const y = viewer.y + viewer.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x, y - dy, { steps: 8 });
+  await page.mouse.up();
 }
 
 export async function centre(locator: Locator) {

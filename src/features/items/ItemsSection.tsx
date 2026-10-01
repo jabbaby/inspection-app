@@ -25,7 +25,7 @@ export function ItemsSection({ inspectionId }: { inspectionId: string }) {
           {data.items.map((item) => (
             <li key={item.id}>
               <Link
-                to={`/inspections/${inspectionId}/drawings/${item.drawingId}?page=${item.page}&item=${item.id}`}
+                to={`/inspections/${inspectionId}/document?item=${item.id}`}
                 className="item-row"
               >
                 <span

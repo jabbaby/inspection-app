@@ -5,6 +5,7 @@ import { ConfirmDialog } from "../../app/ConfirmDialog";
 import { db } from "../../db/db";
 import {
   addDrawing,
+  listDrawings,
   deleteDrawing,
   drawingNameFromFile,
   renameDrawing,
@@ -31,7 +32,7 @@ async function storePdf(inspectionId: string, name: string, bytes: Uint8Array) {
 
 export function DrawingsSection({ inspectionId }: { inspectionId: string }) {
   const drawings = useLiveQuery(
-    () => db.drawings.where("inspectionId").equals(inspectionId).toArray(),
+    () => listDrawings(db, inspectionId),
     [inspectionId],
   );
   const counts = useLiveQuery(async () => {
@@ -151,7 +152,7 @@ export function DrawingsSection({ inspectionId }: { inspectionId: string }) {
             return (
               <li key={drawing.id} className="inspection-card">
                 <Link
-                  to={`/inspections/${inspectionId}/drawings/${drawing.id}`}
+                  to={`/inspections/${inspectionId}/document?drawing=${drawing.id}`}
                   className="inspection-card-link"
                 >
                   <span className="inspection-card-title">{drawing.name}</span>

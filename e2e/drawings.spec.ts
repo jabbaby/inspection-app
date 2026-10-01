@@ -3,7 +3,13 @@ import {
   TYPICAL_DRAWING,
   buildSyntheticDrawing,
 } from "../src/features/drawings/fixtures/syntheticDrawing";
-import { centre, pinch, stageBox, waitForServiceWorker } from "./helpers";
+import {
+  centre,
+  pinch,
+  scrollDocument,
+  stageBox,
+  waitForServiceWorker,
+} from "./helpers";
 
 const field = (page: Page, label: string) =>
   page.getByLabel(label, { exact: true });
@@ -51,9 +57,9 @@ async function openDrawing(page: Page, name: string) {
   });
 }
 
-/** Add pin, then tap at a fraction of the page. Returns the tap point. */
-async function addPinAt(page: Page, fx: number, fy: number) {
-  const box = await stageBox(page);
+/** Add pin, then tap at a fraction of a page. Returns the tap point. */
+async function addPinAt(page: Page, fx: number, fy: number, pageIndex = 0) {
+  const box = await stageBox(page, pageIndex);
   const before = await page.getByTestId("viewer-pin").count();
   await page.getByRole("button", { name: "Add pin" }).click();
   const at = { x: box.x + box.width * fx, y: box.y + box.height * fy };
@@ -101,7 +107,9 @@ test("adds drawings from Files, rejects non-PDFs and opens them", async ({
   );
 
   await openDrawing(page, "S-101 Level 3");
-  await expect(page.getByTestId("page-indicator")).toHaveText("1 / 3");
+  await expect(page.getByTestId("page-indicator")).toHaveText(
+    "S-101 Level 3 · page 1 of 3",
+  );
 });
 
 test("a pin becomes a saved instruction exactly where tapped", async ({
@@ -258,6 +266,11 @@ test("dragged pins and boxes keep their new positions", async ({ page }) => {
   });
   await page.mouse.up();
   await expect(sheet(page)).toHaveCount(0);
+  // Let the moves save before reloading.
+  await expect
+    .poll(async () => Number(await obsBox.getAttribute("data-x")))
+    .toBeLessThan(0.05);
+  await page.waitForTimeout(300);
 
   await page.reload();
   await expect(
@@ -308,12 +321,20 @@ test("the items list opens the right drawing page and item", async ({
   await openDrawing(page, "S-101 Level 3");
   await addPinAt(page, 0.3, 0.3);
   await typeItem(page, "First");
-  await page.getByRole("button", { name: "Next page" }).click();
-  await expect(page.getByTestId("page-indicator")).toHaveText("2 / 3");
+  await sheet(page).getByRole("button", { name: "Done" }).click();
+  // Scroll down to page 2 of the document.
+  const viewer = (await page.getByTestId("drawing-viewer").boundingBox())!;
+  const second = await stageBox(page, 1);
+  await scrollDocument(page, second.y - viewer.y - 20);
+  await expect(page.getByTestId("page-indicator")).toHaveText(
+    "S-101 Level 3 · page 2 of 3",
+  );
   await expect(
-    page.locator('[data-testid="drawing-viewer"][data-ready="true"]'),
+    page.locator(
+      '[data-testid="doc-page"][data-key$=":2"][data-rendered="true"]',
+    ),
   ).toBeVisible();
-  await addPinAt(page, 0.4, 0.4);
+  await addPinAt(page, 0.4, 0.4, 1);
   await sheet(page).getByRole("button", { name: "Observation" }).click();
   await typeItem(page, "Second on page two");
 
@@ -326,8 +347,42 @@ test("the items list opens the right drawing page and item", async ({
   );
 
   await items.nth(1).getByRole("link").click();
-  await expect(page.getByTestId("page-indicator")).toHaveText("2 / 3");
+  await expect(page.getByTestId("page-indicator")).toHaveText(
+    "S-101 Level 3 · page 2 of 3",
+  );
   await expect(sheet(page).getByRole("heading")).toHaveText("Item B");
+});
+
+test("all drawings scroll as one document", async ({ page }) => {
+  await setupInspection(page);
+  const home = page.url();
+  await uploadDrawings(page, [
+    await typicalPdf("S-101 Level 3.pdf"),
+    await typicalPdf("S-102 Level 4.pdf"),
+  ]);
+  await openDrawing(page, "S-101 Level 3");
+  await expect(page.getByTestId("doc-page")).toHaveCount(6);
+  await expect(page.locator(".doc-label")).toHaveText([
+    "S-101 Level 3",
+    "S-102 Level 4",
+  ]);
+
+  // Scroll to the second drawing's first page.
+  const viewer = (await page.getByTestId("drawing-viewer").boundingBox())!;
+  const fourth = await stageBox(page, 3);
+  await scrollDocument(page, fourth.y - viewer.y - 20);
+  await expect(page.getByTestId("page-indicator")).toHaveText(
+    "S-102 Level 4 · page 1 of 3",
+  );
+  await addPinAt(page, 0.5, 0.5, 3);
+  await expect(sheet(page).getByRole("heading")).toHaveText("Item A");
+
+  // Opening a drawing from the inspection scrolls straight to it.
+  await page.goto(home);
+  await openDrawing(page, "S-102 Level 4");
+  await expect(page.getByTestId("page-indicator")).toHaveText(
+    "S-102 Level 4 · page 1 of 3",
+  );
 });
 
 test("deleting a drawing removes its items", async ({ page }) => {
