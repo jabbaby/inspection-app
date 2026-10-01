@@ -15,3 +15,4 @@ outputs/*
 !outputs/README.md
 .env
 .env.*
+fixtures/generated/
