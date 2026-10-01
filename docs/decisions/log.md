@@ -45,3 +45,4 @@ Format: `YYYY-MM-DD | decision | why | changed in SPEC section`
 2026-10-02 | Items tab inside the drawings view (letter order; tap scrolls to the pin) | engineer request: see items without leaving the viewer | 12
 2026-10-02 | Notes box instructions (heading and lines) in red #DA1A32 to match instruction pins; header, observations and border stay blue | engineer request | 5
 2026-10-02 | Notes box lists observations before instructions; header line in black (border and observations stay blue, instructions red) | engineer request | 5
+2026-10-02 | Drags lock to their starting axis; finger flicks keep rolling with iOS deceleration (touch only, not mouse); a touch stops the roll without placing or opening a pin | engineer request (GoodNotes feel); mouse drags don't roll in desktop apps | 5
