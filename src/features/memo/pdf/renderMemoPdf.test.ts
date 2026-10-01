@@ -1,0 +1,141 @@
+import { writeFileSync, mkdirSync } from "node:fs";
+import { PDFDict, PDFDocument, PDFName } from "pdf-lib";
+import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
+import { beforeAll, describe, expect, test } from "vitest";
+import { northrop } from "../../../brand/northrop";
+import { sampleMemo } from "../sampleMemo";
+import {
+  renderMemoPdf,
+  type MemoAssets,
+  type MemoPdfInput,
+} from "./renderMemoPdf";
+import { loadTestMemoAssets } from "./memoAssets.testutil";
+
+let assets: MemoAssets;
+
+/** Set MEMO_PDF_DIR to keep the rendered PDFs for a visual check. */
+function saveForInspection(name: string, bytes: Uint8Array) {
+  const dir = process.env.MEMO_PDF_DIR;
+  if (!dir) return;
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(`${dir}/${name}`, bytes);
+}
+
+beforeAll(async () => {
+  assets = await loadTestMemoAssets();
+});
+
+/** All text on each page, whitespace collapsed. */
+async function pageTexts(bytes: Uint8Array): Promise<string[]> {
+  const doc = await pdfjs.getDocument({ data: bytes.slice() }).promise;
+  const texts: string[] = [];
+  for (let i = 1; i <= doc.numPages; i++) {
+    const content = await (await doc.getPage(i)).getTextContent();
+    const text = content.items
+      .map((item) => ("str" in item ? item.str + (item.hasEOL ? " " : "") : ""))
+      .join(" ");
+    texts.push(text.replace(/\s+/g, " ").trim());
+  }
+  return texts;
+}
+
+function withConditions(count: number): MemoPdfInput {
+  return {
+    ...sampleMemo,
+    conditions: Array.from(
+      { length: count },
+      (_, i) =>
+        `${i + 1}. Sample condition number ${i + 1} for overflow testing.`,
+    ),
+  };
+}
+
+describe("renderMemoPdf", () => {
+  test("renders the sample memo as one A4 page with every field", async () => {
+    const bytes = await renderMemoPdf(sampleMemo, assets);
+    saveForInspection("sample-memo.pdf", bytes);
+
+    const doc = await PDFDocument.load(bytes);
+    expect(doc.getPageCount()).toBe(1);
+    const { width, height } = doc.getPage(0).getSize();
+    expect(width).toBeCloseTo(northrop.page.width, 1);
+    expect(height).toBeCloseTo(northrop.page.height, 1);
+    expect(doc.getTitle()).toBe("SIM-001 – Level 3 slab reinforcement");
+
+    const [text] = await pageTexts(bytes);
+    const f = sampleMemo.fields;
+    for (const value of [
+      f.clientName,
+      f.clientCompany,
+      f.address1,
+      f.address2,
+      "1 October 2026",
+      f.jobNumber,
+      f.jobName,
+      "SIM-001 – Level 3 slab reinforcement",
+      "SITE INSTRUCTION MEMO",
+      "SITE VISIT REQUESTED BY",
+      f.inspector,
+      f.salutation,
+      "Ok to proceed subject to the following:",
+      "Yours sincerely,",
+      f.signOffTitle,
+      ...northrop.officeBlock,
+      "REAL PEOPLE",
+      ...f.recipients.map((r) => r.company),
+    ]) {
+      expect(text).toContain(value);
+    }
+  });
+
+  test("includes the disclaimer word for word", async () => {
+    const [text] = await pageTexts(await renderMemoPdf(sampleMemo, assets));
+    expect(text).toContain(
+      `${northrop.disclaimer.lead} ${northrop.disclaimer.body}`,
+    );
+  });
+
+  test("embeds Figtree and no standard fonts", async () => {
+    const doc = await PDFDocument.load(await renderMemoPdf(sampleMemo, assets));
+    const fonts = doc
+      .getPage(0)
+      .node.Resources()!
+      .lookup(PDFName.of("Font"), PDFDict);
+    const names = fonts
+      .values()
+      .map((ref) =>
+        String(doc.context.lookup(ref, PDFDict).get(PDFName.of("BaseFont"))),
+      );
+    expect(names.length).toBeGreaterThan(0);
+    for (const name of names) expect(name).toMatch(/Figtree/);
+  });
+
+  test("shows 'Ok to proceed.' with no list when there are no conditions", async () => {
+    const [text] = await pageTexts(
+      await renderMemoPdf(withConditions(0), assets),
+    );
+    expect(text).toContain("Ok to proceed.");
+    expect(text).not.toContain("subject to the following");
+  });
+
+  test("flows a long condition list onto a second page with page numbers", async () => {
+    const bytes = await renderMemoPdf(withConditions(30), assets);
+    saveForInspection("overflow-memo.pdf", bytes);
+    const texts = await pageTexts(bytes);
+
+    expect(texts.length).toBe(2);
+    expect(texts[1]).toContain("30. Sample condition number 30");
+    expect(texts[1]).toContain(northrop.disclaimer.lead);
+    expect(texts[1]).not.toContain("SITE INSTRUCTION MEMO");
+    expect(texts[1]).toMatch(/REAL IMPACT 2$/);
+  });
+
+  test("replaces characters the font cannot draw instead of failing", async () => {
+    const input = {
+      ...sampleMemo,
+      fields: { ...sampleMemo.fields, salutation: "Dear Alex 👷," },
+    };
+    const [text] = await pageTexts(await renderMemoPdf(input, assets));
+    expect(text).toContain("Dear Alex ?,");
+  });
+});
