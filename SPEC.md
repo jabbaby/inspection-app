@@ -1,6 +1,6 @@
 # Site Inspection Companion: Project Spec
 
-Status: DRAFT v0.6 (planning complete enough to start build)
+Status: DRAFT v0.7 (planning complete enough to start build)
 Owner: [your name]
 Audience: me, Claude Code, and later the digital innovation team (proof of concept review)
 
@@ -57,7 +57,7 @@ The sample is a one-page **Site Instruction Memo**, not a long report. Anatomy:
 | Date | defaults to today |
 | Job number | text |
 | Job name | text |
-| Memo reference | auto-generated per job (e.g. `SIM-001`, `SIM-002`), editable. Shown in the memo header with the item inspected, e.g. "SIM-001 – Level 3 slab reinforcement". The sample template has no reference field, so placement near Date / Job number is to be confirmed. |
+| Memo reference | auto-generated per job (e.g. `SIM-001`, `SIM-002`), editable. Shown in the memo header with the item inspected, e.g. "SIM-001 – Level 3 slab reinforcement". The sample template has no reference field; it is placed in the right-hand header column on its own line under Job name, in the same style as Job name. |
 | Recipients table | up to ~5 rows: Company, Attn, and To or Copy (checkbox pair; at least one "To") |
 | Site visit requested by | client name/company |
 | Reason for visit | the item inspected (e.g. "Level 3 slab reinforcement") |
@@ -218,10 +218,11 @@ Top-level navigation has separate areas: **Inspections** (screens 1 to 5), **Cal
 ## 15. Assumptions and open questions
 
 - [x] Lettered items can be instructions or neutral observations (decided). Observations go in a draggable text box on the drawing, not in the memo; heading defaults to "Noted for information:" (decided).
-- [x] Memos get an auto-numbered reference per job (SIM-001...), shown together with the item inspected (decided; interpretation to confirm, see section 7a).
+- [x] Memos get an auto-numbered reference per job (SIM-001...), shown together with the item inspected (decided; placed under Job name in the memo header, see sections 4 and 7a).
 - [x] Drawings keep native size in the export (decided).
 - [x] Branding hard-coded to Northrop for the POC (decided).
 - [ ] Is "Aconex / Email" the full list for "Sent via"?
 - [x] Re-inspections are out of scope for the POC (decided).
 - [x] Hosting for the POC: GitHub Pages from David's personal GitHub account (decided). The site is public to anyone with the link (no password option on Pages), which is acceptable because the app has no backend and all user data stays on the device. Synthetic data only until IT approves; revisit hosting (company host or sign-in in front of the link) before real project material or wider sharing.
-- [x] Figtree is self-hosted under the SIL Open Font License (decided).
+- [x] Figtree is self-hosted under the SIL Open Font License (decided). Web fonts come from the @fontsource/figtree package; static TTFs from the official Figtree repo are embedded in the PDF.
+- [x] Memo body text is plain: the sample's italics on the item inspected, the body message and the condition bullets were placeholder highlighting. Bold and italic are kept only for the engineer name and the disclaimer, as in the sample (decided).

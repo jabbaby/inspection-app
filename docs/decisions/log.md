@@ -20,3 +20,6 @@ Format: `YYYY-MM-DD | decision | why | changed in SPEC section`
 2026-10-01 | Figtree self-hosted under SIL OFL | free licence, works offline | 15
 2026-10-01 | Hash routing (/#/settings) instead of path routing | GitHub Pages has no SPA fallback; every route is served by the one precached index.html | n/a
 2026-10-01 | Automated offline test runs in Chromium at iPad viewport; other e2e tests in WebKit | Playwright's WebKit cannot reload offline through a service worker; real iPad offline check stays in the manual test plan | n/a
+2026-10-01 | Memo reference shown on its own line under Job name, same style as Job name | sample has no reference field; keeps the header block together | 4, 15
+2026-10-01 | Memo body text is plain (sample italics were placeholder highlighting); bold/italic only for engineer name and disclaimer | engineer decision | 15
+2026-10-01 | Static Figtree TTFs (official repo, OFL) committed for PDF embedding; memo sidebar drawn as vector, wordmark and footer icon embedded as PNG from the sample | pdf-lib needs TTF; vector keeps the sidebar crisp and small | 15
