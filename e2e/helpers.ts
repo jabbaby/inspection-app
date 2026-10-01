@@ -130,20 +130,3 @@ export async function touchTap(page: Page, at: { x: number; y: number }) {
       );
   }, at);
 }
-
-/** Waits until the first page stops moving and returns its box. */
-export async function waitForStill(page: Page) {
-  let last = await stageBox(page);
-  await expect
-    .poll(
-      async () => {
-        const now = await stageBox(page);
-        const still = now.y === last.y && now.x === last.x;
-        last = now;
-        return still;
-      },
-      { timeout: 10_000 },
-    )
-    .toBe(true);
-  return last;
-}

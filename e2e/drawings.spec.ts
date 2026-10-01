@@ -11,7 +11,6 @@ import {
   stageBox,
   touchTap,
   waitForServiceWorker,
-  waitForStill,
 } from "./helpers";
 
 const field = (page: Page, label: string) =>
@@ -373,10 +372,12 @@ test("a finger flick keeps rolling, straight down the document", async ({
     -300,
   );
   const released = await stageBox(page);
-  const end = await waitForStill(page);
-  // It kept going after the finger lifted, and never moved sideways.
-  expect(end.y).toBeLessThan(released.y - 100);
-  expect(end.x).toBeCloseTo(start.x, 0);
+  // It keeps going after the finger lifts (however slow the machine's
+  // frames are), and never moves sideways.
+  await expect
+    .poll(async () => (await stageBox(page)).y, { timeout: 10_000 })
+    .toBeLessThan(released.y - 100);
+  expect((await stageBox(page)).x).toBeCloseTo(start.x, 0);
 });
 
 test("a touch stops a roll and doesn't place a pin", async ({ page }) => {
