@@ -115,6 +115,7 @@ describe("deleteInspection", () => {
         pdfBlobId: `pdf-${tag}`,
         pageCount: 1,
         fileSize: 3,
+        createdAt: 0,
       });
       await db.photos.add({
         id: `photo-${tag}`,

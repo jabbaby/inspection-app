@@ -18,11 +18,14 @@ async function storePdf(inspectionId: string, name: string, bytes: Uint8Array) {
   // pdf.js takes ownership of the buffer it is given, so pass a copy.
   const pdf = await loadPdf(bytes.slice());
   const pageCount = pdf.numPages;
+  const { measurePageSizes } = await import("./pdf/pageSizes");
+  const pageSizes = await measurePageSizes(pdf);
   await pdf.loadingTask.destroy();
   await addDrawing(db, inspectionId, {
     name,
     pdf: bytes,
     pageCount,
+    pageSizes,
   });
 }
 

@@ -27,7 +27,7 @@ describe("InspectionDb", () => {
       "settings",
       "snippets",
     ]);
-    expect(SCHEMA_VERSION).toBe(2);
+    expect(SCHEMA_VERSION).toBe(3);
   });
 
   test("finds an item by inspection and letter", async () => {
@@ -82,4 +82,20 @@ describe("upgrade from v1", () => {
     expect(empty?.nextLetterIndex).toBe(0);
     expect(withItems?.jobName).toBe("Tower");
   });
+});
+
+test("v3 upgrade gives existing drawings a createdAt", async () => {
+  const name = `test-${crypto.randomUUID()}`;
+  const v2 = new Dexie(name);
+  v2.version(2).stores({ drawings: "id, inspectionId" });
+  await v2.table("drawings").bulkAdd([
+    { id: "d1", inspectionId: "i", name: "S-101" },
+    { id: "d2", inspectionId: "i", name: "S-102" },
+  ]);
+  v2.close();
+
+  db = new InspectionDb(name);
+  const drawings = await db.drawings.toArray();
+  expect(drawings.every((d) => typeof d.createdAt === "number")).toBe(true);
+  expect(new Set(drawings.map((d) => d.createdAt)).size).toBe(2);
 });

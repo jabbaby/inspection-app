@@ -34,6 +34,10 @@ async function drawing(name = "S-101", pageCount = 2) {
     name,
     pdf: new TextEncoder().encode("%PDF"),
     pageCount,
+    pageSizes: Array.from(
+      { length: pageCount },
+      () => [2384, 1684] as [number, number],
+    ),
   });
 }
 

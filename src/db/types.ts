@@ -36,6 +36,14 @@ export interface Drawing {
   pageCount: number;
   /** PDF size in bytes (kept here so listing drawings never loads the file). */
   fileSize: number;
+  /**
+   * Each page's [width, height] in points, so the whole inspection document
+   * can be laid out without loading every PDF. Filled on upload, or the first
+   * time the document is opened for drawings added before this existed.
+   */
+  pageSizes?: [number, number][];
+  /** Drawings appear in the document in the order they were added. */
+  createdAt: number;
 }
 
 export type ItemKind = "instruction" | "observation";

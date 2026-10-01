@@ -11,6 +11,8 @@ export interface NewDrawing {
   /** PDF bytes. Copied, so the caller can keep using its array. */
   pdf: Uint8Array;
   pageCount: number;
+  /** Each page's [width, height] in points. */
+  pageSizes: [number, number][];
 }
 
 /** "S-101 Level 3.pdf" -> "S-101 Level 3". */
@@ -43,12 +45,32 @@ export async function addDrawing(
         pdfBlobId,
         pageCount: drawing.pageCount,
         fileSize: drawing.pdf.byteLength,
+        pageSizes: drawing.pageSizes,
+        createdAt: now,
       };
       await db.drawings.add(record);
       await touchInspection(db, inspectionId, now);
       return record;
     },
   );
+}
+
+/** Saves page sizes measured for a drawing added before they were stored. */
+export async function setPageSizes(
+  db: InspectionDb,
+  id: string,
+  pageSizes: [number, number][],
+): Promise<void> {
+  await db.drawings.update(id, { pageSizes });
+}
+
+/** An inspection's drawings in document order (the order they were added). */
+export async function listDrawings(db: InspectionDb, inspectionId: string) {
+  const drawings = await db.drawings
+    .where("inspectionId")
+    .equals(inspectionId)
+    .toArray();
+  return drawings.sort((a, b) => a.createdAt - b.createdAt);
 }
 
 export async function renameDrawing(

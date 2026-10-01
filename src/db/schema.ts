@@ -18,7 +18,7 @@ import type {
  * Version of the inspection data format. The inspection file (SPEC section 9)
  * writes this as `schemaVersion`; bump it when stored records change shape.
  */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export const DB_NAME = "inspection-app";
 
@@ -72,6 +72,18 @@ export class InspectionDb extends Dexie {
         .modify((inspection) => {
           inspection.itemInspected ??= "";
           inspection.nextLetterIndex ??= (highest.get(inspection.id) ?? -1) + 1;
+        });
+    });
+    // v3: drawings gain createdAt (document order). Page sizes are filled in
+    // lazily by the app, as they need the PDF.
+    this.version(3).upgrade(async (tx) => {
+      let order = 0;
+      const base = Date.now();
+      await tx
+        .table<Drawing>("drawings")
+        .toCollection()
+        .modify((drawing) => {
+          drawing.createdAt ??= base + order++;
         });
     });
   }
