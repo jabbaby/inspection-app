@@ -1,0 +1,37 @@
+import { defineConfig, devices } from "@playwright/test";
+
+const port = 4173;
+
+// Runs against the production build so the service worker is active.
+export default defineConfig({
+  testDir: "e2e",
+  fullyParallel: true,
+  forbidOnly: !!process.env.CI,
+  retries: process.env.CI ? 1 : 0,
+  reporter: process.env.CI ? "github" : "list",
+  use: {
+    baseURL: `http://localhost:${port}/inspection-app/`,
+    trace: "retain-on-failure",
+  },
+  projects: [
+    {
+      name: "ipad-webkit",
+      use: { ...devices["iPad Pro 11"] },
+      grepInvert: /@offline/,
+    },
+    {
+      // Playwright's WebKit cannot reload a page offline through a service
+      // worker, so @offline tests run in Chromium at the iPad viewport.
+      // Offline on real iPad Safari is covered by the manual test plan.
+      name: "ipad-chromium",
+      use: { ...devices["iPad Pro 11"], browserName: "chromium" },
+      grep: /@offline/,
+    },
+  ],
+  webServer: {
+    command: `npm run build && npm run preview -- --port ${port} --strictPort`,
+    url: `http://localhost:${port}/inspection-app/`,
+    reuseExistingServer: !process.env.CI,
+    timeout: 120_000,
+  },
+});
