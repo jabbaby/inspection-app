@@ -19,6 +19,16 @@ import {
   type Size,
   type ViewTransform,
 } from "../viewer/viewTransform";
+import {
+  chooseAxis,
+  isRolling,
+  lockToAxis,
+  releaseVelocity,
+  rollStep,
+  trimSamples,
+  type Axis,
+  type Sample,
+} from "../viewer/momentum";
 import { DocPage, type SettledView } from "./DocPage";
 import {
   DOC_WIDTH,
@@ -90,7 +100,8 @@ function capture(e: React.PointerEvent) {
 /**
  * Every page of every drawing in one continuous, vertically stacked document
  * (GoodNotes style): one finger scrolls and pans, two fingers pinch-zoom,
- * mouse drags and wheel/trackpad scroll or zoom. Apple Pencil input is
+ * mouse drags and wheel/trackpad scroll or zoom. Drags lock to the axis they
+ * start along, and a finger flick keeps rolling (see momentum.ts). Apple Pencil input is
  * ignored (reserved for markup) except while placing a pin. Only pages on
  * or near the screen are rendered; the rest release their memory.
  */
@@ -194,7 +205,8 @@ export function DocumentViewer(props: Props) {
     });
   }
 
-  function setTransform(next: ViewTransform) {
+  /** Moves the view (clamped to the document) without stopping a roll. */
+  function applyTransform(next: ViewTransform) {
     const docSize = {
       width: DOC_WIDTH,
       height: Math.max(currentLayout().height, 1),
@@ -203,6 +215,52 @@ export function DocumentViewer(props: Props) {
     requestLayout();
     window.clearTimeout(settleTimer.current);
     settleTimer.current = window.setTimeout(settle, SETTLE_MS);
+  }
+
+  /** Moves the view; anything that moves it stops a roll first. */
+  function setTransform(next: ViewTransform) {
+    stopRoll();
+    applyTransform(next);
+  }
+
+  // --- roll (momentum after a flick) --------------------------------------
+
+  const roll = useRef<{ v: Point; last: number; frame: number } | null>(null);
+
+  /** Stops a roll; true if one was running. */
+  function stopRoll() {
+    if (!roll.current) return false;
+    cancelAnimationFrame(roll.current.frame);
+    roll.current = null;
+    return true;
+  }
+
+  function startRoll(v: Point) {
+    stopRoll();
+    if (!isRolling(v)) return;
+    const step = (now: number) => {
+      const r = roll.current;
+      if (!r) return;
+      const { move, v: nextV } = rollStep(r.v, Math.min(now - r.last, 50));
+      const before = transform.current;
+      applyTransform(panBy(before, move.x, move.y));
+      const after = transform.current;
+      // Stop on an axis that reached the end of the document.
+      const blocked = (moved: number, wanted: number) =>
+        Math.abs(moved) < Math.abs(wanted) - 0.5;
+      r.v = {
+        x: blocked(after.x - before.x, move.x) ? 0 : nextV.x,
+        y: blocked(after.y - before.y, move.y) ? 0 : nextV.y,
+      };
+      r.last = now;
+      if (isRolling(r.v)) r.frame = requestAnimationFrame(step);
+      else roll.current = null;
+    };
+    roll.current = {
+      v,
+      last: performance.now(),
+      frame: requestAnimationFrame(step),
+    };
   }
 
   function zoomLimits() {
@@ -355,6 +413,7 @@ export function DocumentViewer(props: Props) {
     () => () => {
       window.clearTimeout(settleTimer.current);
       cancelAnimationFrame(frame.current);
+      stopRoll();
     },
     [],
   );
@@ -364,6 +423,12 @@ export function DocumentViewer(props: Props) {
   const pointers = useRef(new Map<number, Tracked>());
   const tap = useRef<{ id: number; start: Point; time: number } | null>(null);
   const pinch = useRef<{ dist: number; mid: Point } | null>(null);
+  /** Axis of the current one-pointer drag (null until it starts moving). */
+  const axis = useRef<Axis | null>(null);
+  /** Recent positions of a one-pointer drag, for the release speed. */
+  const samples = useRef<Sample[]>([]);
+  /** A touch that stopped a roll: it never counts as a tap. */
+  const stopTouch = useRef<number | null>(null);
   const dragging = useRef<{
     id: string;
     pointerId: number;
@@ -395,6 +460,16 @@ export function DocumentViewer(props: Props) {
       : null;
   }
 
+  // Runs before pins and the notes box see the touch. A touch that stops a
+  // roll only stops it: on a pin or the box it is swallowed; on the drawing
+  // it can still drag, but never places a pin.
+  function onPointerDownCapture(e: React.PointerEvent) {
+    if (!stopRoll()) return;
+    stopTouch.current = e.pointerId;
+    if ((e.target as Element).closest(".viewer-pin, .observation-box"))
+      e.stopPropagation();
+  }
+
   function onPointerDown(e: React.PointerEvent) {
     // Pencil is reserved for markup; it only acts while placing a pin.
     if (e.pointerType === "pen" && !latest.current.addPinMode) return;
@@ -406,8 +481,11 @@ export function DocumentViewer(props: Props) {
     pointers.current.set(e.pointerId, { ...p, type: e.pointerType });
     if (pointers.current.size === 1) {
       tap.current = { id: e.pointerId, start: p, time: e.timeStamp };
+      samples.current = [{ ...p, t: performance.now() }];
     } else {
       tap.current = null;
+      axis.current = null;
+      samples.current = [];
       startPinch();
     }
   }
@@ -442,27 +520,50 @@ export function DocumentViewer(props: Props) {
     }
     if (prev.type === "pen" || pointers.current.size !== 1) return;
 
+    const now = performance.now();
+    samples.current = trimSamples([...samples.current, { ...p, t: now }], now);
     const pending = tap.current;
     if (pending && pending.id === e.pointerId) {
-      // Don't move until it's clearly a drag, then catch up.
-      if (Math.hypot(p.x - pending.start.x, p.y - pending.start.y) < TAP_SLOP)
-        return;
+      // Don't move until it's clearly a drag, then pick its axis and catch up.
+      const dx = p.x - pending.start.x;
+      const dy = p.y - pending.start.y;
+      if (Math.hypot(dx, dy) < TAP_SLOP) return;
       tap.current = null;
-      setTransform(
-        panBy(transform.current, p.x - pending.start.x, p.y - pending.start.y),
-      );
+      axis.current = chooseAxis(dx, dy);
+      const d = lockToAxis(axis.current, { x: dx, y: dy });
+      setTransform(panBy(transform.current, d.x, d.y));
       return;
     }
-    setTransform(panBy(transform.current, p.x - prev.x, p.y - prev.y));
+    // After a pinch the remaining finger pans freely.
+    const d = lockToAxis(axis.current ?? "free", {
+      x: p.x - prev.x,
+      y: p.y - prev.y,
+    });
+    setTransform(panBy(transform.current, d.x, d.y));
   }
 
   function onPointerUp(e: React.PointerEvent) {
-    if (!pointers.current.has(e.pointerId)) return;
+    const released = pointers.current.get(e.pointerId);
+    if (!released) return;
+    const soleDrag =
+      pointers.current.size === 1 && !pinch.current && axis.current !== null;
     pointers.current.delete(e.pointerId);
     const pending = tap.current;
     tap.current = null;
+    const stoppedRoll = stopTouch.current === e.pointerId;
+    if (stoppedRoll) stopTouch.current = null;
+    // A finger flick keeps rolling along the drag's axis.
+    if (e.type === "pointerup" && soleDrag && released.type === "touch") {
+      const v = releaseVelocity(samples.current, performance.now());
+      startRoll(lockToAxis(axis.current!, v));
+    }
+    if (pointers.current.size === 0) {
+      axis.current = null;
+      samples.current = [];
+    }
     if (
       e.type === "pointerup" &&
+      !stoppedRoll &&
       pending?.id === e.pointerId &&
       e.timeStamp - pending.time < TAP_MS &&
       latest.current.addPinMode
@@ -589,6 +690,7 @@ export function DocumentViewer(props: Props) {
       className={`viewer${addPinMode ? " viewer-add-pin" : ""}`}
       data-testid="drawing-viewer"
       data-ready={ready}
+      onPointerDownCapture={onPointerDownCapture}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}

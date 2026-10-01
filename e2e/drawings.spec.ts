@@ -5,10 +5,13 @@ import {
 } from "../src/features/drawings/fixtures/syntheticDrawing";
 import {
   centre,
+  flick,
   pinch,
   scrollDocument,
   stageBox,
+  touchTap,
   waitForServiceWorker,
+  waitForStill,
 } from "./helpers";
 
 const field = (page: Page, label: string) =>
@@ -171,7 +174,7 @@ test("a pin becomes a saved instruction exactly where tapped", async ({
   await expect(sheet(page).getByRole("heading")).toHaveText("Item A");
 });
 
-test("the notes box lists instructions, then observations", async ({
+test("the notes box lists observations, then instructions", async ({
   page,
 }) => {
   await setupInspection(page);
@@ -351,6 +354,57 @@ test("the items list opens the right drawing page and item", async ({
     "S-101 Level 3 · page 2 of 3",
   );
   await expect(sheet(page).getByRole("heading")).toHaveText("Item B");
+});
+
+test("a finger flick keeps rolling, straight down the document", async ({
+  page,
+}) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openDrawing(page, "S-101 Level 3");
+  const viewer = (await page.getByTestId("drawing-viewer").boundingBox())!;
+  const start = await stageBox(page);
+
+  // Finger moves up 300 px with a little sideways drift, then lifts.
+  await flick(
+    page,
+    { x: viewer.x + 6, y: viewer.y + viewer.height * 0.75 },
+    15,
+    -300,
+  );
+  const released = await stageBox(page);
+  const end = await waitForStill(page);
+  // It kept going after the finger lifted, and never moved sideways.
+  expect(end.y).toBeLessThan(released.y - 100);
+  expect(end.x).toBeCloseTo(start.x, 0);
+});
+
+test("a touch stops a roll and doesn't place a pin", async ({ page }) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openDrawing(page, "S-101 Level 3");
+  const viewer = (await page.getByTestId("drawing-viewer").boundingBox())!;
+  await page.getByRole("button", { name: "Add pin" }).click();
+  const at = {
+    x: viewer.x + viewer.width / 2,
+    y: viewer.y + viewer.height / 2,
+  };
+
+  await flick(
+    page,
+    { x: viewer.x + 6, y: viewer.y + viewer.height * 0.75 },
+    0,
+    -300,
+  );
+  await touchTap(page, at);
+  const stopped = await stageBox(page);
+  await page.waitForTimeout(300);
+  expect((await stageBox(page)).y).toBe(stopped.y);
+  await expect(page.getByTestId("viewer-pin")).toHaveCount(0);
+
+  // The next tap places the pin as usual.
+  await touchTap(page, at);
+  await expect(page.getByTestId("viewer-pin")).toHaveCount(1);
 });
 
 test("all drawings scroll as one document", async ({ page }) => {

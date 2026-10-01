@@ -73,3 +73,77 @@ export async function pinch(
     { at, from, to },
   );
 }
+
+/**
+ * One-finger flick from synthetic touch pointer events, with real time
+ * between moves so the viewer sees a release speed. The finger moves by
+ * (dx, dy) over about 160 ms and lifts without pausing.
+ */
+export async function flick(
+  page: Page,
+  at: { x: number; y: number },
+  dx: number,
+  dy: number,
+) {
+  await page.evaluate(
+    async ({ at, dx, dy }) => {
+      const el = document.querySelector('[data-testid="drawing-viewer"]')!;
+      const fire = (type: string, x: number, y: number) =>
+        el.dispatchEvent(
+          new PointerEvent(type, {
+            pointerId: 7,
+            pointerType: "touch",
+            clientX: x,
+            clientY: y,
+            bubbles: true,
+            cancelable: true,
+            isPrimary: true,
+          }),
+        );
+      fire("pointerdown", at.x, at.y);
+      const steps = 10;
+      for (let i = 1; i <= steps; i++) {
+        await new Promise((r) => setTimeout(r, 16));
+        fire("pointermove", at.x + (dx * i) / steps, at.y + (dy * i) / steps);
+      }
+      fire("pointerup", at.x + dx, at.y + dy);
+    },
+    { at, dx, dy },
+  );
+}
+
+/** A quick one-finger tap from synthetic touch pointer events. */
+export async function touchTap(page: Page, at: { x: number; y: number }) {
+  await page.evaluate((at) => {
+    const target = document.elementFromPoint(at.x, at.y)!;
+    for (const type of ["pointerdown", "pointerup"])
+      target.dispatchEvent(
+        new PointerEvent(type, {
+          pointerId: 8,
+          pointerType: "touch",
+          clientX: at.x,
+          clientY: at.y,
+          bubbles: true,
+          cancelable: true,
+          isPrimary: true,
+        }),
+      );
+  }, at);
+}
+
+/** Waits until the first page stops moving and returns its box. */
+export async function waitForStill(page: Page) {
+  let last = await stageBox(page);
+  await expect
+    .poll(
+      async () => {
+        const now = await stageBox(page);
+        const still = now.y === last.y && now.x === last.x;
+        last = now;
+        return still;
+      },
+      { timeout: 10_000 },
+    )
+    .toBe(true);
+  return last;
+}
