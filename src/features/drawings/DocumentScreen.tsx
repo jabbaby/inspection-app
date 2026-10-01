@@ -6,6 +6,7 @@ import { listDrawings, setPageSizes } from "../../db/drawings";
 import { createItem, moveObservationBox, updateItem } from "../../db/items";
 import type { Drawing } from "../../db/types";
 import { ItemSheet } from "../items/ItemSheet";
+import { ItemsPanel } from "../items/ItemsPanel";
 import {
   DocumentViewer,
   type DocPin,
@@ -86,6 +87,7 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
   }, []);
 
   const [addPinMode, setAddPinMode] = useState(false);
+  const [itemsOpen, setItemsOpen] = useState(false);
   const [fitRequest, setFitRequest] = useState(0);
   const [justPlaced, setJustPlaced] = useState<string | null>(null);
   const [dragging, setDragging] = useState<Record<string, Point>>({});
@@ -232,6 +234,17 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
             ? `${currentDrawing.name} · page ${current.page} of ${current.pageCount}`
             : ""}
         </strong>
+        <button
+          type="button"
+          aria-pressed={itemsOpen}
+          className={itemsOpen ? "toggle-on" : undefined}
+          onClick={() => {
+            setItemsOpen((open) => !open);
+            select(null);
+          }}
+        >
+          Items
+        </button>
         <button type="button" onClick={() => setFitRequest((n) => n + 1)}>
           Fit page
         </button>
@@ -252,7 +265,9 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
         </p>
       )}
 
-      <div className={`drawing-body${selected ? " with-sheet" : ""}`}>
+      <div
+        className={`drawing-body${selected || itemsOpen ? " with-sheet" : ""}`}
+      >
         {drawings.length === 0 ? (
           <p className="muted">
             No drawings yet. Add them from the{" "}
@@ -286,16 +301,33 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
           />
         )}
 
-        {selected && (
+        {selected ? (
           <ItemSheet
             key={selected.id}
             item={selected}
             autoFocus={selected.id === justPlaced}
+            closeLabel={itemsOpen ? "‹ Items" : "Done"}
             onClose={() => {
               setJustPlaced(null);
               select(null);
             }}
           />
+        ) : (
+          itemsOpen && (
+            <ItemsPanel
+              items={items ?? []}
+              drawings={drawings}
+              onClose={() => setItemsOpen(false)}
+              onSelect={(item) => {
+                select(item.id);
+                setScrollTarget({
+                  pageKey: pageKey(item.drawingId, item.page),
+                  at: { x: item.x, y: item.y },
+                  token: Date.now(),
+                });
+              }}
+            />
+          )
         )}
       </div>
     </section>

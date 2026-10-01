@@ -10,6 +10,8 @@ interface Props {
   /** Focus the text box straight away (a pin was just placed). */
   autoFocus?: boolean;
   onClose: () => void;
+  /** Label for the close button, e.g. "‹ Items" when opened from the list. */
+  closeLabel?: string;
 }
 
 const KINDS: { kind: ItemKind; label: string }[] = [
@@ -21,7 +23,12 @@ const KINDS: { kind: ItemKind; label: string }[] = [
  * Edits one item: kind, text (saved as you type) and, for instructions, the
  * photo confirmation flag. Render with key={item.id} so text state resets.
  */
-export function ItemSheet({ item, autoFocus, onClose }: Props) {
+export function ItemSheet({
+  item,
+  autoFocus,
+  onClose,
+  closeLabel = "Done",
+}: Props) {
   const [text, setText] = useState(item.text);
   // Shown straight away; the saved value catches up.
   const [photoFlag, setPhotoFlag] = useState(item.requiresPhotoConfirmation);
@@ -55,7 +62,7 @@ export function ItemSheet({ item, autoFocus, onClose }: Props) {
           {saveStateLabel(autosave.state)}
         </span>
         <button type="button" onClick={onClose}>
-          Done
+          {closeLabel}
         </button>
       </div>
 

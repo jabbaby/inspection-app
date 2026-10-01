@@ -385,6 +385,52 @@ test("all drawings scroll as one document", async ({ page }) => {
   );
 });
 
+test("the Items tab lists items and jumps to them", async ({ page }) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [
+    await typicalPdf("S-101 Level 3.pdf"),
+    await typicalPdf("S-102 Level 4.pdf"),
+  ]);
+  await openDrawing(page, "S-101 Level 3");
+  await addPinAt(page, 0.3, 0.3);
+  await typeItem(page, "On the first drawing");
+  await sheet(page).getByRole("button", { name: "Done" }).click();
+
+  const viewer = (await page.getByTestId("drawing-viewer").boundingBox())!;
+  const fourth = await stageBox(page, 3);
+  await scrollDocument(page, fourth.y - viewer.y - 20);
+  await expect(page.getByTestId("page-indicator")).toHaveText(
+    "S-102 Level 4 · page 1 of 3",
+  );
+  await addPinAt(page, 0.5, 0.5, 3);
+  await sheet(page).getByRole("button", { name: "Observation" }).click();
+  await typeItem(page, "On the second drawing");
+  await sheet(page).getByRole("button", { name: "Done" }).click();
+
+  await page.getByRole("button", { name: "Items", exact: true }).click();
+  const panel = page.getByTestId("items-panel");
+  const rows = panel.getByRole("listitem");
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(1)).toContainText(
+    "Observation · S-102 Level 4, page 1",
+  );
+
+  // Jump back up to item A on the first drawing.
+  await rows.nth(0).getByRole("button").click();
+  await expect(page.getByTestId("page-indicator")).toHaveText(
+    "S-101 Level 3 · page 1 of 3",
+  );
+  await expect(sheet(page).getByRole("heading")).toHaveText("Item A");
+  await sheet(page).getByRole("button", { name: "‹ Items" }).click();
+  await expect(panel).toBeVisible();
+
+  await rows.nth(1).getByRole("button").click();
+  await expect(page.getByTestId("page-indicator")).toHaveText(
+    "S-102 Level 4 · page 1 of 3",
+  );
+  await expect(sheet(page).getByRole("heading")).toHaveText("Item B");
+});
+
 test("deleting a drawing removes its items", async ({ page }) => {
   await setupInspection(page);
   const home = page.url();

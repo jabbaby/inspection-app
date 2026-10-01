@@ -681,3 +681,11 @@ button.danger-outline {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+button.item-row {
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  border: 1px solid #e5d9c8;
+}
