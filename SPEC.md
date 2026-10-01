@@ -1,6 +1,6 @@
 # Site Inspection Companion: Project Spec
 
-Status: DRAFT v1.2 (planning complete enough to start build)
+Status: DRAFT v1.3 (planning complete enough to start build)
 Owner: [your name]
 Audience: me, Claude Code, and later the digital innovation team (proof of concept review)
 
@@ -136,7 +136,9 @@ Project        { id, name?, createdAt }                    // optional grouping;
 Inspection     { id, jobNumber, jobName, itemInspected, client{...}, date, inspector, status,
                  nextLetterIndex,   // next item letter; equals the item count after re-lettering
                  createdAt, updatedAt }
-Drawing        { id, inspectionId, name, pdfBlobId, pageCount, fileSize }   // name defaults to the file name
+Drawing        { id, inspectionId, name, pdfBlobId, pageCount, fileSize, pageSizes, createdAt }
+               // name defaults to the file name; pageSizes [w, h] per page lay out the document;
+               // createdAt orders drawings in the document
 Item           { id, inspectionId, letter, kind: 'instruction' | 'observation',
                  drawingId, page, x, y,   // x,y normalised 0..1 of page
                  text, requiresPhotoConfirmation, photoIds[], createdAt }
@@ -193,7 +195,7 @@ Brand tokens from the sample: red `#DA1A32`, cream `#FFF2DF`, dark maroon `#580B
 
 1. **Inspections list** (new, open, import, back up)
 2. **Inspection home** (job details, drawings, items summary, memo, export). Job details save automatically as you type (no Save button). Nothing is required to save; a missing job number or job name is flagged, and both are required before a memo is created (step 7). New inspections are dated today and take the inspector name from Settings. Deleting an inspection (after confirmation) removes its drawings, items, photos, memos and observation boxes; memo counters are kept so SIM references are never reused.
-3. **Drawing viewer** (pan/zoom, drop pin, item sheet with instruction + photos). Opened from the inspection home's Drawings list (add PDFs from Files, rename, delete with its items) or its Items list (opens the drawing at that pin). The item sheet is a side panel in landscape and below the drawing in portrait; opening it keeps the current zoom and pans only if the selected pin would be hidden.
+3. **Drawing viewer** (pan/zoom, drop pin, item sheet with instruction + photos). All of an inspection's drawings appear as **one continuous scrolling document** (GoodNotes style): every page of every drawing stacked vertically, in the order the drawings were added, each page shown at the same width, with the drawing's name above its first page. A label shows the current drawing and page; **Fit page** fits the current page. Only pages on or near the screen are rendered, and drawing PDFs are opened only while needed. Opened from the inspection home's Drawings list (scrolls to that drawing) or Items list (scrolls to that pin). An **Items** button opens a panel listing every item in letter order; tapping one scrolls to its pin and opens its sheet. The item sheet is a side panel in landscape and below the drawing in portrait; opening it keeps the current zoom and pans only if the selected pin would be hidden.
 4. **Memo editor** (live preview of the branded page, field editing, snippet picker)
 5. **Export** (preview, generate PDF, share sheet)
 6. **Settings** (inspector details, snippets, template, storage)
