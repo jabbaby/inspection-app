@@ -1,3 +1,5 @@
+import { formatLongDate } from "../../lib/dates";
+
 /**
  * Fixed memo wording that is template logic, not user-editable snippets
  * (SPEC section 4, docs/content/snippets.md "Rules"). Brand text (office
@@ -43,26 +45,5 @@ export function referenceLine(
   return itemInspected ? `${reference} – ${itemInspected}` : reference;
 }
 
-const MONTHS = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-];
-
 /** "2026-10-01" -> "1 October 2026". Other strings are shown as entered. */
-export function formatMemoDate(isoDate: string): string {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate);
-  if (!match) return isoDate;
-  const [, year, month, day] = match;
-  const monthName = MONTHS[Number(month) - 1];
-  return monthName ? `${Number(day)} ${monthName} ${year}` : isoDate;
-}
+export const formatMemoDate = formatLongDate;
