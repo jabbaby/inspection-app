@@ -31,6 +31,8 @@ export default defineConfig({
       strategies: "generateSW",
       // Never reload on its own: an update could interrupt an inspection.
       registerType: "prompt",
+      // public/ is already matched by globPatterns below.
+      includeManifestIcons: false,
       manifest: {
         name: "Site Inspection Companion",
         short_name: "Inspections",
