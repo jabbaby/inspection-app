@@ -91,8 +91,22 @@ describe("deleteInspection", () => {
 
     const seed = async (inspectionId: string, tag: string) => {
       await db.blobs.bulkAdd([
-        { id: `pdf-${tag}`, blob: new Blob(["pdf"]) },
-        { id: `img-${tag}`, blob: new Blob(["jpg"]) },
+        {
+          id: `pdf-${tag}`,
+          ...{
+            data: new TextEncoder().encode("pdf").buffer,
+            type: "application/octet-stream",
+            size: 3,
+          },
+        },
+        {
+          id: `img-${tag}`,
+          ...{
+            data: new TextEncoder().encode("jpg").buffer,
+            type: "application/octet-stream",
+            size: 3,
+          },
+        },
       ]);
       await db.drawings.add({
         id: `dwg-${tag}`,
@@ -100,6 +114,7 @@ describe("deleteInspection", () => {
         name: "S-101",
         pdfBlobId: `pdf-${tag}`,
         pageCount: 1,
+        fileSize: 3,
       });
       await db.photos.add({
         id: `photo-${tag}`,

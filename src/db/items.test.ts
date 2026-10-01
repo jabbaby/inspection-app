@@ -32,7 +32,7 @@ afterEach(async () => {
 async function drawing(name = "S-101", pageCount = 2) {
   return addDrawing(db, inspection.id, {
     name,
-    pdf: new Blob(["%PDF"]),
+    pdf: new TextEncoder().encode("%PDF"),
     pageCount,
   });
 }
@@ -129,7 +129,10 @@ describe("observation boxes", () => {
 describe("drawings", () => {
   test("stores the PDF and names drawings from file names", async () => {
     const d = await drawing("S-101 Level 3", 3);
-    expect((await db.blobs.get(d.pdfBlobId))?.blob.size).toBe(4);
+    const stored = await db.blobs.get(d.pdfBlobId);
+    expect(new TextDecoder().decode(stored?.data)).toBe("%PDF");
+    expect(stored).toMatchObject({ type: "application/pdf", size: 4 });
+    expect(d.fileSize).toBe(4);
     expect(drawingNameFromFile("S-101 Level 3.PDF")).toBe("S-101 Level 3");
     expect(drawingNameFromFile(".pdf")).toBe("Drawing");
   });
@@ -147,7 +150,14 @@ describe("drawings", () => {
     const kept = await drawing("Kept");
     const a = await pin(doomed.id);
     await pin(kept.id);
-    await db.blobs.add({ id: "img", blob: new Blob(["jpg"]) });
+    await db.blobs.add({
+      id: "img",
+      ...{
+        data: new TextEncoder().encode("jpg").buffer,
+        type: "application/octet-stream",
+        size: 3,
+      },
+    });
     await db.photos.add({
       id: "photo",
       blobId: "img",

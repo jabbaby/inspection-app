@@ -1,6 +1,6 @@
 /**
  * Record types stored in IndexedDB (SPEC section 8). Ids are UUID strings.
- * Blobs (PDFs, photos) live in the `blobs` table and are referenced by id.
+ * File bytes (PDFs, photos) live in the `blobs` table and are referenced by id.
  */
 
 export interface Client {
@@ -34,6 +34,8 @@ export interface Drawing {
   name: string;
   pdfBlobId: string;
   pageCount: number;
+  /** PDF size in bytes (kept here so listing drawings never loads the file). */
+  fileSize: number;
 }
 
 export type ItemKind = "instruction" | "observation";
@@ -66,9 +68,16 @@ export interface Photo {
   height: number;
 }
 
+/**
+ * File bytes. Stored as an ArrayBuffer, not a Blob: Blob storage in
+ * IndexedDB is not supported by every WebKit build, ArrayBuffers are.
+ */
 export interface StoredBlob {
   id: string;
-  blob: Blob;
+  data: ArrayBuffer;
+  /** MIME type, e.g. "application/pdf". */
+  type: string;
+  size: number;
 }
 
 export type SentVia = "Aconex" | "Email";

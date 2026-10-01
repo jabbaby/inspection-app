@@ -4,7 +4,8 @@ import type { Drawing } from "./types";
 
 export interface NewDrawing {
   name: string;
-  pdf: Blob;
+  /** PDF bytes. Copied, so the caller can keep using its array. */
+  pdf: Uint8Array;
   pageCount: number;
 }
 
@@ -25,13 +26,19 @@ export async function addDrawing(
     [db.inspections, db.drawings, db.blobs],
     async () => {
       const pdfBlobId = crypto.randomUUID();
-      await db.blobs.add({ id: pdfBlobId, blob: drawing.pdf });
+      await db.blobs.add({
+        id: pdfBlobId,
+        data: drawing.pdf.slice().buffer,
+        type: "application/pdf",
+        size: drawing.pdf.byteLength,
+      });
       const record: Drawing = {
         id: crypto.randomUUID(),
         inspectionId,
         name: drawing.name,
         pdfBlobId,
         pageCount: drawing.pageCount,
+        fileSize: drawing.pdf.byteLength,
       };
       await db.drawings.add(record);
       await touchInspection(db, inspectionId, now);
