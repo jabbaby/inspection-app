@@ -23,3 +23,5 @@ Format: `YYYY-MM-DD | decision | why | changed in SPEC section`
 2026-10-01 | Memo reference shown on its own line under Job name, same style as Job name | sample has no reference field; keeps the header block together | 4, 15
 2026-10-01 | Memo body text is plain (sample italics were placeholder highlighting); bold/italic only for engineer name and disclaimer | engineer decision | 15
 2026-10-01 | Static Figtree TTFs (official repo, OFL) committed for PDF embedding; memo sidebar drawn as vector, wordmark and footer icon embedded as PNG from the sample | pdf-lib needs TTF; vector keeps the sidebar crisp and small | 15
+2026-10-01 | Gesture model: one finger pans, two-finger pinch zooms, pins only via an Add pin button (one pin per tap of the button); Apple Pencil reserved for freehand markup in slice 2 | engineer wants GoodNotes-style behaviour and no accidental pins while drawing | 3, 5, 14
+2026-10-01 | Use the standard (non-legacy) pdf.js build | test iPad runs iPadOS 26.5, which supports it | n/a

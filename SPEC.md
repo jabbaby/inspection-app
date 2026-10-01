@@ -1,6 +1,6 @@
 # Site Inspection Companion: Project Spec
 
-Status: DRAFT v0.7 (planning complete enough to start build)
+Status: DRAFT v0.8 (planning complete enough to start build)
 Owner: [your name]
 Audience: me, Claude Code, and later the digital innovation team (proof of concept review)
 
@@ -24,7 +24,7 @@ Longer term the app also holds engineering calculators (AS 3600) and a standard 
 ### Slice 1 (the POC core, build first)
 1. Create an inspection (job details).
 2. Upload one or more drawing PDFs and view them with smooth pan/zoom.
-3. Tap to drop **lettered pins** (A, B, C...) on a drawing. Each pin is either an **instruction** or an **observation**, with text, optional photos, and (for instructions) a flag for "photo confirmation required before proceeding".
+3. Use **Add pin** to drop **lettered pins** (A, B, C...) on a drawing. Each pin is either an **instruction** or an **observation**, with text, optional photos, and (for instructions) a flag for "photo confirmation required before proceeding".
 4. Generate the **Site Instruction Memo**, editable in app.
 5. Export one PDF pack: memo + marked-up drawing page(s) + photo appendix.
 6. Export/import an **inspection file** so work moves between iPad and desktop.
@@ -96,6 +96,7 @@ Northrop branding is **hard-coded** for the POC. Brand assets come from the samp
   - The engineer **drags the box into place** in the drawing viewer so it doesn't cover drawing detail. Its position is stored in normalised page coordinates (0..1), like pins. A sensible default spot is used until it is moved.
   - Text size is relative to page size, like the markers, so it stays legible on A1/A3 sheets.
   - The box is hidden on pages with no observations.
+- **Gesture model (GoodNotes style, decided in Spike B):** one finger drags to pan, two fingers pinch to zoom. Pins are placed only through an **Add pin** button: tap it, then tap the drawing (finger, Apple Pencil or mouse); the mode ends after one pin. Taps never place pins otherwise, so the Apple Pencil stays free for freehand markup (slice 2). Pins can be dragged to move them.
 - Fields per item: letter, kind, drawing + page, position, text, photos (0..n), `requiresPhotoConfirmation` (bool, only meaningful for instructions). No open/closed status in the POC (re-inspections are out of scope).
 
 ## 6. Photos
@@ -211,7 +212,7 @@ Top-level navigation has separate areas: **Inspections** (screens 1 to 5), **Cal
 | PDF export fidelity on iPad Safari | Build PDF with pdf-lib, spike early |
 | Large drawings (A1, many MB) slow on iPad | Render at device resolution only, lazy-render pages, test with real drawings early |
 | iOS storage eviction / limits | Persistent storage request, storage meter, backup prompts |
-| Pencil/touch gesture conflicts (pan vs draw) | Distinguish pointer types; decide gesture model in Spike B |
+| Pencil/touch gesture conflicts (pan vs draw) | Decided: fingers pan/zoom, Pencil reserved for drawing, pins only via an Add pin button (section 5) |
 | Calculator correctness (later) | Every formula cites its AS 3600 clause, has unit tests against hand calcs, and is verified by the engineer before use |
 | Company data and AI tool policy | Check policy before using real drawings or client data with any AI tool |
 
