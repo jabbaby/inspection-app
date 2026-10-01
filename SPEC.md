@@ -1,6 +1,6 @@
 # Site Inspection Companion: Project Spec
 
-Status: DRAFT v0.9 (planning complete enough to start build)
+Status: DRAFT v1.0 (planning complete enough to start build)
 Owner: [your name]
 Audience: me, Claude Code, and later the digital innovation team (proof of concept review)
 
@@ -60,11 +60,11 @@ The sample is a one-page **Site Instruction Memo**, not a long report. Anatomy:
 | Memo reference | auto-generated per job (e.g. `SIM-001`, `SIM-002`), editable. Shown in the memo header with the item inspected, e.g. "SIM-001 – Level 3 slab reinforcement". The sample template has no reference field; it is placed in the right-hand header column on its own line under Job name, in the same style as Job name. |
 | Recipients table | up to ~5 rows: Company, Attn, and To or Copy (checkbox pair; at least one "To") |
 | Site visit requested by | client name/company |
-| Reason for visit | the item inspected (e.g. "Level 3 slab reinforcement") |
+| Reason for visit | the item inspected (e.g. "Level 3 slab reinforcement"); prefilled from the inspection's Item inspected |
 | Inspector | the engineer's name |
 | Sent via | Aconex / Email (select) |
 | Salutation | "Dear [name]," |
-| Item inspected | used in the body sentence |
+| Item inspected | used in the body sentence; prefilled from the inspection's Item inspected (a job details field, also shown in the observations box header) |
 | Body paragraph 1 | "We confirm having inspected the [item inspected] as highlighted on the drawing attached." |
 | Body paragraph 2 | pick from **prefilled messages** (see below) |
 | Conditions list | One lead-in line, then bullets generated from the instruction items and extra standard clauses. With one or more instruction items the lead-in is "Ok to proceed subject to the following:" (same for every body message, as in the sample). With no instruction items the memo shows "Ok to proceed." and no list. |
@@ -91,11 +91,15 @@ Northrop branding is **hard-coded** for the POC. Brand assets come from the samp
 - The memo's conditions list is generated from the items, e.g. "A. [instruction]". The engineer can edit the text in the memo without changing the underlying item.
 - Each item has a **kind**: `instruction` (something the builder must fix or complete) or `observation` (neutral note, no action required). Both get a letter and a pin.
 - In the memo, instructions feed the "Ok to proceed subject to the following:" list.
-- Observations **do not appear in the memo**, so they are never read as conditions. Instead each drawing page that has observation items gets an **observations text box**, burned into that page in the export:
-  - Heading from a `heading` snippet (default "Noted for information:"; longer alternative in the starter set), followed by that page's observations by letter, e.g. "D. Existing crack noted at grid 4".
-  - The engineer **drags the box into place** in the drawing viewer so it doesn't cover drawing detail. Its position is stored in normalised page coordinates (0..1), like pins. A sensible default spot is used until it is moved.
-  - Text size is relative to page size, like the markers, so it stays legible on A1/A3 sheets.
-  - The box is hidden on pages with no observations.
+- Observations **do not appear in the memo**, so they are never read as conditions. Instead each drawing page that has pins gets an **observations box**, burned into that page in the export:
+  - A header line on every page with pins: `NORTHROP INSPECTION | {item inspected} | {first initial}. {surname} | {DD/MM/YYYY}` (inspector and date from the inspection; empty parts are left out).
+  - Below it, only when the page has observations: a heading from a `heading` snippet (default "Noted for information:"; longer alternative in the starter set), followed by that page's observations by letter, e.g. "D. Existing crack noted at grid 4".
+  - The engineer **drags the box into place** in the drawing viewer so it doesn't cover drawing detail. Its position is stored in normalised page coordinates (0..1), like pins. Default spot: top right of the page.
+  - Text size and box width are relative to page size, like the markers, so it stays legible on A1/A3 sheets. In the viewer the box is drawn on the page so it looks as it will in the export.
+  - The box is removed from a page when its last pin is removed.
+- **Item sheet:** placing a pin creates an item and opens its sheet. New items start as **instruction** with the cursor in the text box; an Instruction | Observation switch changes the kind at any time. Instructions have the "photo confirmation required before proceeding" option. Text saves as you type. Tapping a pin reopens its sheet.
+- **Pin style:** instructions are filled red circles with a white letter; observations are white circles with a red border and red letter.
+- The inspection keeps a letter counter that only counts up, so deleting an item never frees its letter.
 - **Gesture model (GoodNotes style, decided in Spike B):** one finger drags to pan, two fingers pinch to zoom. Pins are placed only through an **Add pin** button: tap it, then tap the drawing (finger, Apple Pencil or mouse); the mode ends after one pin. Taps never place pins otherwise, so the Apple Pencil stays free for freehand markup (slice 2). Pins can be dragged to move them.
 - Fields per item: letter, kind, drawing + page, position, text, photos (0..n), `requiresPhotoConfirmation` (bool, only meaningful for instructions). No open/closed status in the POC (re-inspections are out of scope).
 
@@ -127,7 +131,9 @@ Stored locally in IndexedDB. Blobs (PDFs, photos) stored as Blob records and ref
 
 ```ts
 Project        { id, name?, createdAt }                    // optional grouping; may be dropped for POC
-Inspection     { id, jobNumber, jobName, client{...}, date, inspector, status, createdAt, updatedAt }
+Inspection     { id, jobNumber, jobName, itemInspected, client{...}, date, inspector, status,
+                 nextLetterIndex,   // letter counter: only counts up, so letters are never reused
+                 createdAt, updatedAt }
 Drawing        { id, inspectionId, name, pdfBlobId, pageCount }
 Item           { id, inspectionId, letter, kind: 'instruction' | 'observation',
                  drawingId, page, x, y,   // x,y normalised 0..1 of page
@@ -137,7 +143,7 @@ Memo           { id, inspectionId, templateId, reference, fields{...}, bodyBlock
 MemoCounter    { jobNumber, lastSeq }   // drives SIM-001, SIM-002 ... per job number
 MemoTemplate   { id, name, branding{ colours, logoBlobId, fonts }, fixedText{ disclaimer, officeBlock } }
                // POC: a single hard-coded Northrop template (see section 4a)
-ObservationBox { id, drawingId, page, x, y }   // normalised 0..1 top-left; one per drawing page with observations
+ObservationBox { id, drawingId, page, x, y }   // normalised 0..1 top-left; one per drawing page with pins
 Snippet        { id, kind: 'body' | 'condition' | 'heading', label, text }   // 'heading' = observations box heading
 Settings       { inspectorName, inspectorTitle, defaultSentVia, ... }
 // later
@@ -224,6 +230,7 @@ Top-level navigation has separate areas: **Inspections** (screens 1 to 5), **Cal
 - [x] Branding hard-coded to Northrop for the POC (decided).
 - [ ] Is "Aconex / Email" the full list for "Sent via"?
 - [x] Re-inspections are out of scope for the POC (decided).
-- [x] Hosting for the POC: GitHub Pages from David's personal GitHub account (decided). The site is public to anyone with the link (no password option on Pages), which is acceptable because the app has no backend and all user data stays on the device. Synthetic data only until IT approves; revisit hosting (company host or sign-in in front of the link) before real project material or wider sharing.
+- [x] Hosting for the POC: GitHub Pages from David's personal GitHub account (decided). The site is public to anyone with the link (no password option on Pages), which is acceptable because the app has no backend and all user data stays on the device. Revisit hosting (company host or sign-in in front of the link) before wider sharing.
+- [x] Real drawings may be used in the app (decided 2026-10-01): they are stored only on the device and never sent to GitHub, a server or an AI tool. The repo, test fixtures and AI chats stay synthetic, per company policy. Until backups (build step 9), keep original PDFs elsewhere: iOS can clear local web app data.
 - [x] Figtree is self-hosted under the SIL Open Font License (decided). Web fonts come from the @fontsource/figtree package; static TTFs from the official Figtree repo are embedded in the PDF.
 - [x] Memo body text is plain: the sample's italics on the item inspected, the body message and the condition bullets were placeholder highlighting. Bold and italic are kept only for the engineer name and the disclaimer, as in the sample (decided).

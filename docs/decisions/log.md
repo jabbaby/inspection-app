@@ -29,3 +29,9 @@ Format: `YYYY-MM-DD | decision | why | changed in SPEC section`
 2026-10-01 | No field blocks saving an inspection; job number and job name flagged and required before a memo | start inspections with partial details on site; SIM reference and filename need them | 12
 2026-10-01 | New inspections take the inspector name from Settings (My details) | engineer request | 12
 2026-10-01 | Deleting an inspection keeps its job's memo counter | SIM references are never reused | 12
+2026-10-01 | Real drawings may be used in the app; they stay on the device. Repo, fixtures and AI chats stay synthetic | engineer decision: drawings are never uploaded to git, a server or AI | 15
+2026-10-01 | Observations box on every page with pins, default top right, with header "NORTHROP INSPECTION / item inspected / initial surname / DD/MM/YYYY"; observation list only when the page has observations | engineer request | 5, 8
+2026-10-01 | Item inspected becomes an inspection job detail; memo Item inspected and Reason for visit prefill from it | needed for the observations box header before the memo exists | 4, 8
+2026-10-01 | New items start as instructions; kind switched in the item sheet (no separate Add observation button) | most items are instructions; one tap to switch | 5
+2026-10-01 | Inspection keeps an only-increasing letter counter (nextLetterIndex) | letters never reused after deletion | 5, 8
+2026-10-01 | Re-letter deferred; raise it when planning step 7 and before step 10 | gaps are harmless; re-lettering after a memo is sent could confuse | 5
