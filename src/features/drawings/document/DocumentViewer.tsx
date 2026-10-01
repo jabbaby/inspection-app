@@ -399,6 +399,8 @@ export function DocumentViewer(props: Props) {
     // Pencil is reserved for markup; it only acts while placing a pin.
     if (e.pointerType === "pen" && !latest.current.addPinMode) return;
     if (e.pointerType === "mouse" && e.button !== 0) return;
+    // Stop a mouse drag from selecting text around the viewer.
+    if (e.pointerType === "mouse") e.preventDefault();
     capture(e);
     const p = local(e);
     pointers.current.set(e.pointerId, { ...p, type: e.pointerType });

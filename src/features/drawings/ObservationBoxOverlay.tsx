@@ -26,6 +26,7 @@ export function ObservationBoxOverlay({ box, lines, onMoveEnd }: Props) {
 
   function onPointerDown(e: React.PointerEvent) {
     e.stopPropagation();
+    if (e.pointerType === "mouse") e.preventDefault();
     try {
       e.currentTarget.setPointerCapture(e.pointerId);
     } catch {

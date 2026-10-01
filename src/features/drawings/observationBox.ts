@@ -21,8 +21,8 @@ export interface BoxMetrics {
 
 /**
  * Text is 1.2% of the sheet's short side: about 20 pt on A1, 10 pt on A3 and
- * 7 pt on A4. The box is 42 text-heights wide, so the header usually fits on
- * one line.
+ * 7 pt on A4. The box is 50 text-heights wide, so a typical header (in
+ * capitals) fits on one line.
  */
 export function boxMetrics(page: Size): BoxMetrics {
   const short = Math.min(page.width, page.height);
@@ -31,7 +31,7 @@ export function boxMetrics(page: Size): BoxMetrics {
     fontSize,
     lineHeight: fontSize * 1.3,
     padding: fontSize * 0.6,
-    width: Math.min(fontSize * 42, page.width * 0.9),
+    width: Math.min(fontSize * 50, page.width * 0.9),
     margin: short * 0.02,
     borderWidth: Math.max(0.5, fontSize * 0.06),
   };
