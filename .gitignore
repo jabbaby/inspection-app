@@ -1,6 +1,16 @@
 node_modules/
 dist/
+dev-dist/
+coverage/
+test-results/
+playwright-report/
+playwright/.cache/
+*.log
+*.local
 .DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea
 outputs/*
 !outputs/README.md
 .env

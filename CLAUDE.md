@@ -12,12 +12,14 @@ TypeScript, React, Vite, vite-plugin-pwa, pdfjs-dist (render), pdf-lib (export),
 
 ## Commands
 
-(Fill in once scaffolded.)
-- `npm run dev` start dev server
-- `npm run build` production build
-- `npm test` unit tests
-- `npm run test:e2e` Playwright (iPad viewport)
+Node 24, npm.
+- `npm run dev` start dev server (http://localhost:5173/inspection-app/)
+- `npm run build` production build (typecheck + Vite build into `dist/`)
+- `npm run preview` serve the production build (service worker active)
+- `npm test` unit tests (Vitest)
+- `npm run test:e2e` Playwright (iPad viewport, against the production build)
 - `npm run lint` and `npm run typecheck`
+- `npm run format` / `npm run format:check` Prettier
 
 Run typecheck, lint and tests before saying a task is done.
 
