@@ -7,7 +7,6 @@ import {
   type StorageStatus,
 } from "../../db/storage";
 import type { SnippetKind } from "../../db/types";
-import { Link } from "react-router";
 import { MyDetailsForm } from "./MyDetailsForm";
 import { SampleMemoPanel } from "./SampleMemoPanel";
 
@@ -66,17 +65,6 @@ export function SettingsPage() {
       </p>
 
       <SampleMemoPanel />
-
-      <section className="spike-panel" aria-labelledby="viewer-spike-heading">
-        <h2 id="viewer-spike-heading">Drawing viewer (Spike B)</h2>
-        <p>
-          Try pan, pinch-zoom and pins on synthetic drawings or a PDF from
-          Files. Pins are not saved. Temporary.
-        </p>
-        <Link className="button-link" to="/spike/viewer">
-          Open drawing viewer
-        </Link>
-      </section>
     </section>
   );
 }

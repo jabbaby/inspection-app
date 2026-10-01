@@ -9,6 +9,8 @@ import {
   type InspectionPatch,
 } from "../../db/inspections";
 import type { Inspection } from "../../db/types";
+import { DrawingsSection } from "../drawings/DrawingsSection";
+import { ItemsSection } from "../items/ItemsSection";
 import { DeleteInspectionDialog } from "./DeleteInspectionDialog";
 import { inspectionTitle } from "./inspectionTitle";
 import { JobDetailsForm, type JobDetailsValues } from "./JobDetailsForm";
@@ -47,16 +49,6 @@ function mergePatches(a: InspectionPatch, b: InspectionPatch): InspectionPatch {
 }
 
 const LATER_SECTIONS = [
-  {
-    title: "Drawings",
-    step: 5,
-    text: "Upload drawing PDFs and drop lettered pins.",
-  },
-  {
-    title: "Items",
-    step: 5,
-    text: "Instructions and observations, with photos.",
-  },
   {
     title: "Memo",
     step: 7,
@@ -156,6 +148,9 @@ function InspectionHomeFor({ id }: { id: string }) {
         }}
         onBlur={() => void autosave.flush()}
       />
+
+      <DrawingsSection inspectionId={id} />
+      <ItemsSection inspectionId={id} />
 
       {LATER_SECTIONS.map((section) => (
         <div key={section.title} className="later-section">

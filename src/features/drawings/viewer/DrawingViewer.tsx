@@ -177,6 +177,28 @@ export function DrawingViewer(props: Props) {
     settleTimer.current = window.setTimeout(renderTile, SETTLE_MS);
   }
 
+  /** Pans just enough to bring the selected pin back into view. */
+  function keepSelectedVisible(t: ViewTransform): ViewTransform {
+    const pin = latest.current.pins.find((p) => p.selected);
+    if (!pin) return t;
+    const p = normalisedToScreen(t, pin, pageSize);
+    const margin = 40;
+    const { width, height } = viewSize.current;
+    const dx =
+      p.x < margin
+        ? margin - p.x
+        : p.x > width - margin
+          ? width - margin - p.x
+          : 0;
+    const dy =
+      p.y < margin
+        ? margin - p.y
+        : p.y > height - margin
+          ? height - margin - p.y
+          : 0;
+    return dx || dy ? panBy(t, dx, dy) : t;
+  }
+
   function fit() {
     const fitted = fitTransform(pageSize, viewSize.current);
     fitScale.current = fitted.scale;
@@ -348,10 +370,18 @@ export function DrawingViewer(props: Props) {
         return;
       const wasFit =
         Math.abs(transform.current.scale - fitScale.current) < 1e-6;
+      // Width changes on rotation or split view: refit if the page was fitted.
+      // Height-only changes (e.g. an item sheet opening below) keep the view
+      // where it is, so the drawing doesn't jump under the engineer's finger.
+      const widthChanged = Math.abs(width - viewSize.current.width) > 1;
       viewSize.current = { width, height };
       const fitted = fitTransform(pageSize, viewSize.current);
       fitScale.current = fitted.scale;
-      setTransform(wasFit ? fitted : transform.current);
+      if (wasFit && widthChanged) {
+        setTransform(fitted);
+        return;
+      }
+      setTransform(keepSelectedVisible(transform.current));
     });
     observer.observe(container);
     return () => observer.disconnect();

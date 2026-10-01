@@ -6,6 +6,9 @@ const port = 4173;
 export default defineConfig({
   testDir: "e2e",
   fullyParallel: true,
+  // Several WebKit workers rendering PDFs at once starve each other on a dev
+  // machine (tests stall past their timeouts); 3 is stable. CI picks its own.
+  workers: process.env.CI ? undefined : 3,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? "github" : "list",
