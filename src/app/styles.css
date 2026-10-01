@@ -124,3 +124,37 @@ dl.facts dd {
   background: var(--brand-maroon);
   color: #fff;
 }
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.button-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0.5rem 1rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--brand-maroon);
+  background: #fff;
+  color: var(--brand-maroon);
+  text-decoration: none;
+}
+
+.spike-panel {
+  margin-top: 2rem;
+  padding: 1rem 1.25rem;
+  border: 1px dashed var(--brand-maroon);
+  border-radius: 0.5rem;
+}
+
+.spike-panel h2 {
+  margin-top: 0;
+}
+
+.error {
+  color: var(--brand-red);
+}

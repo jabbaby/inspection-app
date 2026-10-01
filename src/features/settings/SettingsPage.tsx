@@ -7,6 +7,7 @@ import {
   type StorageStatus,
 } from "../../db/storage";
 import type { SnippetKind } from "../../db/types";
+import { SampleMemoPanel } from "./SampleMemoPanel";
 
 const KINDS: SnippetKind[] = ["body", "condition", "heading"];
 
@@ -59,6 +60,8 @@ export function SettingsPage() {
                 `${snippets.filter((s) => s.kind === kind).length} ${kind}`,
             ).join(", ")})`}
       </p>
+
+      <SampleMemoPanel />
     </section>
   );
 }

@@ -7,8 +7,6 @@
  * Do not reword it.
  */
 
-const asset = (path: string) => new URL(path, import.meta.url).href;
-
 export const northrop = {
   name: "Northrop",
   colours: {
@@ -43,19 +41,31 @@ export const northrop = {
     body: "Any inspection carried out by Northrop Consulting Engineers Pty Ltd does not relieve the Contractor of their responsibility to construct the structure in accordance with the drawings and specifications. Statements set out here do not relieve the Contractor of his obligations to obtain approvals from authorities having jurisdiction over the works. This does not constitute authorisation for a contract variation unless stated in the instruction. No claim will be accepted unless approval of variation is obtained before any work proceeds.",
   },
   strapline: ["REAL PEOPLE", "REAL PARTNERSHIPS", "REAL IMPACT"],
-  /** Asset URLs (bundled by Vite, precached for offline use). */
+  /**
+   * Asset URLs, bundled by Vite and precached for offline use. Vite only
+   * rewrites `new URL("literal", import.meta.url)`, so keep the paths literal.
+   */
   assets: {
     /** Cream wordmark for the red sidebar (sample image1.png). */
-    wordmarkCream: asset("./assets/northrop-wordmark-cream.png"),
+    wordmarkCream: new URL(
+      "./assets/northrop-wordmark-cream.png",
+      import.meta.url,
+    ).href,
     /** Red "N" roundel for the footer (sample image3.png). */
-    icon: asset("./assets/northrop-icon.png"),
+    icon: new URL("./assets/northrop-icon.png", import.meta.url).href,
     /** Static Figtree TTFs for PDF embedding (SIL OFL, see assets/fonts/OFL.txt). */
     fonts: {
-      regular: asset("./assets/fonts/Figtree-Regular.ttf"),
-      italic: asset("./assets/fonts/Figtree-Italic.ttf"),
-      semiBold: asset("./assets/fonts/Figtree-SemiBold.ttf"),
-      bold: asset("./assets/fonts/Figtree-Bold.ttf"),
-      boldItalic: asset("./assets/fonts/Figtree-BoldItalic.ttf"),
+      regular: new URL("./assets/fonts/Figtree-Regular.ttf", import.meta.url)
+        .href,
+      italic: new URL("./assets/fonts/Figtree-Italic.ttf", import.meta.url)
+        .href,
+      semiBold: new URL("./assets/fonts/Figtree-SemiBold.ttf", import.meta.url)
+        .href,
+      bold: new URL("./assets/fonts/Figtree-Bold.ttf", import.meta.url).href,
+      boldItalic: new URL(
+        "./assets/fonts/Figtree-BoldItalic.ttf",
+        import.meta.url,
+      ).href,
     },
   },
 } as const;

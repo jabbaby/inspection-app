@@ -25,6 +25,11 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(pkg.version),
     __APP_COMMIT__: JSON.stringify(gitCommit()),
   },
+  build: {
+    // pdf-lib + fontkit form one ~1.1 MB chunk, loaded only when a PDF is
+    // generated (and precached for offline use).
+    chunkSizeWarningLimit: 1200,
+  },
   plugins: [
     react(),
     VitePWA({
@@ -57,8 +62,8 @@ export default defineConfig({
       },
       workbox: {
         // Precache everything the app needs, including fonts, so it runs
-        // with no network at all.
-        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2,woff,json}"],
+        // with no network at all. TTFs are the fonts embedded in exported PDFs.
+        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2,woff,ttf,json}"],
         navigateFallback: "index.html",
         cleanupOutdatedCaches: true,
       },
