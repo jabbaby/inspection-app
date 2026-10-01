@@ -1,6 +1,6 @@
 # Site Inspection Companion: Project Spec
 
-Status: DRAFT v1.0 (planning complete enough to start build)
+Status: DRAFT v1.1 (planning complete enough to start build)
 Owner: [your name]
 Audience: me, Claude Code, and later the digital innovation team (proof of concept review)
 
@@ -127,14 +127,14 @@ Export must work offline.
 
 ## 8. Data model
 
-Stored locally in IndexedDB. Blobs (PDFs, photos) stored as Blob records and referenced by id.
+Stored locally in IndexedDB. File bytes (PDFs, photos) are stored in a `blobs` table as ArrayBuffer records `{ id, data, type, size }` and referenced by id. (Not Blob objects: Blob storage in IndexedDB is not supported by every WebKit build.)
 
 ```ts
 Project        { id, name?, createdAt }                    // optional grouping; may be dropped for POC
 Inspection     { id, jobNumber, jobName, itemInspected, client{...}, date, inspector, status,
                  nextLetterIndex,   // letter counter: only counts up, so letters are never reused
                  createdAt, updatedAt }
-Drawing        { id, inspectionId, name, pdfBlobId, pageCount }
+Drawing        { id, inspectionId, name, pdfBlobId, pageCount, fileSize }   // name defaults to the file name
 Item           { id, inspectionId, letter, kind: 'instruction' | 'observation',
                  drawingId, page, x, y,   // x,y normalised 0..1 of page
                  text, requiresPhotoConfirmation, photoIds[], createdAt }
@@ -191,7 +191,7 @@ Brand tokens from the sample: red `#DA1A32`, cream `#FFF2DF`, dark maroon `#580B
 
 1. **Inspections list** (new, open, import, back up)
 2. **Inspection home** (job details, drawings, items summary, memo, export). Job details save automatically as you type (no Save button). Nothing is required to save; a missing job number or job name is flagged, and both are required before a memo is created (step 7). New inspections are dated today and take the inspector name from Settings. Deleting an inspection (after confirmation) removes its drawings, items, photos, memos and observation boxes; memo counters are kept so SIM references are never reused.
-3. **Drawing viewer** (pan/zoom, drop pin, item sheet with instruction + photos)
+3. **Drawing viewer** (pan/zoom, drop pin, item sheet with instruction + photos). Opened from the inspection home's Drawings list (add PDFs from Files, rename, delete with its items) or its Items list (opens the drawing at that pin). The item sheet is a side panel in landscape and below the drawing in portrait; opening it keeps the current zoom and pans only if the selected pin would be hidden.
 4. **Memo editor** (live preview of the branded page, field editing, snippet picker)
 5. **Export** (preview, generate PDF, share sheet)
 6. **Settings** (inspector details, snippets, template, storage)

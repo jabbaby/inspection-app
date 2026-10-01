@@ -35,3 +35,5 @@ Format: `YYYY-MM-DD | decision | why | changed in SPEC section`
 2026-10-01 | New items start as instructions; kind switched in the item sheet (no separate Add observation button) | most items are instructions; one tap to switch | 5
 2026-10-01 | Inspection keeps an only-increasing letter counter (nextLetterIndex) | letters never reused after deletion | 5, 8
 2026-10-01 | Re-letter deferred; raise it when planning step 7 and before step 10 | gaps are harmless; re-lettering after a memo is sent could confuse | 5
+2026-10-01 | File bytes stored as ArrayBuffer records (with type and size), not Blob; drawings keep fileSize | Blob-in-IndexedDB unsupported in some WebKit builds; ArrayBuffer works everywhere and zips simply | 8
+2026-10-01 | Opening the item sheet keeps the drawing's zoom; the view pans only to keep the selected pin visible | avoid the drawing jumping when the sheet opens in portrait | 12
