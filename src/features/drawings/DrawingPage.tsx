@@ -7,11 +7,7 @@ import type { Item } from "../../db/types";
 import { ItemSheet } from "../items/ItemSheet";
 import { indexForLetter } from "../items/letters";
 import { ObservationBoxOverlay } from "./ObservationBoxOverlay";
-import {
-  boxHeader,
-  defaultBoxPosition,
-  observationLines,
-} from "./observationBox";
+import { boxHeader, defaultBoxPosition, boxLines } from "./observationBox";
 import type { PDFDocumentProxy, PDFPageProxy } from "./pdf/pdfjs";
 import { DrawingViewer, type ViewerPin } from "./viewer/DrawingViewer";
 import type { Point } from "./viewer/viewTransform";
@@ -247,9 +243,11 @@ function DrawingScreen({
               box && (
                 <ObservationBoxOverlay
                   box={box}
-                  header={boxHeader(inspection)}
-                  heading={heading ?? DEFAULT_HEADING}
-                  lines={observationLines(pageItems)}
+                  lines={boxLines({
+                    header: boxHeader(inspection),
+                    observationHeading: heading ?? DEFAULT_HEADING,
+                    items: pageItems,
+                  })}
                   onMoveEnd={(to) =>
                     void moveObservationBox(db, box.id, to, inspectionId)
                   }

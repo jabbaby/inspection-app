@@ -117,8 +117,8 @@ export function ItemSheet({ item, autoFocus, onClose }: Props) {
 
       <p className="muted item-sheet-note">
         {isInstruction
-          ? "Instructions are listed in the memo's conditions."
-          : "Observations go in this page's observations box, not the memo."}
+          ? "Instructions go in this page's notes box and the memo's conditions."
+          : "Observations go in this page's notes box, not the memo."}
       </p>
 
       <button
@@ -142,8 +142,8 @@ export function ItemSheet({ item, autoFocus, onClose }: Props) {
         }}
       >
         <p>
-          The pin and its text will be removed. Letter {item.letter} won't be
-          used again in this inspection.
+          The pin and its text will be removed. Later items move up a letter so
+          there are no gaps.
         </p>
       </ConfirmDialog>
     </aside>

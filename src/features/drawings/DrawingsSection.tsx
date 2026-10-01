@@ -189,6 +189,7 @@ export function DrawingsSection({ inspectionId }: { inspectionId: string }) {
         open={renaming !== null}
         title="Rename drawing"
         confirmLabel="Save"
+        wide
         onCancel={() => setRenaming(null)}
         onConfirm={() => {
           if (renaming) void renameDrawing(db, renaming.id, newName);
@@ -223,7 +224,10 @@ export function DrawingsSection({ inspectionId }: { inspectionId: string }) {
             ? ` and its ${deletingCount} ${deletingCount === 1 ? "item" : "items"} will be removed from this device.`
             : " will be removed from this device."}
         </p>
-        <p>This can't be undone. Deleted items' letters won't be used again.</p>
+        <p>
+          This can't be undone. Remaining items are re-lettered so there are no
+          gaps.
+        </p>
       </ConfirmDialog>
     </div>
   );

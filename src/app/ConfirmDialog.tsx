@@ -7,6 +7,8 @@ interface Props {
   confirmLabel: string;
   /** Styles the confirm button as destructive. */
   danger?: boolean;
+  /** Wider dialog, e.g. for editing a long name. */
+  wide?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -18,6 +20,7 @@ export function ConfirmDialog({
   children,
   confirmLabel,
   danger,
+  wide,
   onConfirm,
   onCancel,
 }: Props) {
@@ -34,7 +37,7 @@ export function ConfirmDialog({
   return (
     <dialog
       ref={ref}
-      className="confirm-dialog"
+      className={wide ? "confirm-dialog wide" : "confirm-dialog"}
       aria-labelledby={titleId}
       onCancel={(e) => {
         e.preventDefault();

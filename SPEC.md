@@ -1,6 +1,6 @@
 # Site Inspection Companion: Project Spec
 
-Status: DRAFT v1.1 (planning complete enough to start build)
+Status: DRAFT v1.2 (planning complete enough to start build)
 Owner: [your name]
 Audience: me, Claude Code, and later the digital innovation team (proof of concept review)
 
@@ -86,20 +86,22 @@ Northrop branding is **hard-coded** for the POC. Brand assets come from the samp
 
 ## 5. Lettered items and pins
 
-- Each pin has a letter in order of creation: A, B, C ... Z, then AA, AB ... (never reuse a letter within an inspection, even after deletion, unless the user chooses "re-letter").
+- Each pin has a letter in order of creation: A, B, C ... Z, then AA, AB ... Deleting an item (or a drawing) re-letters the remaining items in creation order so there are no gaps: delete C and D becomes C. Memos are checked before sending; build step 8 warns before deleting once a memo has been exported.
 - Letters are **per inspection**, not per drawing, so item "C" in the memo points to exactly one pin on one drawing.
 - The memo's conditions list is generated from the items, e.g. "A. [instruction]". The engineer can edit the text in the memo without changing the underlying item.
 - Each item has a **kind**: `instruction` (something the builder must fix or complete) or `observation` (neutral note, no action required). Both get a letter and a pin.
 - In the memo, instructions feed the "Ok to proceed subject to the following:" list.
-- Observations **do not appear in the memo**, so they are never read as conditions. Instead each drawing page that has pins gets an **observations box**, burned into that page in the export:
+- Observations **do not appear in the memo**, so they are never read as conditions. Instead each drawing page that has pins gets an **observations box** (the "notes box" in the app), burned into that page in the export. It also lists that page's instructions, so the builder sees both on the drawing:
   - A header line on every page with pins: `NORTHROP INSPECTION | {item inspected} | {first initial}. {surname} | {DD/MM/YYYY}` (inspector and date from the inspection; empty parts are left out).
-  - Below it, only when the page has observations: a heading from a `heading` snippet (default "Noted for information:"; longer alternative in the starter set), followed by that page's observations by letter, e.g. "D. Existing crack noted at grid 4".
+  - Then, only when the page has instructions: the fixed heading "Instructions:" followed by that page's instructions by letter, e.g. "A. Add N12 bar at grid C/4".
+  - Then, only when the page has observations: a heading from a `heading` snippet (default "Noted for information:"; longer alternative in the starter set), followed by that page's observations by letter, e.g. "D. Existing crack noted at grid 4".
   - The engineer **drags the box into place** in the drawing viewer so it doesn't cover drawing detail. Its position is stored in normalised page coordinates (0..1), like pins. Default spot: top right of the page.
   - Text size and box width are relative to page size, like the markers, so it stays legible on A1/A3 sheets. In the viewer the box is drawn on the page so it looks as it will in the export.
   - The box is removed from a page when its last pin is removed.
+  - Style: text and border in markup blue `#0165FC`, all in capitals, Arial on screen. The PDF export uses Helvetica (Arial's metric twin, built into every PDF viewer) so no font file is bundled. Colour and fonts live in `src/brand/northrop.ts` (`markup`).
 - **Item sheet:** placing a pin creates an item and opens its sheet. New items start as **instruction** with the cursor in the text box; an Instruction | Observation switch changes the kind at any time. Instructions have the "photo confirmation required before proceeding" option. Text saves as you type. Tapping a pin reopens its sheet.
-- **Pin style:** instructions are filled red circles with a white letter; observations are white circles with a red border and red letter.
-- The inspection keeps a letter counter that only counts up, so deleting an item never frees its letter.
+- **Pin style:** instructions are filled red circles with a white letter; observations are filled markup-blue (`#0165FC`) circles with a white letter.
+- The inspection keeps a letter counter (the next letter), reset to the item count whenever items are re-lettered.
 - **Gesture model (GoodNotes style, decided in Spike B):** one finger drags to pan, two fingers pinch to zoom. Pins are placed only through an **Add pin** button: tap it, then tap the drawing (finger, Apple Pencil or mouse); the mode ends after one pin. Taps never place pins otherwise, so the Apple Pencil stays free for freehand markup (slice 2). Pins can be dragged to move them.
 - Fields per item: letter, kind, drawing + page, position, text, photos (0..n), `requiresPhotoConfirmation` (bool, only meaningful for instructions). No open/closed status in the POC (re-inspections are out of scope).
 
@@ -132,7 +134,7 @@ Stored locally in IndexedDB. File bytes (PDFs, photos) are stored in a `blobs` t
 ```ts
 Project        { id, name?, createdAt }                    // optional grouping; may be dropped for POC
 Inspection     { id, jobNumber, jobName, itemInspected, client{...}, date, inspector, status,
-                 nextLetterIndex,   // letter counter: only counts up, so letters are never reused
+                 nextLetterIndex,   // next item letter; equals the item count after re-lettering
                  createdAt, updatedAt }
 Drawing        { id, inspectionId, name, pdfBlobId, pageCount, fileSize }   // name defaults to the file name
 Item           { id, inspectionId, letter, kind: 'instruction' | 'observation',

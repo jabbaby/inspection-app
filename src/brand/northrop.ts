@@ -22,6 +22,17 @@ export const northrop = {
   font: {
     family: "Figtree",
   },
+  /**
+   * Drawing markup (pins and the notes box burned into drawing pages).
+   * Instruction pins use colours.red; observation pins and the notes box use
+   * markup.blue. The notes box is set in Arial capitals; exported PDFs use
+   * Helvetica, Arial's metric twin, which every PDF viewer has built in.
+   */
+  markup: {
+    blue: "#0165FC",
+    notesFont: "Arial",
+    notesPdfFont: "Helvetica",
+  },
   /** A4 portrait in PDF points. */
   page: {
     width: 595.28,

@@ -1,29 +1,21 @@
 import { useRef, useState } from "react";
 import type { ObservationBox } from "../../db/types";
-import { boxMetrics, clampBoxPosition } from "./observationBox";
+import { boxMetrics, clampBoxPosition, type BoxLine } from "./observationBox";
 import type { Point } from "./viewer/viewTransform";
 import { useViewerCoords } from "./viewer/viewerCoords";
 
 interface Props {
   box: ObservationBox;
-  header: string;
-  /** Shown with the observation lines; omitted when there are none. */
-  heading: string;
-  lines: string[];
+  /** From boxLines(): header, then instruction and observation sections. */
+  lines: BoxLine[];
   onMoveEnd: (to: Point) => void;
 }
 
 /**
- * The observations box, drawn on the page in page units so it zooms with the
+ * The notes box (instructions and observations), drawn on the page in page units so it zooms with the
  * drawing and matches the exported PDF. Drag it to move it off detail.
  */
-export function ObservationBoxOverlay({
-  box,
-  header,
-  heading,
-  lines,
-  onMoveEnd,
-}: Props) {
+export function ObservationBoxOverlay({ box, lines, onMoveEnd }: Props) {
   const { pageSize, clientToNormalised } = useViewerCoords();
   const m = boxMetrics(pageSize);
   const [dragPos, setDragPos] = useState<Point | null>(null);
@@ -74,7 +66,7 @@ export function ObservationBoxOverlay({
       data-x={pos.x.toFixed(4)}
       data-y={pos.y.toFixed(4)}
       role="group"
-      aria-label="Observations box (drag to move)"
+      aria-label="Notes box (drag to move)"
       style={{
         left: pos.x * pageSize.width,
         top: pos.y * pageSize.height,
@@ -89,15 +81,11 @@ export function ObservationBoxOverlay({
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
     >
-      <div className="observation-box-header">{header}</div>
-      {lines.length > 0 && (
-        <>
-          <div className="observation-box-heading">{heading}</div>
-          {lines.map((line) => (
-            <div key={line}>{line}</div>
-          ))}
-        </>
-      )}
+      {lines.map((line, i) => (
+        <div key={i} className={`observation-box-${line.style}`}>
+          {line.text}
+        </div>
+      ))}
     </div>
   );
 }

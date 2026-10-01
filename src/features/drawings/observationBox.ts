@@ -1,6 +1,6 @@
 /**
- * The observations box drawn on each drawing page that has pins (SPEC
- * section 5). Pure layout and text rules shared by the viewer and, in build
+ * The notes box ("observations box" in SPEC section 5) drawn on each
+ * drawing page that has pins. Pure layout and text rules shared by the viewer and, in build
  * step 8, the PDF export, so both draw it the same size in the same place.
  * Sizes are in page units (PDF points) and scale with the sheet.
  */
@@ -85,10 +85,44 @@ export function boxHeader(inspection: {
     .join(" | ");
 }
 
-/** That page's observations in letter order, e.g. "D. Existing crack". */
-export function observationLines(items: Item[]): string[] {
+/** Fixed template heading for the page's instructions in the box. */
+export const INSTRUCTIONS_HEADING = "Instructions:";
+
+/** That page's items of one kind in letter order, e.g. "D. Existing crack". */
+export function itemLines(items: Item[], kind: Item["kind"]): string[] {
   return items
-    .filter((item) => item.kind === "observation")
+    .filter((item) => item.kind === kind)
     .sort((a, b) => indexForLetter(a.letter) - indexForLetter(b.letter))
     .map((item) => `${item.letter}. ${item.text.trim()}`.trim());
+}
+
+/** That page's observations in letter order. */
+export function observationLines(items: Item[]): string[] {
+  return itemLines(items, "observation");
+}
+
+export interface BoxLine {
+  text: string;
+  style: "header" | "heading" | "item";
+}
+
+/**
+ * Everything the box shows, top to bottom, in capitals: the header, then
+ * instructions (if any), then observations (if any). The viewer and the PDF
+ * export both draw these lines, so they always match.
+ */
+export function boxLines(options: {
+  header: string;
+  observationHeading: string;
+  items: Item[];
+}): BoxLine[] {
+  const lines: BoxLine[] = [{ text: options.header, style: "header" }];
+  const section = (heading: string, items: string[]) => {
+    if (items.length === 0) return;
+    lines.push({ text: heading, style: "heading" });
+    for (const text of items) lines.push({ text, style: "item" });
+  };
+  section(INSTRUCTIONS_HEADING, itemLines(options.items, "instruction"));
+  section(options.observationHeading, itemLines(options.items, "observation"));
+  return lines.map((line) => ({ ...line, text: line.text.toUpperCase() }));
 }

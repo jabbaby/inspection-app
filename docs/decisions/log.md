@@ -37,3 +37,7 @@ Format: `YYYY-MM-DD | decision | why | changed in SPEC section`
 2026-10-01 | Re-letter deferred; raise it when planning step 7 and before step 10 | gaps are harmless; re-lettering after a memo is sent could confuse | 5
 2026-10-01 | File bytes stored as ArrayBuffer records (with type and size), not Blob; drawings keep fileSize | Blob-in-IndexedDB unsupported in some WebKit builds; ArrayBuffer works everywhere and zips simply | 8
 2026-10-01 | Opening the item sheet keeps the drawing's zoom; the view pans only to keep the selected pin visible | avoid the drawing jumping when the sheet opens in portrait | 12
+2026-10-02 | Deleting an item or drawing re-letters the rest in creation order (no gaps); replaces "letters never reused" and the deferred manual re-letter | engineer decision; memos are checked before sending. Step 8 to warn after a memo has been exported | 5, CLAUDE.md
+2026-10-02 | Notes box also lists the page's instructions under "Instructions:" above observations | engineer request | 5
+2026-10-02 | Notes box text and border, and observation pins, in markup blue #0165FC | easier to tell observations from instructions | 5
+2026-10-02 | Notes box in Arial capitals (screen); Helvetica in PDF export. ISOCPEUR not bundled: Autodesk copyright, public repo and site | licensing; Helvetica is Arial's metric twin and needs no font file | 5, 8

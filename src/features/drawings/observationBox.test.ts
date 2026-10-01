@@ -5,6 +5,7 @@ import {
   boxMetrics,
   clampBoxPosition,
   defaultBoxPosition,
+  boxLines,
   initialAndSurname,
   observationLines,
 } from "./observationBox";
@@ -75,4 +76,46 @@ test("observation lines are in letter order and skip instructions", () => {
       item("C", "observation", ""),
     ]),
   ).toEqual(["C.", "D. Existing crack noted at grid 4", "AA. Late one"]);
+});
+
+describe("boxLines", () => {
+  const item = (letter: string, kind: Item["kind"], text: string) =>
+    ({ letter, kind, text }) as Item;
+
+  test("header, then instructions, then observations, all in capitals", () => {
+    expect(
+      boxLines({
+        header: "NORTHROP INSPECTION | Level 3 slab | T. Engineer | 01/10/2026",
+        observationHeading: "Noted for information:",
+        items: [
+          item("B", "observation", "Existing crack noted at grid 4"),
+          item("C", "instruction", "Prop spacing per shop drawing"),
+          item("A", "instruction", "Add N12 bar at grid C/4"),
+        ],
+      }),
+    ).toEqual([
+      {
+        style: "header",
+        text: "NORTHROP INSPECTION | LEVEL 3 SLAB | T. ENGINEER | 01/10/2026",
+      },
+      { style: "heading", text: "INSTRUCTIONS:" },
+      { style: "item", text: "A. ADD N12 BAR AT GRID C/4" },
+      { style: "item", text: "C. PROP SPACING PER SHOP DRAWING" },
+      { style: "heading", text: "NOTED FOR INFORMATION:" },
+      { style: "item", text: "B. EXISTING CRACK NOTED AT GRID 4" },
+    ]);
+  });
+
+  test("leaves out a section with no items", () => {
+    const lines = boxLines({
+      header: "H",
+      observationHeading: "Noted for information:",
+      items: [item("A", "observation", "x")],
+    });
+    expect(lines.map((l) => l.text)).toEqual([
+      "H",
+      "NOTED FOR INFORMATION:",
+      "A. X",
+    ]);
+  });
 });

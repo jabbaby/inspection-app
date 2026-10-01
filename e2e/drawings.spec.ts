@@ -7,8 +7,9 @@ import { centre, pinch, stageBox, waitForServiceWorker } from "./helpers";
 
 const field = (page: Page, label: string) =>
   page.getByLabel(label, { exact: true });
+// The notes box shows everything in capitals.
 const HEADER =
-  "NORTHROP INSPECTION | Level 3 slab reinforcement | T. Engineer | 01/10/2026";
+  "NORTHROP INSPECTION | LEVEL 3 SLAB REINFORCEMENT | T. ENGINEER | 01/10/2026";
 
 /** New inspection with the fields the observations box header uses. */
 async function setupInspection(page: Page) {
@@ -53,10 +54,15 @@ async function openDrawing(page: Page, name: string) {
 /** Add pin, then tap at a fraction of the page. Returns the tap point. */
 async function addPinAt(page: Page, fx: number, fy: number) {
   const box = await stageBox(page);
+  const before = await page.getByTestId("viewer-pin").count();
   await page.getByRole("button", { name: "Add pin" }).click();
   const at = { x: box.x + box.width * fx, y: box.y + box.height * fy };
   await page.mouse.click(at.x, at.y);
-  await expect(page.getByTestId("item-sheet")).toBeVisible();
+  // Wait for the new pin's own sheet (a previous sheet may still be open).
+  await expect(page.getByTestId("viewer-pin")).toHaveCount(before + 1);
+  await expect(
+    page.getByTestId("item-sheet").getByRole("textbox"),
+  ).toBeFocused();
   return at;
 }
 
@@ -131,9 +137,12 @@ test("a pin becomes a saved instruction exactly where tapped", async ({
   expect(Math.abs(placed.x - (stage.x + stage.width * n.x))).toBeLessThan(1);
   expect(Math.abs(placed.y - (stage.y + stage.height * n.y))).toBeLessThan(1);
 
-  // The page's box shows the header line but no observation list yet.
+  // The page's notes box shows the header and the instruction.
   const obsBox = page.getByTestId("observation-box");
-  await expect(obsBox).toHaveText(HEADER);
+  await expect(obsBox).toContainText(HEADER);
+  await expect(obsBox).toContainText("INSTRUCTIONS:");
+  await expect(obsBox).toContainText("A. ADD N12 BAR AT GRID C/4");
+  await expect(obsBox).not.toContainText("NOTED FOR INFORMATION:");
 
   await page.reload();
   await expect(
@@ -154,7 +163,7 @@ test("a pin becomes a saved instruction exactly where tapped", async ({
   await expect(sheet(page).getByRole("heading")).toHaveText("Item A");
 });
 
-test("observations go in the page's box, not the memo list", async ({
+test("the notes box lists instructions, then observations", async ({
   page,
 }) => {
   await setupInspection(page);
@@ -176,30 +185,47 @@ test("observations go in the page's box, not the memo list", async ({
 
   const obsBox = page.getByTestId("observation-box");
   await expect(obsBox).toContainText(HEADER);
-  await expect(obsBox).toContainText("Noted for information:");
-  await expect(obsBox).toContainText("B. Existing crack noted at grid 4");
-  await expect(obsBox).not.toContainText("Add bar");
+  await expect(obsBox).toContainText(
+    "INSTRUCTIONS:A. ADD BARNOTED FOR INFORMATION:B. EXISTING CRACK NOTED AT GRID 4",
+  );
 
   await sheet(page).getByRole("button", { name: "Instruction" }).click();
-  await expect(obsBox).toHaveText(HEADER);
+  await expect(obsBox).toContainText(
+    "INSTRUCTIONS:A. ADD BARB. EXISTING CRACK NOTED AT GRID 4",
+  );
+  await expect(obsBox).not.toContainText("NOTED FOR INFORMATION:");
 });
 
-test("letters are never reused and the box goes with the last pin", async ({
+test("deleting an item re-letters the rest, and the box goes with the last pin", async ({
   page,
 }) => {
   await setupInspection(page);
   await uploadDrawings(page, [await typicalPdf()]);
   await openDrawing(page, "S-101 Level 3");
 
-  for (const fx of [0.2, 0.3, 0.4]) await addPinAt(page, fx, 0.5);
-  await expect(sheet(page).getByRole("heading")).toHaveText("Item C");
-  await deleteOpenItem(page);
-  await addPinAt(page, 0.5, 0.5);
-  await expect(sheet(page).getByRole("heading")).toHaveText("Item D");
+  for (const fx of [0.2, 0.3, 0.4]) {
+    await addPinAt(page, fx, 0.5);
+    await typeItem(page, `Pin at ${fx}`);
+  }
   await sheet(page).getByRole("button", { name: "Done" }).click();
 
-  for (const letter of ["A", "B", "D"]) {
-    const c = await centre(pinByLetter(page, letter));
+  // Delete B: the pin that was C becomes B.
+  let c = await centre(pinByLetter(page, "B"));
+  await page.mouse.click(c.x, c.y);
+  await deleteOpenItem(page);
+  await expect(page.getByTestId("viewer-pin")).toHaveCount(2);
+  c = await centre(pinByLetter(page, "B"));
+  await page.mouse.click(c.x, c.y);
+  await expect(sheet(page).getByRole("textbox")).toHaveValue("Pin at 0.4");
+  await sheet(page).getByRole("button", { name: "Done" }).click();
+  await addPinAt(page, 0.5, 0.5);
+  await expect(sheet(page).getByRole("heading")).toHaveText("Item C");
+  await sheet(page).getByRole("button", { name: "Done" }).click();
+
+  // Deleting A each time re-letters the rest down to A.
+  for (let i = 0; i < 3; i++) {
+    const letter = "A";
+    c = await centre(pinByLetter(page, letter));
     await page.mouse.click(c.x, c.y);
     await expect(sheet(page).getByRole("heading")).toHaveText(`Item ${letter}`);
     await deleteOpenItem(page);

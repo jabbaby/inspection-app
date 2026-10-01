@@ -417,7 +417,7 @@ button.danger-outline {
   border: none;
   border-radius: 0.75rem;
   padding: 1.5rem;
-  max-width: min(90vw, 440px);
+  width: min(90vw, 440px);
   color: var(--brand-grey);
   font-family: inherit;
 }
@@ -437,9 +437,7 @@ button.danger-outline {
 }
 
 .viewer-pin-observation {
-  background: #fff;
-  color: var(--brand-red);
-  border: 3px solid var(--brand-red);
+  background: var(--markup-blue);
 }
 
 .viewer-pin-selected {
@@ -581,8 +579,8 @@ button.danger-outline {
 }
 
 .item-badge-observation {
-  background: #fff;
-  color: var(--brand-red);
+  background: var(--markup-blue);
+  border-color: var(--markup-blue);
 }
 
 .item-list {
@@ -618,10 +616,12 @@ button.danger-outline {
   position: absolute;
   box-sizing: border-box;
   background: #fff;
-  color: #000;
+  color: var(--markup-blue);
   border-style: solid;
-  border-color: #000;
-  font-family: var(--brand-font), system-ui, sans-serif;
+  border-color: var(--markup-blue);
+  /* Arial is built into iPadOS and Windows; Liberation Sans matches it. */
+  font-family: var(--notes-font), "Liberation Sans", Helvetica, sans-serif;
+  text-transform: uppercase;
   cursor: move;
   touch-action: none;
 }
@@ -632,5 +632,13 @@ button.danger-outline {
 
 .observation-box-heading {
   margin-top: 0.35em;
-  font-style: italic;
+  font-weight: 700;
+}
+
+.confirm-dialog.wide {
+  width: min(92vw, 640px);
+}
+
+.confirm-dialog .field input {
+  width: 100%;
 }
