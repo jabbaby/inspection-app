@@ -1,4 +1,4 @@
-import { letterForIndex } from "../features/items/letters";
+import { indexForLetter, letterForIndex } from "../features/items/letters";
 import type { InspectionDb } from "./schema";
 import type { Item, ItemKind } from "./types";
 
@@ -25,9 +25,8 @@ export async function touchInspection(
 }
 
 /**
- * Creates an instruction item with the inspection's next letter (the counter
- * only ever increases, so letters are never reused). The first pin on a page
- * also creates that page's observations box at `boxPosition`.
+ * Creates an instruction item with the inspection's next letter. The first
+ * pin on a page also creates that page's notes box at `boxPosition`.
  */
 export async function createItem(
   db: InspectionDb,
@@ -104,8 +103,34 @@ export async function deleteItemRecords(
 }
 
 /**
- * Deletes an item and its photos. Its letter is not reused. The page's
- * observations box goes when its last pin does.
+ * Re-letters an inspection's items A, B, C... in the order their pins were
+ * created, closing any gaps, and resets the letter counter to match. Run
+ * inside a transaction that includes inspections and items.
+ */
+export async function reletterInspection(
+  db: InspectionDb,
+  inspectionId: string,
+): Promise<void> {
+  const items = await db.items
+    .where("inspectionId")
+    .equals(inspectionId)
+    .toArray();
+  items.sort(
+    (a, b) =>
+      a.createdAt - b.createdAt ||
+      indexForLetter(a.letter) - indexForLetter(b.letter),
+  );
+  for (const [index, item] of items.entries()) {
+    const letter = letterForIndex(index);
+    if (item.letter !== letter) await db.items.update(item.id, { letter });
+  }
+  await db.inspections.update(inspectionId, { nextLetterIndex: items.length });
+}
+
+/**
+ * Deletes an item and its photos, then re-letters the rest so there are no
+ * gaps (delete C and D becomes C). The page's notes box goes when its last
+ * pin does.
  */
 export async function deleteItem(
   db: InspectionDb,
@@ -130,6 +155,7 @@ export async function deleteItem(
           .equals([item.drawingId, item.page])
           .delete();
       }
+      await reletterInspection(db, item.inspectionId);
       await touchInspection(db, item.inspectionId, now);
     },
   );

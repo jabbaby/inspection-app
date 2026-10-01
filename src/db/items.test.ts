@@ -57,13 +57,34 @@ describe("items", () => {
     expect((await db.inspections.get(inspection.id))?.nextLetterIndex).toBe(3);
   });
 
-  test("never reuses a deleted letter", async () => {
+  test("re-letters the rest in creation order when one is deleted", async () => {
+    const d1 = await drawing("S-101");
+    const d2 = await drawing("S-102");
+    const a = await pin(d1.id);
+    const b = await pin(d2.id);
+    const c = await pin(d1.id, 2);
+    const dItem = await pin(d2.id);
+
+    await deleteItem(db, b.id);
+
+    const letters = async (id: string) => (await db.items.get(id))?.letter;
+    expect([
+      await letters(a.id),
+      await letters(c.id),
+      await letters(dItem.id),
+    ]).toEqual(["A", "B", "C"]);
+    expect((await db.inspections.get(inspection.id))?.nextLetterIndex).toBe(3);
+    expect((await pin(d1.id)).letter).toBe("D");
+  });
+
+  test("re-letters past Z without gaps", async () => {
     const d = await drawing();
-    await pin(d.id);
-    await pin(d.id);
-    const c = await pin(d.id);
-    await deleteItem(db, c.id);
-    expect((await pin(d.id)).letter).toBe("D");
+    const items = [];
+    for (let i = 0; i < 28; i++) items.push(await pin(d.id));
+    expect(items[27].letter).toBe("AB");
+    await deleteItem(db, items[0].id);
+    expect((await db.items.get(items[27].id))?.letter).toBe("AA");
+    expect((await db.items.get(items[1].id))?.letter).toBe("A");
   });
 
   test("updates kind, text, flag and position", async () => {
@@ -181,7 +202,7 @@ describe("drawings", () => {
     expect(
       (await db.observationBoxes.toArray()).map((b) => b.drawingId),
     ).toEqual([kept.id]);
-    // Letters keep counting after a drawing is deleted.
-    expect((await pin(kept.id)).letter).toBe("C");
+    // The kept drawing's item becomes A, so the next pin is B.
+    expect((await pin(kept.id)).letter).toBe("B");
   });
 });

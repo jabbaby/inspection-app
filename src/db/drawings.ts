@@ -1,4 +1,8 @@
-import { deleteItemRecords, touchInspection } from "./items";
+import {
+  deleteItemRecords,
+  reletterInspection,
+  touchInspection,
+} from "./items";
 import type { InspectionDb } from "./schema";
 import type { Drawing } from "./types";
 
@@ -63,7 +67,7 @@ export async function renameDrawing(
 
 /**
  * Deletes a drawing, its PDF, its items (with photos) and its observation
- * boxes. Deleted items' letters are not reused.
+ * boxes, then re-letters the inspection's remaining items.
  */
 export async function deleteDrawing(
   db: InspectionDb,
@@ -88,6 +92,7 @@ export async function deleteDrawing(
       await db.observationBoxes.filter((box) => box.drawingId === id).delete();
       await db.blobs.delete(drawing.pdfBlobId);
       await db.drawings.delete(id);
+      await reletterInspection(db, drawing.inspectionId);
       await touchInspection(db, drawing.inspectionId, now);
     },
   );
