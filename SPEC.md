@@ -109,9 +109,13 @@ Northrop branding is **hard-coded** for the POC. Brand assets come from the samp
 
 ## 6. Photos
 
-- Add from the camera or photo library.
-- Photos attach to an item and also appear in the **photo appendix** at the end of the PDF pack, grouped by item (e.g. Instruction A) with captions.
-- Compress on import (target long edge about 1600 px, JPEG ~0.8) to keep local storage and PDF size sensible. Keep EXIF orientation correct.
+- Each item's sheet has a **Photos** section: **Take photo** opens the camera; **Choose photos** opens the library (several at once). Photos taken in the iPad's Camera app are saved to Photos automatically and can be added with Choose photos.
+- Photos attach to an item and also appear in the **photo appendix** at the end of the PDF pack, grouped by item (e.g. Instruction A) with captions. Captions are optional; a photo without one shows none.
+- Every photo gets a **working copy**: JPEG, long edge 1600 px (never enlarged), quality 0.8, the right way up. The camera stores which way up as an EXIF flag; Safari and Chrome apply it when decoding, and the working copy has no EXIF, so it can't be rotated twice. Photos are decoded one at a time to stay within iPad memory.
+- **Camera shots also keep their full-size original**, so they can be saved to the iPad at native resolution later. Library picks keep only the working copy (they are already in Photos). Originals use roughly 3–5 MB each.
+- Thumbnails in the sheet open a full-screen viewer: previous/next, optional caption (saved as you type) and Delete. Adding and deleting photos are undoable. The Items lists show each item's photo count.
+- **Save to iPad** (item sheet, that item's photos) and **Save photos to iPad** (inspection home, every photo, in item list order) share the photos through the Share sheet: choose Save Images (Photos) or Save to Files. A web app can't save to Photos silently; iPadOS only allows the Share sheet straight after a tap, so each batch of up to 20 is loaded first and shared on the next tap. Camera shots are shared as their original, others as the working copy, named like `SY000001 Instruction A 1.jpg`. Browsers without file sharing download the files instead.
+- **Free up space** (inspection home) removes the full-size originals of photos already saved to the iPad; the working copies stay for the report.
 - Storage is the main offline risk on iPad (see section 10).
 
 ## 7. PDF export pack
@@ -145,7 +149,9 @@ Item           { id, inspectionId, letter, kind: 'instruction' | 'observation',
                  text, requiresPhotoConfirmation, photoIds[], createdAt,
                  sequence,    // order on its page: placement order unless reordered
                  arrows[] }   // { id, x, y }: arrow tips, normalised 0..1 on the item's page
-Photo          { id, blobId, caption?, takenAt, width, height }
+Photo          { id, blobId, originalBlobId?, originalSize?, source: 'camera' | 'library',
+                 caption?, takenAt, width, height, savedAt? }
+               // blobId: working copy (1600 px JPEG); originalBlobId: camera original, until freed
 Memo           { id, inspectionId, templateId, reference, fields{...}, bodyBlocks[], conditionBlocks[], updatedAt }
 MemoCounter    { jobNumber, lastSeq }   // drives SIM-001, SIM-002 ... per job number
 MemoTemplate   { id, name, branding{ colours, logoBlobId, fonts }, fixedText{ disclaimer, officeBlock } }
