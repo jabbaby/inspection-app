@@ -52,3 +52,20 @@ export function compareItems(
   if (a.kind !== b.kind) return a.kind === "observation" ? -1 : 1;
   return indexForLetter(a.letter) - indexForLetter(b.letter);
 }
+
+/**
+ * Items split into the list's groups, in list order (observations, then
+ * instructions), leaving out an empty group. Items must already be sorted
+ * with compareItems.
+ */
+export function groupItems<T extends { kind: ItemKind; letter: string }>(
+  items: T[],
+): { kind: ItemKind; heading: string; items: T[] }[] {
+  return (["observation", "instruction"] as const)
+    .map((kind) => ({
+      kind,
+      heading: `${kindName(kind)}s`,
+      items: items.filter((item) => item.kind === kind),
+    }))
+    .filter((group) => group.items.length > 0);
+}

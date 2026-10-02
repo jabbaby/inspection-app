@@ -590,6 +590,17 @@ button.danger-outline {
   border-color: var(--markup-blue);
 }
 
+.item-groups {
+  display: grid;
+  gap: 1rem;
+}
+
+.item-group-heading {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  color: var(--brand-maroon);
+}
+
 .item-list {
   list-style: none;
   padding: 0;

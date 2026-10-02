@@ -1,5 +1,5 @@
 import type { Drawing, Item } from "../../db/types";
-import { compareItems, kindName } from "./letters";
+import { compareItems, groupItems, kindName } from "./letters";
 
 interface Props {
   items: Item[];
@@ -24,36 +24,44 @@ export function ItemsPanel({ items, drawings, onSelect, onClose }: Props) {
       {sorted.length === 0 ? (
         <p className="muted">No items yet. Use Add pin.</p>
       ) : (
-        <ul className="item-list" aria-label="Items in this inspection">
-          {sorted.map((item) => (
-            <li key={item.id}>
-              <button
-                type="button"
-                className="item-row"
-                onClick={() => onSelect(item)}
-              >
-                <span
-                  className={`item-badge${item.kind === "observation" ? " item-badge-observation" : ""}`}
-                  aria-hidden="true"
-                >
-                  {item.letter}
-                </span>
-                <span className="item-row-text">
-                  <span>
-                    <strong>{item.letter}.</strong>{" "}
-                    {item.text.trim() || (
-                      <span className="muted">No text yet</span>
-                    )}
-                  </span>
-                  <span className="muted">
-                    {kindName(item.kind)} ·{" "}
-                    {names.get(item.drawingId) ?? "Drawing"}, page {item.page}
-                  </span>
-                </span>
-              </button>
-            </li>
+        <div className="item-groups">
+          {groupItems(sorted).map((group) => (
+            <section key={group.kind} aria-label={group.heading}>
+              <h3 className="item-group-heading">{group.heading}</h3>
+              <ul className="item-list" aria-label={group.heading}>
+                {group.items.map((item) => (
+                  <li key={item.id}>
+                    <button
+                      type="button"
+                      className="item-row"
+                      onClick={() => onSelect(item)}
+                    >
+                      <span
+                        className={`item-badge${item.kind === "observation" ? " item-badge-observation" : ""}`}
+                        aria-hidden="true"
+                      >
+                        {item.letter}
+                      </span>
+                      <span className="item-row-text">
+                        <span>
+                          <strong>{item.letter}.</strong>{" "}
+                          {item.text.trim() || (
+                            <span className="muted">No text yet</span>
+                          )}
+                        </span>
+                        <span className="muted">
+                          {kindName(item.kind)} ·{" "}
+                          {names.get(item.drawingId) ?? "Drawing"}, page{" "}
+                          {item.page}
+                        </span>
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
           ))}
-        </ul>
+        </div>
       )}
     </aside>
   );

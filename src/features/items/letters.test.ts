@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   compareItems,
+  groupItems,
   indexForLetter,
   itemLabel,
   letterForIndex,
@@ -60,4 +61,21 @@ describe("item order and labels", () => {
       "Instruction B",
     ]);
   });
+});
+
+test("groups items under Observations and Instructions, skipping empty ones", () => {
+  const items = [
+    { kind: "observation", letter: "A" },
+    { kind: "instruction", letter: "A" },
+    { kind: "instruction", letter: "B" },
+  ] as const;
+  expect(
+    groupItems([...items]).map((g) => [g.heading, g.items.length]),
+  ).toEqual([
+    ["Observations", 1],
+    ["Instructions", 2],
+  ]);
+  expect(groupItems([items[1]]).map((g) => g.heading)).toEqual([
+    "Instructions",
+  ]);
 });
