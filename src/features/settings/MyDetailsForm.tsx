@@ -2,7 +2,9 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { useState } from "react";
 import { saveStateLabel, useAutosave } from "../../app/useAutosave";
 import { db } from "../../db/db";
+import { clearMySignature, setMySignature } from "../../db/signatures";
 import { SETTINGS_ID, type SentVia, type Settings } from "../../db/types";
+import { SignatureField } from "../signature/SignatureField";
 
 type Details = Pick<
   Settings,
@@ -15,7 +17,22 @@ const SENT_VIA: SentVia[] = ["Aconex", "Email"];
 export function MyDetailsForm() {
   // Settings are created on first run; show the form once they exist.
   const settings = useLiveQuery(() => db.settings.get(SETTINGS_ID), []);
-  return settings ? <MyDetailsFields initial={settings} /> : null;
+  return settings ? (
+    <>
+      <MyDetailsFields initial={settings} />
+      <h3>Signature</h3>
+      <p className="muted">
+        Copied into each new memo, between &ldquo;Yours sincerely,&rdquo; and
+        your name. Memos you&rsquo;ve already made keep theirs.
+      </p>
+      <SignatureField
+        label="My signature"
+        blobId={settings.signatureBlobId}
+        onSave={(png) => setMySignature(db, png)}
+        onRemove={() => clearMySignature(db)}
+      />
+    </>
+  ) : null;
 }
 
 /** Owns the field values after the first load so typing is never overwritten. */

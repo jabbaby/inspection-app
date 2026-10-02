@@ -138,4 +138,32 @@ describe("renderMemoPdf", () => {
     const [text] = await pageTexts(await renderMemoPdf(input, assets));
     expect(text).toContain("Dear Alex ?,");
   });
+  test("prints a signature between the sign-off and the name", async () => {
+    // Any PNG will do: the footer icon stands in for a signature.
+    const signed = await renderMemoPdf(sampleMemo, assets, assets.icon);
+    const unsigned = await renderMemoPdf(sampleMemo, assets);
+    saveForInspection("signed-memo.pdf", signed);
+
+    const images = async (bytes: Uint8Array) => {
+      const doc = await pdfjs.getDocument({ data: bytes.slice() }).promise;
+      const ops = await (await doc.getPage(1)).getOperatorList();
+      return ops.fnArray.filter((fn) => fn === pdfjs.OPS.paintImageXObject)
+        .length;
+    };
+    expect(await images(signed)).toBe((await images(unsigned)) + 1);
+
+    // The name moves down to make room for the 40 pt signature.
+    const nameY = async (bytes: Uint8Array) => {
+      const doc = await pdfjs.getDocument({ data: bytes.slice() }).promise;
+      const content = await (await doc.getPage(1)).getTextContent();
+      // The last match: the inspector row shows the same name.
+      const item = content.items.findLast(
+        (it) => "str" in it && it.str === sampleMemo.fields.signOffName,
+      );
+      return item && "transform" in item ? (item.transform[5] as number) : NaN;
+    };
+    const drop = (await nameY(unsigned)) - (await nameY(signed));
+    expect(drop).toBeGreaterThan(25);
+    expect(drop).toBeLessThan(35);
+  });
 });

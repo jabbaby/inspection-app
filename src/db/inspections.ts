@@ -73,7 +73,8 @@ export async function updateInspection(
 
 /**
  * Deletes an inspection and everything that belongs to it: drawings and
- * their PDFs, items, photos and their images, observation boxes and memos.
+ * their PDFs, items, photos and their images, observation boxes and memos
+ * (with their signatures).
  * Runs in one transaction so it either all goes or nothing does. Memo
  * counters are kept: they belong to the job number, so SIM references are
  * never reused.
@@ -108,10 +109,12 @@ export async function deleteInspection(
         (p) => p !== undefined,
       );
       const drawingIds = drawings.map((d) => d.id);
+      const memos = await db.memos.where("inspectionId").equals(id).toArray();
 
       await db.blobs.bulkDelete([
         ...drawings.map((d) => d.pdfBlobId),
         ...photos.flatMap(photoBlobIds),
+        ...memos.flatMap((m) => (m.signatureBlobId ? [m.signatureBlobId] : [])),
       ]);
       await db.photos.bulkDelete(photoIds);
       await db.observationBoxes

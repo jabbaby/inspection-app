@@ -186,6 +186,10 @@ export interface Memo {
   itemOverrides: Record<string, string>;
   signOffName: string;
   signOffTitle: string;
+  /** The memo's own copy of the signature (PNG in blobs), if it has one. */
+  signatureBlobId: string | null;
+  /** Print the signature between "Yours sincerely," and the name. */
+  includeSignature: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -237,6 +241,8 @@ export interface Settings {
   defaultSentVia: SentVia;
   /** Set once the starter snippets have been seeded; they are never re-seeded. */
   snippetsSeeded: boolean;
+  /** My signature (PNG in blobs), copied into each new memo. */
+  signatureBlobId?: string | null;
   /** Result of the first-run navigator.storage.persist() request. */
   persistRequested?: { granted: boolean; at: number };
 }

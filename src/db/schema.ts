@@ -19,7 +19,7 @@ import type {
  * Version of the inspection data format. The inspection file (SPEC section 9)
  * writes this as `schemaVersion`; bump it when stored records change shape.
  */
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 9;
 
 export const DB_NAME = "inspection-app";
 
@@ -148,6 +148,16 @@ export class InspectionDb extends Dexie {
         .toCollection()
         .modify((inspection) => {
           inspection.photoIds ??= [];
+        });
+    });
+    // v9: memos gain a signature (none until one is drawn or uploaded).
+    this.version(9).upgrade(async (tx) => {
+      await tx
+        .table<Memo>("memos")
+        .toCollection()
+        .modify((memo) => {
+          memo.signatureBlobId ??= null;
+          memo.includeSignature ??= true;
         });
     });
   }

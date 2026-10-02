@@ -257,3 +257,93 @@ test("prefilled message boxes use body-size text and grow to fit", async ({
     await text.evaluate((el) => el.scrollHeight - el.clientHeight),
   ).toBeLessThanOrEqual(1);
 });
+
+/** Signs the open signing pad with a mouse scribble. */
+async function scribble(page: Page) {
+  const box = (await page.getByTestId("signature-pad").boundingBox())!;
+  await page.mouse.move(box.x + box.width * 0.2, box.y + box.height * 0.6);
+  await page.mouse.down();
+  for (let i = 1; i <= 20; i++)
+    await page.mouse.move(
+      box.x + box.width * (0.2 + i * 0.03),
+      box.y + box.height * (0.6 - 0.3 * Math.sin(i / 2)),
+    );
+  await page.mouse.up();
+}
+
+test("a signature drawn in Settings goes on new memos; a memo can upload its own or leave it off", async ({
+  page,
+}) => {
+  await page.goto("./#/settings");
+  const mine = page.getByRole("group", { name: "My signature" });
+  await mine.getByRole("button", { name: "Draw signature" }).click();
+  const dialog = page.getByRole("dialog", { name: "Draw your signature" });
+  await scribble(page);
+  await expect(page.getByTestId("signature-pad")).toHaveAttribute(
+    "data-ink",
+    "true",
+  );
+  await dialog.getByRole("button", { name: "Save" }).click();
+  await expect(mine.getByRole("img", { name: "My signature" })).toBeVisible();
+
+  await newInspection(page);
+  await page.getByRole("button", { name: "Create memo" }).click();
+  const onMemo = page.getByRole("group", { name: "Signature on this memo" });
+  await expect(
+    onMemo.getByRole("img", { name: "Signature on this memo" }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Include signature")).toBeChecked();
+
+  // Upload a photo of a signature on white paper instead.
+  const drawnSrc = await onMemo
+    .getByRole("img", { name: "Signature on this memo" })
+    .getAttribute("src");
+  const png = await page.evaluate(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 300;
+    canvas.height = 100;
+    const ctx = canvas.getContext("2d")!;
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, 300, 100);
+    ctx.strokeStyle = "#123";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(40, 70);
+    ctx.bezierCurveTo(90, 10, 160, 90, 260, 30);
+    ctx.stroke();
+    return canvas.toDataURL("image/png").split(",")[1];
+  });
+  await page.getByTestId("signature-file-input").setInputFiles({
+    name: "signature.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(png, "base64"),
+  });
+  const img = onMemo.getByRole("img", { name: "Signature on this memo" });
+  await expect(img).not.toHaveAttribute("src", drawnSrc!);
+  // The white paper was made see-through and cropped away.
+  const corner = await img.evaluate(async (el: HTMLImageElement) => {
+    await el.decode();
+    const c = document.createElement("canvas");
+    c.width = el.naturalWidth;
+    c.height = el.naturalHeight;
+    const ctx = c.getContext("2d")!;
+    ctx.drawImage(el, 0, 0);
+    return {
+      alpha: ctx.getImageData(0, 0, 1, 1).data[3],
+      width: el.naturalWidth,
+    };
+  });
+  expect(corner.alpha).toBe(0);
+  expect(corner.width).toBeLessThan(300);
+
+  await expect(
+    page.locator('[data-testid="memo-preview"][data-ready="true"]'),
+  ).toBeVisible({ timeout: 20_000 });
+  await page.getByLabel("Include signature").uncheck();
+  await expect(page.getByTestId("memo-save-state")).toHaveText("Saved");
+  await page.reload();
+  await expect(page.getByLabel("Include signature")).not.toBeChecked();
+  await expect(
+    onMemo.getByRole("img", { name: "Signature on this memo" }),
+  ).toBeVisible();
+});

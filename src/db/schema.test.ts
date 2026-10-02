@@ -27,7 +27,7 @@ describe("InspectionDb", () => {
       "settings",
       "snippets",
     ]);
-    expect(SCHEMA_VERSION).toBe(8);
+    expect(SCHEMA_VERSION).toBe(9);
   });
 
   test("finds an item by inspection and letter", async () => {
@@ -187,4 +187,17 @@ test("v8 upgrade gives inspections an empty general photo list", async () => {
 
   db = new InspectionDb(name);
   expect((await db.inspections.get("insp"))?.photoIds).toEqual([]);
+});
+
+test("v9 upgrade gives memos no signature, shown once added", async () => {
+  const name = `test-${crypto.randomUUID()}`;
+  const v8 = new Dexie(name);
+  v8.version(8).stores({ memos: "id, inspectionId" });
+  await v8.table("memos").add({ id: "memo", inspectionId: "insp" });
+  v8.close();
+
+  db = new InspectionDb(name);
+  const memo = await db.memos.get("memo");
+  expect(memo?.signatureBlobId).toBeNull();
+  expect(memo?.includeSignature).toBe(true);
 });

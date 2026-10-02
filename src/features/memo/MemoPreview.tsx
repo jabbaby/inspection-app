@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { StoredBlob } from "../../db/types";
 import type { MemoAssets, MemoPdfInput } from "./pdf/renderMemoPdf";
 
 /** Fonts and images, loaded once per app session. */
@@ -9,13 +10,20 @@ let assets: Promise<MemoAssets> | null = null;
  * change and drawn page by page. pdf-lib and pdf.js load on demand so they
  * stay out of the start-up bundle.
  */
-export function MemoPreview({ input }: { input: MemoPdfInput }) {
+export function MemoPreview({
+  input,
+  signature,
+}: {
+  input: MemoPdfInput;
+  /** The signature to print, if the memo includes one. */
+  signature?: StoredBlob;
+}) {
   const host = useRef<HTMLDivElement>(null);
   const [state, setState] = useState<"rendering" | "ready" | "error">(
     "rendering",
   );
   const [pages, setPages] = useState(0);
-  const key = JSON.stringify(input);
+  const key = JSON.stringify([input, signature?.id]);
 
   useEffect(() => {
     let current = true;
@@ -28,7 +36,11 @@ export function MemoPreview({ input }: { input: MemoPdfInput }) {
             import("../drawings/pdf/pdfjs"),
           ]);
         assets ??= loadMemoAssets();
-        const bytes = await renderMemoPdf(input, await assets);
+        const bytes = await renderMemoPdf(
+          input,
+          await assets,
+          signature ? new Uint8Array(signature.data) : null,
+        );
         if (!current) return;
         const pdf = await loadPdf(bytes);
         try {

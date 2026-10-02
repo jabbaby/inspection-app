@@ -45,6 +45,8 @@ export function blankMemo(
     itemOverrides: {},
     signOffName: settings.inspectorName,
     signOffTitle: settings.inspectorTitle,
+    signatureBlobId: null,
+    includeSignature: true,
     createdAt: now,
     updatedAt: now,
   };
@@ -72,7 +74,14 @@ export async function createMemo(
 ): Promise<Memo> {
   return db.transaction(
     "rw",
-    [db.inspections, db.memos, db.memoCounters, db.settings, db.snippets],
+    [
+      db.inspections,
+      db.memos,
+      db.memoCounters,
+      db.settings,
+      db.snippets,
+      db.blobs,
+    ],
     async () => {
       const existing = await getMemo(db, inspectionId);
       if (existing) return existing;
@@ -101,6 +110,15 @@ export async function createMemo(
         body ?? null,
         now,
       );
+      // The memo keeps its own copy of my signature, so it travels with
+      // the inspection and later changes in Settings don't alter it.
+      const mine = settings?.signatureBlobId
+        ? await db.blobs.get(settings.signatureBlobId)
+        : undefined;
+      if (mine) {
+        memo.signatureBlobId = crypto.randomUUID();
+        await db.blobs.add({ ...mine, id: memo.signatureBlobId });
+      }
       await db.memos.add(memo);
       await touchInspection(db, inspectionId, now);
       return memo;

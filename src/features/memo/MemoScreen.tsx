@@ -6,7 +6,14 @@ import { saveStateLabel, useAutosave } from "../../app/useAutosave";
 import { db } from "../../db/db";
 import { updateInspection, type InspectionPatch } from "../../db/inspections";
 import { getMemo, updateMemo, type MemoPatch } from "../../db/memos";
-import type { Inspection, Memo, Recipient, SentVia } from "../../db/types";
+import { setMemoSignature } from "../../db/signatures";
+import {
+  SETTINGS_ID,
+  type Inspection,
+  type Memo,
+  type Recipient,
+  type SentVia,
+} from "../../db/types";
 import {
   JobDetailsForm,
   type JobDetailsValues,
@@ -25,6 +32,7 @@ import {
   letterRange,
   memoInstructions,
 } from "./buildMemo";
+import { SignatureField } from "../signature/SignatureField";
 import { MemoPreview } from "./MemoPreview";
 import { conditionsLeadIn, confirmationParagraph } from "./memoTemplate";
 
@@ -64,6 +72,18 @@ function MemoEditorFor({ inspectionId }: { inspectionId: string }) {
     [inspectionId],
   );
   const snippets = useLiveQuery(() => db.snippets.toArray(), []);
+  const mySignatureId = useLiveQuery(
+    async () => (await db.settings.get(SETTINGS_ID))?.signatureBlobId ?? null,
+    [],
+  );
+  const signatureId =
+    memo?.includeSignature && memo.signatureBlobId
+      ? memo.signatureBlobId
+      : null;
+  const signature = useLiveQuery(
+    async () => (signatureId ? await db.blobs.get(signatureId) : undefined),
+    [signatureId],
+  );
 
   useEffect(() => {
     let current = true;
@@ -93,6 +113,22 @@ function MemoEditorFor({ inspectionId }: { inspectionId: string }) {
         <h1>No memo yet</h1>
         <p>Create the memo from the inspection.</p>
       </section>
+    );
+  }
+
+  async function setSignature(source: Uint8Array | "mine" | null) {
+    if (!memo) return;
+    // Save typing first: setMemoSignature writes the memo too.
+    await memoSave.flush();
+    const signatureBlobId = await setMemoSignature(db, memo.id, source);
+    setMemo((m) =>
+      m
+        ? {
+            ...m,
+            signatureBlobId,
+            includeSignature: source ? true : m.includeSignature,
+          }
+        : m,
     );
   }
 
@@ -293,6 +329,28 @@ function MemoEditorFor({ inspectionId }: { inspectionId: string }) {
             </select>
           </label>
 
+          <label className="checkbox">
+            <input
+              type="checkbox"
+              checked={memo.includeSignature}
+              onChange={(e) => patch({ includeSignature: e.target.checked })}
+            />
+            Include signature
+          </label>
+          <SignatureField
+            label="Signature on this memo"
+            blobId={memo.signatureBlobId}
+            onSave={(png) => setSignature(png)}
+            onRemove={() => setSignature(null)}
+            extra={
+              mySignatureId && (
+                <button type="button" onClick={() => void setSignature("mine")}>
+                  Use my saved signature
+                </button>
+              )
+            }
+          />
+
           <h2>Letter</h2>
           <DefaultedField
             label="Salutation"
@@ -437,7 +495,10 @@ function MemoEditorFor({ inspectionId }: { inspectionId: string }) {
           </label>
         </div>
 
-        <MemoPreview input={input} />
+        <MemoPreview
+          input={input}
+          signature={signatureId ? signature : undefined}
+        />
       </div>
     </section>
   );

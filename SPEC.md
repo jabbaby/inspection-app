@@ -63,6 +63,7 @@ The sample is a one-page **Site Instruction Memo**, not a long report. Anatomy:
 | Reason for visit | the item inspected (e.g. "Level 3 slab reinforcement"); prefilled from the inspection's Item inspected |
 | Inspector | the engineer's name |
 | Sent via | Aconex / Email (select) |
+| Signature | under Sent via in the editor: **Include signature** (on by default) and the memo's own signature, printed between "Yours sincerely," and the engineer's name, 40 pt tall (narrower if very wide), keeping its shape. **Draw signature** opens a signing pad (Apple Pencil or finger, black ink; Pencil pressure varies the line; every pen sample is drawn as it arrives so it keeps up at 120 Hz; once the Pencil is used, finger touches are ignored so a resting palm doesn't draw), **Upload image** takes a PNG or a photo of a signature on paper (white paper is made see-through unless the image already has a transparent background), both cropped to the ink. **Use my saved signature** and **Remove**. A new memo copies the signature saved in Settings; the first one added to a memo with none saved in Settings is saved there too |
 | Salutation | defaults to "Dear {first name}," from the Attn of the first "To" recipient; editable, with Reset |
 | Item inspected | used in the body sentence; prefilled from the inspection's Item inspected (a job details field, also shown in the observations box header) |
 | Body paragraph 1 | "We confirm having inspected the [item inspected] as highlighted on the drawing attached." |
@@ -157,15 +158,18 @@ Photo          { id, blobId, originalBlobId?, originalSize?, source: 'camera' | 
 Memo           { id, inspectionId, templateId, reference, recipients[], siteVisitRequestedBy|null,
                  reasonForVisit|null, sentVia, salutation|null, bodySnippetId, bodyText,
                  conditionChoices{snippetId: bool}, itemOverrides{itemId: text},
-                 signOffName, signOffTitle, createdAt, updatedAt }
+                 signOffName, signOffTitle, signatureBlobId|null, includeSignature,
+                 createdAt, updatedAt }
                // one per inspection; job details (client, address, date, job number/name,
-               // item inspected, inspector) are read from the inspection, never copied; null = default
+               // item inspected, inspector) are read from the inspection, never copied; null = default.
+               // The signature is the memo's own copy (PNG in blobs), so it travels with the inspection
 MemoCounter    { jobNumber, lastSeq }   // drives SIM-001, SIM-002 ... per job number
 MemoTemplate   { id, name, branding{ colours, logoBlobId, fonts }, fixedText{ disclaimer, officeBlock } }
                // POC: a single hard-coded Northrop template (see section 4a)
 ObservationBox { id, drawingId, page, x, y }   // normalised 0..1 top-left; one per drawing page with pins
 Snippet        { id, kind: 'body' | 'condition' | 'heading', label, text }   // 'heading' = observations box heading
-Settings       { inspectorName, inspectorTitle, defaultSentVia, ... }
+Settings       { inspectorName, inspectorTitle, defaultSentVia, signatureBlobId?, ... }
+               // signatureBlobId: my signature (PNG), copied into each new memo
 // later
 Markup         { id, drawingId, page, strokes[] }
 Calculation    { id, type, inputs, outputs, createdAt }   // standalone history, no inspectionId, never exported with an inspection
@@ -214,7 +218,7 @@ Brand tokens from the sample: red `#DA1A32`, cream `#FFF2DF`, dark maroon `#580B
 3. **Drawing viewer** (pan/zoom, drop pin, item sheet with instruction + photos). All of an inspection's drawings appear as **one continuous scrolling document** (GoodNotes style): every page of every drawing stacked vertically, in the order the drawings were added, each page shown at the same width, with the drawing's name above its first page. A label shows the current drawing and page; **Fit page** fits the current page. Only pages on or near the screen are rendered, and drawing PDFs are opened only while needed. Opened from the inspection home's Drawings list (scrolls to that drawing) or Items list (scrolls to that pin). An **Items** button opens a panel listing every item: observations, then instructions, each in letter order and grouped under a page subheading (e.g. "S-101 Level 3 · page 1"); rows show just the letter and text. Rows whose pins are on screen are highlighted (cream with a maroon edge), updating when scrolling or zooming pauses. Tapping one scrolls to its pin and opens its sheet. Swiping a row left shows a **Delete** button (deletes at once, undoable). Items of the same kind on the same page have a drag handle (≡) to reorder them, which re-letters them and reorders the notes box; reordering across pages isn't possible because letters follow the document. **Undo** and **Redo** buttons (arrow icons) in the toolbar reverse and re-apply the latest pin added, item deleted, reorder, or arrow added, moved or removed (undoing an add removes the pin with anything typed since, and its notes box if it was the page's first pin); doing something new clears Redo. The history is per inspection and lasts until the app closes (the data itself is always saved). Later features (markup, edits) will add to the same Undo and Redo. Deleting a whole drawing still asks first. The item sheet is a side panel in landscape and below the drawing in portrait; opening it keeps the current zoom and pans only if the selected pin would be hidden.
 4. **Memo editor**: **Create memo** on the inspection home (needs a job number and job name) gives the memo the job's next SIM reference and opens it; then **Open memo**. The editor has the form (reference; job details, shared with the inspection so editing them here changes them there; recipients; visit details; letter; conditions; sign-off) beside a **live preview** in landscape, below it in portrait. The preview is the real PDF built by the export renderer and drawn with pdf.js, so it shows exactly what will be exported, and works offline. Everything saves as you type.
 5. **Export** (preview, generate PDF, share sheet)
-6. **Settings** (inspector details, storage, and **Prefilled messages**: memo messages, standard conditions and the notes box heading, each editable as you type, with Add and Delete; message boxes use body-size text and grow to show all their text. A memo keeps its own copy of the message it chose; standard conditions and the heading are used live).
+6. **Settings** (inspector details and signature (draw or upload; copied into new memos), storage, and **Prefilled messages**: memo messages, standard conditions and the notes box heading, each editable as you type, with Add and Delete; message boxes use body-size text and grow to show all their text. A memo keeps its own copy of the message it chose; standard conditions and the heading are used live).
 
 Top-level navigation has separate areas: **Inspections** (screens 1 to 5), **Calculators** (slice 3, own screens, not linked to inspections or the memo), **Standard details** (slice 4), and **Settings**. In slice 1 only Inspections and Settings exist; the other entries are added in their own slices.
 

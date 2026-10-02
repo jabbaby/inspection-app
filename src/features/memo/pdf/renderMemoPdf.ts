@@ -29,6 +29,9 @@ export interface MemoPdfInput {
   conditions: string[];
 }
 
+/** Signature image (PNG), printed between the sign-off and the name. */
+export type MemoSignature = Uint8Array;
+
 export type FontKey = keyof typeof northrop.assets.fonts;
 
 /** Font and image bytes, loaded by the caller so rendering stays pure. */
@@ -116,6 +119,11 @@ const BODY = {
   signOffGap: 33.8,
   nameGap: 38.1,
   titleGap: 16.9,
+  /** Signature: height, and gaps from the sign-off baseline and to the name. */
+  signatureHeight: 40,
+  signatureMaxWidth: 170,
+  signatureGapAbove: 8,
+  signatureNameGap: 14,
 };
 
 const DISCLAIMER = { gap: 34, size: 6.96, pitch: 10.1 };
@@ -530,7 +538,11 @@ function drawParagraph(w: MemoWriter, text: string, gap: number) {
   });
 }
 
-function drawBody(w: MemoWriter, input: MemoPdfInput) {
+function drawBody(
+  w: MemoWriter,
+  input: MemoPdfInput,
+  signature: PDFImage | null,
+) {
   const { regular, bold } = w.fonts;
   const { fields } = input;
 
@@ -561,18 +573,43 @@ function drawBody(w: MemoWriter, input: MemoPdfInput) {
     });
   }
 
-  // Keep the sign-off, name and title together.
+  // Keep the sign-off, signature, name and title together.
   const titleLines = w.wrap(fields.signOffTitle, regular, BODY.size, CONTENT_W);
   const nameLines = w.wrap(fields.signOffName, bold, BODY.size, CONTENT_W);
+  // The signature keeps its shape: 40 pt tall unless that makes it too wide.
+  const sig = signature
+    ? signature.scale(
+        Math.min(
+          BODY.signatureHeight / signature.height,
+          BODY.signatureMaxWidth / signature.width,
+        ),
+      )
+    : null;
+  const nameGap = sig
+    ? BODY.signatureGapAbove +
+      BODY.signatureHeight +
+      BODY.signatureNameGap +
+      BODY.size * 0.7
+    : BODY.nameGap;
   const reserve =
-    BODY.nameGap +
+    nameGap +
     (nameLines.length - 1) * BODY.pitch +
     BODY.titleGap +
     (titleLines.length - 1) * BODY.pitch;
   let baseline = w.baseline(BODY.signOffGap, reserve);
   w.text(SIGN_OFF, LEFT, baseline, regular, BODY.size);
+  if (signature && sig) {
+    // Bottom-aligned in its 40 pt band, so a short, wide one sits on the line.
+    const bottom = baseline + BODY.signatureGapAbove + BODY.signatureHeight;
+    w.page.drawImage(signature, {
+      x: LEFT,
+      y: PAGE_H - bottom,
+      width: sig.width,
+      height: sig.height,
+    });
+  }
   nameLines.forEach((line, i) => {
-    baseline = w.baseline(i === 0 ? BODY.nameGap : BODY.pitch);
+    baseline = w.baseline(i === 0 ? nameGap : BODY.pitch);
     w.text(line, LEFT, baseline, bold, BODY.size);
   });
   titleLines.forEach((line, i) => {
@@ -606,6 +643,7 @@ function drawDisclaimer(w: MemoWriter) {
 export async function renderMemoPdf(
   input: MemoPdfInput,
   assets: MemoAssets,
+  signature: MemoSignature | null = null,
 ): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   doc.registerFontkit(fontkit);
@@ -640,7 +678,7 @@ export async function renderMemoPdf(
     Math.max(RECIPIENTS.minTop, headerBottom + 40),
   );
   drawDetails(w, input.fields);
-  drawBody(w, input);
+  drawBody(w, input, signature ? await doc.embedPng(signature) : null);
   drawDisclaimer(w);
   w.drawFooters();
 
