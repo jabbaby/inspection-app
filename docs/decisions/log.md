@@ -58,3 +58,5 @@ Format: `YYYY-MM-DD | decision | why | changed in SPEC section`
 2026-10-02 | Pinch previews with a CSS transform and lays out once when the fingers lift; in-view highlight updates when movement pauses | live re-layout and scroll during a pinch fought Safari's async scrolling (jumps, lag, wrong zoom point) | 5, 12
 2026-10-02 | Pinch preview updates once per frame and pauses page drawing during the gesture | engineer: pinch still a bit choppy | 5
 2026-10-02 | Pins can have several arrows to spots on the same page (Add arrow then tap; drag tip; select and Remove); arrowhead at the spot, pin colour, page-relative size; undoable; new Item.arrows (Dexie v7); step 8 export draws them with the shared geometry | engineer request: show exactly what a pin refers to | 5, 8, 12
+2026-10-02 | Tapping the drawing (away from pins, outside Add pin / Add arrow) closes the item sheet | engineer request: quicker workflow | 5
+2026-10-02 | Viewer hears pointer and touch ends page-wide and a first finger clears stale pointers; item sheet shows text saved after it opened unless typed over | bug: Add pin stopped responding until restart; quick reopen could show stale empty text | n/a
