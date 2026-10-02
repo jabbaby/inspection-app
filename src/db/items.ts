@@ -1,6 +1,12 @@
 import { indexForLetter, letterForIndex } from "../features/items/letters";
 import type { InspectionDb } from "./schema";
-import type { Item, ItemKind } from "./types";
+import type {
+  Item,
+  ItemKind,
+  ObservationBox,
+  Photo,
+  StoredBlob,
+} from "./types";
 
 export interface NewItem {
   inspectionId: string;
@@ -60,7 +66,10 @@ export async function createItem(
           now,
           ...existing.map((other) => other.createdAt + 1),
         ),
+        sequence: 0,
       };
+      // Placed last on its page.
+      created.sequence = created.createdAt;
       await db.items.add(created);
       await reletterInspection(db, item.inspectionId);
       await touchInspection(db, item.inspectionId, now);
@@ -119,7 +128,8 @@ export async function deleteItemRecords(
 /**
  * Letters for items, per kind: instructions A, B, C... and observations
  * A, B, C... each in document order (drawing order, then page, then the
- * order pins were placed on the page), with no gaps. `drawingOrder` lists
+ * item's sequence on the page: placement order unless reordered), with no
+ * gaps. `drawingOrder` lists
  * the inspection's drawing ids in document order. Returns only the items
  * whose letter changes.
  */
@@ -137,7 +147,7 @@ export function letterChanges(
         (a, b) =>
           drawingRank(a) - drawingRank(b) ||
           a.page - b.page ||
-          a.createdAt - b.createdAt ||
+          a.sequence - b.sequence ||
           indexForLetter(a.letter) - indexForLetter(b.letter),
       );
     for (const [index, item] of ofKind.entries()) {
@@ -166,14 +176,72 @@ export async function reletterInspection(
     await db.items.update(id, { letter });
 }
 
+/** Everything deleteItem removed, so restoreItem can put it back exactly. */
+export interface DeletedItem {
+  item: Item;
+  photos: Photo[];
+  blobs: StoredBlob[];
+  /** The page's notes box, if the item was its last pin. */
+  box: ObservationBox | null;
+}
+
 /**
  * Deletes an item and its photos, then re-letters the rest so there are no
  * gaps (delete C and D becomes C). The page's notes box goes when its last
- * pin does.
+ * pin does. Returns what was removed (for undo), or null if not found.
  */
 export async function deleteItem(
   db: InspectionDb,
   id: string,
+  now = Date.now(),
+): Promise<DeletedItem | null> {
+  return db.transaction(
+    "rw",
+    [
+      db.inspections,
+      db.drawings,
+      db.items,
+      db.photos,
+      db.blobs,
+      db.observationBoxes,
+    ],
+    async () => {
+      const item = await db.items.get(id);
+      if (!item) return null;
+      const photos = (await db.photos.bulkGet(item.photoIds)).filter(
+        (p) => p !== undefined,
+      );
+      const blobs = (
+        await db.blobs.bulkGet(photos.map((p) => p.blobId))
+      ).filter((b) => b !== undefined);
+      await deleteItemRecords(db, [item]);
+      const remaining = await db.items
+        .where("drawingId")
+        .equals(item.drawingId)
+        .filter((other) => other.page === item.page)
+        .count();
+      let box: ObservationBox | null = null;
+      if (remaining === 0) {
+        const pageBox = db.observationBoxes
+          .where("[drawingId+page]")
+          .equals([item.drawingId, item.page]);
+        box = (await pageBox.first()) ?? null;
+        await pageBox.delete();
+      }
+      await reletterInspection(db, item.inspectionId);
+      await touchInspection(db, item.inspectionId, now);
+      return { item, photos, blobs, box };
+    },
+  );
+}
+
+/**
+ * Puts a deleted item back (undo) with its photos and notes box, then
+ * re-letters. Does nothing if its drawing has since been deleted.
+ */
+export async function restoreItem(
+  db: InspectionDb,
+  deleted: DeletedItem,
   now = Date.now(),
 ): Promise<void> {
   await db.transaction(
@@ -187,22 +255,58 @@ export async function deleteItem(
       db.observationBoxes,
     ],
     async () => {
-      const item = await db.items.get(id);
-      if (!item) return;
-      await deleteItemRecords(db, [item]);
-      const remaining = await db.items
-        .where("drawingId")
-        .equals(item.drawingId)
-        .filter((other) => other.page === item.page)
-        .count();
-      if (remaining === 0) {
-        await db.observationBoxes
-          .where("[drawingId+page]")
-          .equals([item.drawingId, item.page])
-          .delete();
-      }
+      const { item } = deleted;
+      if (!(await db.drawings.get(item.drawingId))) return;
+      await db.blobs.bulkPut(deleted.blobs);
+      await db.photos.bulkPut(deleted.photos);
+      await db.items.put(item);
+      const box = await db.observationBoxes
+        .where("[drawingId+page]")
+        .equals([item.drawingId, item.page])
+        .first();
+      if (!box && deleted.box) await db.observationBoxes.put(deleted.box);
       await reletterInspection(db, item.inspectionId);
       await touchInspection(db, item.inspectionId, now);
+    },
+  );
+}
+
+/**
+ * Reorders items of one kind on one page: `ids` in their new order. Their
+ * sequence numbers are shared out again in that order, then everything is
+ * re-lettered. Returns the previous order (for undo).
+ */
+export async function reorderItems(
+  db: InspectionDb,
+  ids: string[],
+  now = Date.now(),
+): Promise<string[]> {
+  return db.transaction(
+    "rw",
+    [db.inspections, db.drawings, db.items],
+    async () => {
+      const items = (await db.items.bulkGet(ids)).filter(
+        (item) => item !== undefined,
+      );
+      const previous = [...items].sort((a, b) => a.sequence - b.sequence);
+      if (items.length < 2) return previous.map((item) => item.id);
+      const [first] = items;
+      const samePage = items.every(
+        (item) =>
+          item.inspectionId === first.inspectionId &&
+          item.kind === first.kind &&
+          item.drawingId === first.drawingId &&
+          item.page === first.page,
+      );
+      if (!samePage)
+        throw new Error("Only items of one kind on one page can be reordered");
+      const slots = previous.map((item) => item.sequence);
+      const present = ids.filter((id) => items.some((item) => item.id === id));
+      for (const [i, id] of present.entries())
+        await db.items.update(id, { sequence: slots[i] });
+      await reletterInspection(db, first.inspectionId);
+      await touchInspection(db, first.inspectionId, now);
+      return previous.map((item) => item.id);
     },
   );
 }

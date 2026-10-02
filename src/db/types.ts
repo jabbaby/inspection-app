@@ -66,6 +66,11 @@ export interface Item {
   requiresPhotoConfirmation: boolean;
   photoIds: string[];
   createdAt: number;
+  /**
+   * Order among the items on its page: placement order unless the engineer
+   * reorders them. Letters follow drawing, page, then sequence.
+   */
+  sequence: number;
 }
 
 export interface Photo {

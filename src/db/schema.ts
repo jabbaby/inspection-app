@@ -19,7 +19,7 @@ import type {
  * Version of the inspection data format. The inspection file (SPEC section 9)
  * writes this as `schemaVersion`; bump it when stored records change shape.
  */
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 export const DB_NAME = "inspection-app";
 
@@ -101,7 +101,11 @@ export class InspectionDb extends Dexie {
     // v5: letters follow document order (drawing, page, then placement on
     // the page), per kind. Re-letter existing items to match.
     this.version(5).upgrade(async (tx) => {
-      const items = await tx.table<Item>("items").toArray();
+      // Items gain a sequence in v6; until then it's the creation order.
+      const items = (await tx.table<Item>("items").toArray()).map((item) => ({
+        ...item,
+        sequence: item.sequence ?? item.createdAt,
+      }));
       const drawings = await tx.table<Drawing>("drawings").toArray();
       drawings.sort((a, b) => a.createdAt - b.createdAt);
       const byInspection = new Map<string, Item[]>();
@@ -117,6 +121,16 @@ export class InspectionDb extends Dexie {
         for (const { id, letter } of letterChanges(group, order))
           await tx.table<Item>("items").update(id, { letter });
       }
+    });
+    // v6: items gain a sequence (their order on the page) so they can be
+    // reordered. It starts as the creation order, so no letters change.
+    this.version(6).upgrade(async (tx) => {
+      await tx
+        .table<Item>("items")
+        .toCollection()
+        .modify((item) => {
+          item.sequence ??= item.createdAt;
+        });
     });
   }
 }

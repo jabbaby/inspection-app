@@ -10,6 +10,8 @@ import { createInspection } from "./inspections";
 import {
   createItem,
   deleteItem,
+  reorderItems,
+  restoreItem,
   moveObservationBox,
   updateItem,
 } from "./items";
@@ -173,6 +175,97 @@ describe("items", () => {
     expect((await db.inspections.get(inspection.id))?.updatedAt).toBe(
       999_999_999_999,
     );
+  });
+});
+
+describe("undoing a delete", () => {
+  test("restores the item, its photo, its notes box and the letters", async () => {
+    const d = await drawing();
+    const a = await pin(d.id);
+    const b = await pin(d.id);
+    await db.blobs.add({
+      id: "img",
+      data: new ArrayBuffer(4),
+      type: "image/jpeg",
+      size: 4,
+    });
+    await db.photos.add({
+      id: "ph",
+      blobId: "img",
+      takenAt: 0,
+      width: 10,
+      height: 10,
+    });
+    await updateItem(db, a.id, { text: "Add bar" });
+    await db.items.update(a.id, { photoIds: ["ph"] });
+
+    const deleted = await deleteItem(db, a.id);
+    expect((await db.items.get(b.id))?.letter).toBe("A");
+    await restoreItem(db, deleted!);
+
+    expect(await db.items.get(a.id)).toMatchObject({
+      letter: "A",
+      text: "Add bar",
+    });
+    expect((await db.items.get(b.id))?.letter).toBe("B");
+    expect(await db.photos.get("ph")).toBeDefined();
+    expect(await db.blobs.get("img")).toBeDefined();
+  });
+
+  test("brings back the notes box with its last pin, where it was", async () => {
+    const d = await drawing();
+    const a = await pin(d.id);
+    const box = (await db.observationBoxes.toArray())[0];
+    await moveObservationBox(db, box.id, { x: 0.1, y: 0.2 }, inspection.id);
+
+    const deleted = await deleteItem(db, a.id);
+    expect(await db.observationBoxes.count()).toBe(0);
+    await restoreItem(db, deleted!);
+    expect(await db.observationBoxes.get(box.id)).toMatchObject({
+      x: 0.1,
+      y: 0.2,
+    });
+  });
+
+  test("does nothing once the drawing is gone", async () => {
+    const d = await drawing();
+    const deleted = await deleteItem(db, (await pin(d.id)).id);
+    await deleteDrawing(db, d.id);
+    await restoreItem(db, deleted!);
+    expect(await db.items.count()).toBe(0);
+  });
+});
+
+describe("reordering", () => {
+  test("reorders one kind on one page and re-letters, reversibly", async () => {
+    const d = await drawing();
+    const a = await pin(d.id);
+    const b = await pin(d.id);
+    const c = await pin(d.id);
+    const later = await pin(d.id, 2);
+    const letter = async (id: string) => (await db.items.get(id))?.letter;
+
+    const previous = await reorderItems(db, [c.id, a.id, b.id]);
+    expect([
+      await letter(c.id),
+      await letter(a.id),
+      await letter(b.id),
+    ]).toEqual(["A", "B", "C"]);
+    expect(await letter(later.id)).toBe("D");
+
+    await reorderItems(db, previous);
+    expect([
+      await letter(a.id),
+      await letter(b.id),
+      await letter(c.id),
+    ]).toEqual(["A", "B", "C"]);
+  });
+
+  test("refuses items from different pages", async () => {
+    const d = await drawing();
+    const a = await pin(d.id, 1);
+    const b = await pin(d.id, 2);
+    await expect(reorderItems(db, [b.id, a.id])).rejects.toThrow();
   });
 });
 
