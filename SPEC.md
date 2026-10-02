@@ -58,17 +58,17 @@ The sample is a one-page **Site Instruction Memo**, not a long report. Anatomy:
 | Job number | text |
 | Job name | text |
 | Memo reference | auto-generated per job (e.g. `SIM-001`, `SIM-002`), editable. Shown in the memo header with the item inspected, e.g. "SIM-001 – Level 3 slab reinforcement". The sample template has no reference field; it is placed in the right-hand header column on its own line under Job name, in the same style as Job name. |
-| Recipients table | up to ~5 rows: Company, Attn, and To or Copy (checkbox pair; at least one "To") |
-| Site visit requested by | client name/company |
+| Recipients table | up to 5 rows: Company, Attn, and To or Copy (checkbox pair; at least one "To", warned if none). A new memo starts with the client as the first "To". |
+| Site visit requested by | defaults to "client name, client company"; editable, with Reset |
 | Reason for visit | the item inspected (e.g. "Level 3 slab reinforcement"); prefilled from the inspection's Item inspected |
 | Inspector | the engineer's name |
 | Sent via | Aconex / Email (select) |
-| Salutation | "Dear [name]," |
+| Salutation | defaults to "Dear {first name}," from the Attn of the first "To" recipient; editable, with Reset |
 | Item inspected | used in the body sentence; prefilled from the inspection's Item inspected (a job details field, also shown in the observations box header) |
 | Body paragraph 1 | "We confirm having inspected the [item inspected] as highlighted on the drawing attached." |
-| Body paragraph 2 | pick from **prefilled messages** (see below) |
-| Conditions list | One lead-in line, then bullets generated from the instruction items and extra standard clauses. With one or more instruction items the lead-in is "Ok to proceed subject to the following:" (same for every body message, as in the sample). With no instruction items the memo shows "Ok to proceed." and no list. |
-| Sign-off | engineer name and title |
+| Body paragraph 2 | pick from **prefilled messages** (see below); the chosen text is copied into the memo and can be edited there |
+| Conditions list | One lead-in line, then bullets: first the ticked **standard conditions** (condition snippets; "[letters]" becomes the instruction letters, e.g. "A–D"), then each **instruction** as "A. text" in letter order, generated live from the items. "Complete items [letters] listed below." is ticked by default when there are instructions, and "Confirm completion of items via photos prior to proceeding." when any instruction has photo confirmation required; the engineer can tick or untick any. An instruction can be reworded for the memo without changing the item ("Use item text" goes back). With one or more conditions the lead-in is "Ok to proceed subject to the following:" (same for every body message, as in the sample); with none, "Ok to proceed." and no list. |
+| Sign-off | engineer name and title, from Settings (My details) when the memo is created; editable |
 
 **Prefilled messages (needs a small snippet library)**
 The sample explicitly says different prefilled messages should be selectable. Example from the sample:
@@ -154,7 +154,12 @@ Item           { id, inspectionId, letter, kind: 'instruction' | 'observation',
 Photo          { id, blobId, originalBlobId?, originalSize?, source: 'camera' | 'library',
                  caption?, takenAt, width, height, savedAt? }
                // blobId: working copy (1600 px JPEG); originalBlobId: camera original, until freed
-Memo           { id, inspectionId, templateId, reference, fields{...}, bodyBlocks[], conditionBlocks[], updatedAt }
+Memo           { id, inspectionId, templateId, reference, recipients[], siteVisitRequestedBy|null,
+                 reasonForVisit|null, sentVia, salutation|null, bodySnippetId, bodyText,
+                 conditionChoices{snippetId: bool}, itemOverrides{itemId: text},
+                 signOffName, signOffTitle, createdAt, updatedAt }
+               // one per inspection; job details (client, address, date, job number/name,
+               // item inspected, inspector) are read from the inspection, never copied; null = default
 MemoCounter    { jobNumber, lastSeq }   // drives SIM-001, SIM-002 ... per job number
 MemoTemplate   { id, name, branding{ colours, logoBlobId, fonts }, fixedText{ disclaimer, officeBlock } }
                // POC: a single hard-coded Northrop template (see section 4a)
@@ -207,9 +212,9 @@ Brand tokens from the sample: red `#DA1A32`, cream `#FFF2DF`, dark maroon `#580B
 1. **Inspections list** (new, open, import, back up)
 2. **Inspection home** (job details, drawings, items summary, memo, export). Job details save automatically as you type (no Save button). Nothing is required to save; a missing job number or job name is flagged, and both are required before a memo is created (step 7). New inspections are dated today and take the inspector name from Settings. Deleting an inspection (after confirmation) removes its drawings, items, photos, memos and observation boxes; memo counters are kept so SIM references are never reused.
 3. **Drawing viewer** (pan/zoom, drop pin, item sheet with instruction + photos). All of an inspection's drawings appear as **one continuous scrolling document** (GoodNotes style): every page of every drawing stacked vertically, in the order the drawings were added, each page shown at the same width, with the drawing's name above its first page. A label shows the current drawing and page; **Fit page** fits the current page. Only pages on or near the screen are rendered, and drawing PDFs are opened only while needed. Opened from the inspection home's Drawings list (scrolls to that drawing) or Items list (scrolls to that pin). An **Items** button opens a panel listing every item: observations, then instructions, each in letter order and grouped under a page subheading (e.g. "S-101 Level 3 · page 1"); rows show just the letter and text. Rows whose pins are on screen are highlighted (cream with a maroon edge), updating when scrolling or zooming pauses. Tapping one scrolls to its pin and opens its sheet. Swiping a row left shows a **Delete** button (deletes at once, undoable). Items of the same kind on the same page have a drag handle (≡) to reorder them, which re-letters them and reorders the notes box; reordering across pages isn't possible because letters follow the document. **Undo** and **Redo** buttons (arrow icons) in the toolbar reverse and re-apply the latest pin added, item deleted, reorder, or arrow added, moved or removed (undoing an add removes the pin with anything typed since, and its notes box if it was the page's first pin); doing something new clears Redo. The history is per inspection and lasts until the app closes (the data itself is always saved). Later features (markup, edits) will add to the same Undo and Redo. Deleting a whole drawing still asks first. The item sheet is a side panel in landscape and below the drawing in portrait; opening it keeps the current zoom and pans only if the selected pin would be hidden.
-4. **Memo editor** (live preview of the branded page, field editing, snippet picker)
+4. **Memo editor**: **Create memo** on the inspection home (needs a job number and job name) gives the memo the job's next SIM reference and opens it; then **Open memo**. The editor has the form (reference; job details, shared with the inspection so editing them here changes them there; recipients; visit details; letter; conditions; sign-off) beside a **live preview** in landscape, below it in portrait. The preview is the real PDF built by the export renderer and drawn with pdf.js, so it shows exactly what will be exported, and works offline. Everything saves as you type.
 5. **Export** (preview, generate PDF, share sheet)
-6. **Settings** (inspector details, snippets, template, storage)
+6. **Settings** (inspector details, storage, and **Prefilled messages**: memo messages, standard conditions and the notes box heading, each editable as you type, with Add and Delete. A memo keeps its own copy of the message it chose; standard conditions and the heading are used live).
 
 Top-level navigation has separate areas: **Inspections** (screens 1 to 5), **Calculators** (slice 3, own screens, not linked to inspections or the memo), **Standard details** (slice 4), and **Settings**. In slice 1 only Inspections and Settings exist; the other entries are added in their own slices.
 
