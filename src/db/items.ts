@@ -1,5 +1,6 @@
 import { indexForLetter, letterForIndex } from "../features/items/letters";
 import type { InspectionDb } from "./schema";
+import { photoBlobIds } from "./types";
 import type {
   Item,
   ItemKind,
@@ -124,7 +125,7 @@ export async function deleteItemRecords(
   const photos = (await db.photos.bulkGet(photoIds)).filter(
     (p) => p !== undefined,
   );
-  await db.blobs.bulkDelete(photos.map((p) => p.blobId));
+  await db.blobs.bulkDelete(photos.flatMap(photoBlobIds));
   await db.photos.bulkDelete(photoIds);
   await db.items.bulkDelete(items.map((item) => item.id));
 }
@@ -216,7 +217,7 @@ export async function deleteItem(
         (p) => p !== undefined,
       );
       const blobs = (
-        await db.blobs.bulkGet(photos.map((p) => p.blobId))
+        await db.blobs.bulkGet(photos.flatMap(photoBlobIds))
       ).filter((b) => b !== undefined);
       await deleteItemRecords(db, [item]);
       const remaining = await db.items

@@ -84,11 +84,29 @@ export interface ItemArrow {
 
 export interface Photo {
   id: string;
+  /** The working copy: JPEG, about 1600 px on the long edge (SPEC section 6). */
   blobId: string;
+  /**
+   * The camera's full-size original, kept so it can be saved to the iPad
+   * at native resolution. Library picks have none (they are already in
+   * Photos); "Free up space" removes it once saved.
+   */
+  originalBlobId?: string;
+  source: "camera" | "library";
   caption?: string;
   takenAt: number;
+  /** Size of the working copy in pixels. */
   width: number;
   height: number;
+  /** When it was last saved to the iPad (Share sheet), if ever. */
+  savedAt?: number;
+}
+
+/** The stored files behind a photo (working copy, and original if kept). */
+export function photoBlobIds(photo: Photo): string[] {
+  return photo.originalBlobId
+    ? [photo.blobId, photo.originalBlobId]
+    : [photo.blobId];
 }
 
 /**

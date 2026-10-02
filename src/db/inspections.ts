@@ -1,6 +1,11 @@
 import { todayIso } from "../lib/dates";
 import type { InspectionDb } from "./schema";
-import { SETTINGS_ID, type Client, type Inspection } from "./types";
+import {
+  SETTINGS_ID,
+  photoBlobIds,
+  type Client,
+  type Inspection,
+} from "./types";
 
 /** Fields the job details form edits. Client fields are merged, not replaced. */
 export interface InspectionPatch {
@@ -97,7 +102,7 @@ export async function deleteInspection(
 
       await db.blobs.bulkDelete([
         ...drawings.map((d) => d.pdfBlobId),
-        ...photos.map((p) => p.blobId),
+        ...photos.flatMap(photoBlobIds),
       ]);
       await db.photos.bulkDelete(photoIds);
       await db.observationBoxes

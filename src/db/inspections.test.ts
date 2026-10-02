@@ -119,6 +119,7 @@ describe("deleteInspection", () => {
       await db.photos.add({
         id: `photo-${tag}`,
         blobId: `img-${tag}`,
+        source: "library",
         takenAt: 0,
         width: 1600,
         height: 1200,

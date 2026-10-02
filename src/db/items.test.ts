@@ -192,6 +192,7 @@ describe("undoing a delete", () => {
     await db.photos.add({
       id: "ph",
       blobId: "img",
+      source: "library",
       takenAt: 0,
       width: 10,
       height: 10,
@@ -337,6 +338,7 @@ describe("drawings", () => {
     await db.photos.add({
       id: "photo",
       blobId: "img",
+      source: "library",
       takenAt: 0,
       width: 1,
       height: 1,
