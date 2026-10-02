@@ -95,6 +95,14 @@ export function ItemSheet({
   arrows,
 }: Props) {
   const [text, setText] = useState(item.text);
+  // A save can land after the sheet opens (e.g. text from a sheet closed a
+  // moment ago by tapping the drawing). Show it, unless the engineer has
+  // typed since, so a stale empty box never saves over real text.
+  const [syncedText, setSyncedText] = useState(item.text);
+  if (item.text !== syncedText) {
+    setSyncedText(item.text);
+    if (text === syncedText) setText(item.text);
+  }
   // Shown straight away; the saved value catches up.
   const [photoFlag, setPhotoFlag] = useState(item.requiresPhotoConfirmation);
   const autosave = useAutosave<ItemPatch>(
