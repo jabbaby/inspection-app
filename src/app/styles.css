@@ -152,17 +152,6 @@ dl.facts dd {
   text-decoration: none;
 }
 
-.spike-panel {
-  margin-top: 2rem;
-  padding: 1rem 1.25rem;
-  border: 1px dashed var(--brand-maroon);
-  border-radius: 0.5rem;
-}
-
-.spike-panel h2 {
-  margin-top: 0;
-}
-
 .error {
   color: var(--brand-red);
 }
@@ -1149,4 +1138,39 @@ button.item-row {
 
 .defaulted-field .field {
   width: 100%;
+}
+
+/* Settings: prefilled messages. */
+.snippets-editor {
+  display: grid;
+  gap: 1.25rem;
+  max-width: 900px;
+}
+
+.snippet-group {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.snippet-group h3 {
+  margin: 0;
+  color: var(--brand-maroon);
+}
+
+.snippet-row {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.75rem;
+  border: 1px solid #e5d9c8;
+  border-radius: 0.5rem;
+  background: #fff;
+}
+
+.snippet-row textarea,
+.snippet-row input {
+  width: 100%;
+}
+
+.snippet-row .button-row {
+  margin: 0;
 }

@@ -8,7 +8,7 @@ import {
 } from "../../db/storage";
 import type { SnippetKind } from "../../db/types";
 import { MyDetailsForm } from "./MyDetailsForm";
-import { SampleMemoPanel } from "./SampleMemoPanel";
+import { SnippetsEditor } from "./SnippetsEditor";
 
 const KINDS: SnippetKind[] = ["body", "condition", "heading"];
 
@@ -54,7 +54,7 @@ export function SettingsPage() {
         <small>Available once inspections can be exported.</small>
       </p>
 
-      <h2>Snippets</h2>
+      <h2>Prefilled messages</h2>
       <p data-testid="snippet-count">
         {snippets === undefined
           ? "Loading…"
@@ -64,7 +64,7 @@ export function SettingsPage() {
             ).join(", ")})`}
       </p>
 
-      <SampleMemoPanel />
+      <SnippetsEditor />
     </section>
   );
 }

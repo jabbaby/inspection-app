@@ -8,7 +8,7 @@ const worksGenerallyInAccordance =
   starterSnippets.find((s) => s.id === "body-works-generally-in-accordance")
     ?.text ?? "";
 
-/** Synthetic memo for Spike A. No real client, job or person. */
+/** Synthetic memo for the PDF renderer tests. No real client, job or person. */
 export const sampleMemo: MemoPdfInput = {
   reference: "SIM-001",
   fields: {

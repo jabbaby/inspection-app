@@ -168,3 +168,53 @@ test(
     );
   },
 );
+
+test("prefilled messages are edited in Settings and offered in the memo", async ({
+  page,
+}) => {
+  await page.goto("./#/settings");
+  const bodies = page.getByRole("region", { name: "Memo messages" });
+  await expect(bodies.getByTestId("snippet-row")).toHaveCount(4);
+  await bodies.getByRole("button", { name: "Add" }).click();
+  await expect(bodies.getByTestId("snippet-row")).toHaveCount(5);
+  const added = bodies.getByTestId("snippet-row").last();
+  await added.getByLabel(/^Name of/).fill("Partly complete");
+  await added
+    .getByLabel(/^Text of/)
+    .fill("At the time of the inspection the works were partly complete.");
+  await expect(added).toContainText("Saved");
+
+  // Reword a standard condition.
+  const conditions = page.getByRole("region", { name: "Standard conditions" });
+  const photo = conditions.getByTestId("snippet-row").nth(1);
+  await photo
+    .getByLabel(/^Text of/)
+    .fill("Provide photos of completed items before proceeding.");
+  await expect(photo).toContainText("Saved");
+
+  // The memo offers the new message, and ticks the reworded condition.
+  await newInspection(page);
+  await page.getByRole("button", { name: "Create memo" }).click();
+  await page
+    .getByLabel("Prefilled message")
+    .selectOption({ label: "Partly complete" });
+  await expect(page.getByLabel("Message text (for this memo)")).toHaveValue(
+    "At the time of the inspection the works were partly complete.",
+  );
+  await expect(
+    page.getByLabel("Provide photos of completed items before proceeding."),
+  ).toBeVisible();
+
+  // Deleting asks first.
+  await page.goto("./#/settings");
+  await bodies
+    .getByTestId("snippet-row")
+    .last()
+    .getByRole("button", { name: "Delete" })
+    .click();
+  await page
+    .getByRole("dialog", { name: /^Delete "Partly complete"/ })
+    .getByRole("button", { name: "Delete" })
+    .click();
+  await expect(bodies.getByTestId("snippet-row")).toHaveCount(4);
+});
