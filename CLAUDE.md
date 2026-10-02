@@ -37,7 +37,7 @@ Run typecheck, lint and tests before saying a task is done.
 - **Offline first.** Nothing may require a network at runtime. No CDN assets, no remote fonts, no analytics. Everything needed is bundled or precached.
 - **All user data lives in IndexedDB via Dexie.** Never rely on in-memory-only state for anything the user created. No localStorage for records (small UI prefs only).
 - **Pin positions are normalised page coordinates (0..1)**, never screen pixels.
-- **Letters are per kind, per inspection**: instructions A, B ... Z, AA ... and observations A, B ... separately, each in pin creation order (engineer decision, 2026-10-02), so an instruction A and an observation A can both exist; always say which ("Instruction A"). Deleting an item or drawing, or switching an item's kind, re-letters so there are no gaps (memos are checked before sending).
+- **Letters are per kind, per inspection**: instructions A, B ... Z, AA ... and observations A, B ... separately, each in document order: drawing order, then page, then the order pins were placed on that page (engineer decision, 2026-10-02), so an instruction A and an observation A can both exist; always say which ("Instruction A"). Adding, deleting or switching the kind of an item, or deleting a drawing, re-letters so there are no gaps (memos are checked before sending).
 - **PDF export is built with pdf-lib**, not browser print. The memo layout must match the brand tokens in `SPEC.md`.
 - **Inspection file** (zip with `schemaVersion`) must round-trip losslessly. Add a test for export then import.
 - Keep `/src/engineering` free of UI and framework imports so calculators stay pure and testable.
