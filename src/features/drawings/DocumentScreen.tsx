@@ -1,7 +1,7 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
-import { undoLast, useUndo } from "../../app/undo";
+import { redoLast, undoLast, useUndo } from "../../app/undo";
 import { db } from "../../db/db";
 import { listDrawings, setPageSizes } from "../../db/drawings";
 import { createItem, moveObservationBox, updateItem } from "../../db/items";
@@ -37,6 +37,28 @@ async function backfillPageSizes(drawing: Drawing) {
   } finally {
     await pdf.loadingTask.destroy();
   }
+}
+
+/** Curved arrow: back (undo) or, mirrored, forward (redo). */
+function UndoIcon({ redo = false }: { redo?: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="22"
+      height="22"
+      aria-hidden="true"
+      style={redo ? { transform: "scaleX(-1)" } : undefined}
+    >
+      <path
+        d="M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
 }
 
 export function DocumentScreen() {
@@ -87,7 +109,7 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
     );
   }, []);
 
-  const nextUndo = useUndo(inspectionId);
+  const history = useUndo(inspectionId);
   const [addPinMode, setAddPinMode] = useState(false);
   const [itemsOpen, setItemsOpen] = useState(false);
   const [fitRequest, setFitRequest] = useState(0);
@@ -236,18 +258,39 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
             ? `${currentDrawing.name} · page ${current.page} of ${current.pageCount}`
             : ""}
         </strong>
-        <button
-          type="button"
-          disabled={!nextUndo}
-          title={nextUndo ? `Undo: ${nextUndo.label}` : "Nothing to undo"}
-          onClick={() => {
-            // An undone delete would leave its sheet pointing at nothing.
-            select(null);
-            void undoLast(inspectionId);
-          }}
-        >
-          Undo
-        </button>
+        <span className="undo-group" role="group" aria-label="History">
+          <button
+            type="button"
+            className="icon-button"
+            aria-label="Undo"
+            disabled={!history.undo}
+            title={
+              history.undo ? `Undo: ${history.undo.label}` : "Nothing to undo"
+            }
+            onClick={() => {
+              // An undone change could leave the open sheet pointing at nothing.
+              select(null);
+              void undoLast(inspectionId);
+            }}
+          >
+            <UndoIcon />
+          </button>
+          <button
+            type="button"
+            className="icon-button"
+            aria-label="Redo"
+            disabled={!history.redo}
+            title={
+              history.redo ? `Redo: ${history.redo.label}` : "Nothing to redo"
+            }
+            onClick={() => {
+              select(null);
+              void redoLast(inspectionId);
+            }}
+          >
+            <UndoIcon redo />
+          </button>
+        </span>
         <button
           type="button"
           aria-pressed={itemsOpen}
