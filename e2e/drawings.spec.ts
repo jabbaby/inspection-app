@@ -120,7 +120,7 @@ async function threeItemsInPanel(page: Page) {
     await addPinAt(page, fx, 0.5);
     await typeItem(page, `Item ${i + 1}`);
   }
-  await sheet(page).getByRole("button", { name: "Done" }).click();
+  await sheet(page).getByRole("button", { name: "Done" }).first().click();
   await page.getByRole("button", { name: "Items", exact: true }).click();
   await expect(panelRows(page)).toHaveCount(3);
 }
@@ -195,7 +195,7 @@ test("a pin becomes a saved instruction exactly where tapped", async ({
   await expect(
     sheet(page).getByLabel("Photo confirmation required before proceeding"),
   ).toBeChecked();
-  await sheet(page).getByRole("button", { name: "Done" }).click();
+  await sheet(page).getByRole("button", { name: "Done" }).first().click();
   await expect(sheet(page)).toHaveCount(0);
 
   // Tapping the pin reopens its sheet.
@@ -252,7 +252,7 @@ test("deleting an item re-letters the rest, and the box goes with the last pin",
     await addPinAt(page, fx, 0.5);
     await typeItem(page, `Pin at ${fx}`);
   }
-  await sheet(page).getByRole("button", { name: "Done" }).click();
+  await sheet(page).getByRole("button", { name: "Done" }).first().click();
 
   // Delete B: the pin that was C becomes B.
   let c = await centre(pinByLetter(page, "B"));
@@ -262,10 +262,10 @@ test("deleting an item re-letters the rest, and the box goes with the last pin",
   c = await centre(pinByLetter(page, "B"));
   await page.mouse.click(c.x, c.y);
   await expect(sheet(page).getByRole("textbox")).toHaveValue("Pin at 0.4");
-  await sheet(page).getByRole("button", { name: "Done" }).click();
+  await sheet(page).getByRole("button", { name: "Done" }).first().click();
   await addPinAt(page, 0.5, 0.5);
   await expect(sheet(page).getByRole("heading")).toHaveText("Instruction C");
-  await sheet(page).getByRole("button", { name: "Done" }).click();
+  await sheet(page).getByRole("button", { name: "Done" }).first().click();
 
   // Deleting A each time re-letters the rest down to A.
   for (let i = 0; i < 3; i++) {
@@ -286,7 +286,7 @@ test("dragged pins and boxes keep their new positions", async ({ page }) => {
   await uploadDrawings(page, [await typicalPdf()]);
   await openDrawing(page, "S-101 Level 3");
   await addPinAt(page, 0.5, 0.5);
-  await sheet(page).getByRole("button", { name: "Done" }).click();
+  await sheet(page).getByRole("button", { name: "Done" }).first().click();
 
   const stage = await stageBox(page);
   const pin = pinByLetter(page, "A");
@@ -327,7 +327,7 @@ test("pins stay on their spot through a pinch zoom", async ({ page }) => {
   await uploadDrawings(page, [await typicalPdf()]);
   await openDrawing(page, "S-101 Level 3");
   await addPinAt(page, 0.25, 0.4);
-  await sheet(page).getByRole("button", { name: "Done" }).click();
+  await sheet(page).getByRole("button", { name: "Done" }).first().click();
 
   let box = await stageBox(page);
   await pinch(
@@ -368,14 +368,14 @@ test("letters follow the pins' order in the document", async ({ page }) => {
   await addPinAt(page, 0.5, 0.5, 1);
   await typeItem(page, "On page two");
   await expect(sheet(page).getByRole("heading")).toHaveText("Instruction A");
-  await sheet(page).getByRole("button", { name: "Done" }).click();
+  await sheet(page).getByRole("button", { name: "Done" }).first().click();
 
   // ...until a pin goes on page 1: that becomes A and page 2's becomes B.
   const first = await stageBox(page, 0);
   await scrollDocument(page, first.y - viewer.y - 20);
   await addPinAt(page, 0.3, 0.3, 0);
   await expect(sheet(page).getByRole("heading")).toHaveText("Instruction A");
-  await sheet(page).getByRole("button", { name: "Done" }).click();
+  await sheet(page).getByRole("button", { name: "Done" }).first().click();
   await expect(
     page.locator('[data-testid="viewer-pin"][data-letter="B"]'),
   ).toHaveAttribute("data-page", /:2$/);
@@ -390,7 +390,7 @@ test("the items list opens the right drawing page and item", async ({
   await openDrawing(page, "S-101 Level 3");
   await addPinAt(page, 0.3, 0.3);
   await typeItem(page, "First");
-  await sheet(page).getByRole("button", { name: "Done" }).click();
+  await sheet(page).getByRole("button", { name: "Done" }).first().click();
   // Scroll down to page 2 of the document.
   const viewer = (await page.getByTestId("drawing-viewer").boundingBox())!;
   const second = await stageBox(page, 1);
@@ -527,7 +527,7 @@ test("the Items tab lists items and jumps to them", async ({ page }) => {
   await openDrawing(page, "S-101 Level 3");
   await addPinAt(page, 0.3, 0.3);
   await typeItem(page, "On the first drawing");
-  await sheet(page).getByRole("button", { name: "Done" }).click();
+  await sheet(page).getByRole("button", { name: "Done" }).first().click();
 
   const viewer = (await page.getByTestId("drawing-viewer").boundingBox())!;
   const fourth = await stageBox(page, 3);
@@ -540,16 +540,18 @@ test("the Items tab lists items and jumps to them", async ({ page }) => {
     .getByRole("button", { name: "Observation", exact: true })
     .click();
   await typeItem(page, "On the second drawing");
-  await sheet(page).getByRole("button", { name: "Done" }).click();
+  await sheet(page).getByRole("button", { name: "Done" }).first().click();
 
   await page.getByRole("button", { name: "Items", exact: true }).click();
   const panel = page.getByTestId("items-panel");
   const rows = panel.getByRole("listitem");
-  // Observations first.
+  // Observations first, each under its page.
   await expect(rows).toHaveCount(2);
-  await expect(rows.nth(0)).toContainText(
-    "Observation · S-102 Level 4, page 1",
-  );
+  await expect(panel.getByRole("heading", { level: 4 })).toHaveText([
+    "S-102 Level 4 · page 1",
+    "S-101 Level 3 · page 1",
+  ]);
+  await expect(rows.nth(0)).not.toContainText("S-102");
 
   // Jump back up to instruction A on the first drawing.
   await rows.nth(1).getByRole("button").click();
@@ -587,6 +589,28 @@ test("Undo brings back a deleted item with its letter", async ({ page }) => {
   await page.mouse.click(c.x, c.y);
   await expect(sheet(page).getByRole("textbox")).toHaveValue("Second");
   await expect(undo).toBeDisabled();
+
+  // Redo deletes it again; Undo brings it back again.
+  const redo = page.getByRole("button", { name: "Redo", exact: true });
+  await redo.click();
+  await expect(page.getByTestId("viewer-pin")).toHaveCount(1);
+  await expect(redo).toBeDisabled();
+  await undo.click();
+  await expect(page.getByTestId("viewer-pin")).toHaveCount(2);
+});
+
+test("the item sheet's Done button closes it", async ({ page }) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openDrawing(page, "S-101 Level 3");
+  await addPinAt(page, 0.3, 0.5);
+  await sheet(page).getByRole("textbox").fill("Typed then done");
+  // The Done button sits just above Delete.
+  await sheet(page).getByRole("button", { name: "Done" }).last().click();
+  await expect(sheet(page)).toHaveCount(0);
+  const c = await centre(pinByLetter(page, "A"));
+  await page.mouse.click(c.x, c.y);
+  await expect(sheet(page).getByRole("textbox")).toHaveValue("Typed then done");
 });
 
 test("swiping an item left in the Items tab deletes it", async ({ page }) => {

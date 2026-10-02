@@ -723,6 +723,32 @@ button.item-row {
   border: 1px solid #e5d9c8;
 }
 
+/* Undo / redo arrows in the drawings toolbar. */
+.undo-group {
+  display: inline-flex;
+  gap: 0.25rem;
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  padding: 0 0.5rem;
+}
+
+/* Items tab: page groups within each kind. */
+.item-page-group + .item-page-group {
+  margin-top: 0.75rem;
+}
+
+.item-page-heading {
+  margin: 0 0 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--brand-grey);
+}
+
 /* Items tab: swipe a row left to show Delete; drag ≡ to reorder. */
 .item-panel-hint {
   margin: 0;

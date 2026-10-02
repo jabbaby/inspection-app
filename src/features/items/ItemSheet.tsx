@@ -128,6 +128,14 @@ export function ItemSheet({
           : "Observations go in this page's notes box, not the memo."}
       </p>
 
+      <button
+        type="button"
+        className="primary"
+        onClick={() => void autosave.flush().then(onClose)}
+      >
+        Done
+      </button>
+
       {/* No confirm: Undo in the toolbar puts it back. */}
       <button
         type="button"

@@ -29,6 +29,29 @@ function pageSiblings(items: Item[], item: Item): Item[] {
   );
 }
 
+/** Consecutive items on the same drawing page (items are in letter order). */
+function pageGroups(items: Item[]) {
+  const groups: {
+    key: string;
+    drawingId: string;
+    page: number;
+    items: Item[];
+  }[] = [];
+  for (const item of items) {
+    const last = groups.at(-1);
+    if (last && last.drawingId === item.drawingId && last.page === item.page)
+      last.items.push(item);
+    else
+      groups.push({
+        key: `${item.drawingId}:${item.page}`,
+        drawingId: item.drawingId,
+        page: item.page,
+        items: [item],
+      });
+  }
+  return groups;
+}
+
 interface Drag {
   id: string;
   pointerId: number;
@@ -213,6 +236,92 @@ export function ItemsPanel({ items, drawings, onSelect, onClose }: Props) {
     return 0;
   }
 
+  function renderRow(item: Item) {
+    const offset = offsetOf(item.id);
+    const canReorder = pageSiblings(sorted, item).length > 1;
+    const dragged = drag?.id === item.id;
+    return (
+      <li
+        key={item.id}
+        className={`swipe-row${dragged ? " swipe-row-dragged" : ""}`}
+        data-testid="items-panel-row"
+        ref={(el) => {
+          if (el) rowEls.current.set(item.id, el);
+          else rowEls.current.delete(item.id);
+        }}
+        style={{
+          transform: `translateY(${dragShift(item.id)}px)`,
+          transition: dragged || !drag ? "none" : undefined,
+        }}
+      >
+        <button
+          type="button"
+          className="swipe-delete"
+          aria-label={`Delete ${label(item)}`}
+          // Only reachable once the row is swiped open.
+          aria-hidden={offset < 0 ? undefined : true}
+          tabIndex={offset < 0 ? 0 : -1}
+          onClick={() => {
+            setOpenId(null);
+            void deleteItemWithUndo(item);
+          }}
+        >
+          Delete
+        </button>
+        <div
+          className="swipe-content"
+          style={{
+            transform: `translateX(${offset}px)`,
+            transition: swipe?.id === item.id ? "none" : undefined,
+          }}
+          onPointerDown={(e) => onRowPointerDown(e, item)}
+          onPointerMove={onRowPointerMove}
+          onPointerUp={onRowPointerUp}
+          onPointerCancel={onRowPointerUp}
+        >
+          <button
+            type="button"
+            className="item-row"
+            onClick={() => {
+              // A swipe ends with a click; ignore it.
+              if (swiped.current) {
+                swiped.current = false;
+                return;
+              }
+              onRowClick(item);
+            }}
+          >
+            <span
+              className={`item-badge${item.kind === "observation" ? " item-badge-observation" : ""}`}
+              aria-hidden="true"
+            >
+              {item.letter}
+            </span>
+            <span className="item-row-text">
+              <span>
+                <strong>{item.letter}.</strong>{" "}
+                {item.text.trim() || <span className="muted">No text yet</span>}
+              </span>
+            </span>
+          </button>
+          {canReorder && (
+            <button
+              type="button"
+              className="drag-handle"
+              aria-label={`Reorder ${label(item)}`}
+              onPointerDown={(e) => onHandlePointerDown(e, item)}
+              onPointerMove={onHandlePointerMove}
+              onPointerUp={onHandlePointerUp}
+              onPointerCancel={onHandlePointerUp}
+            >
+              ≡
+            </button>
+          )}
+        </div>
+      </li>
+    );
+  }
+
   return (
     <aside className="item-sheet" aria-label="Items" data-testid="items-panel">
       <div className="item-sheet-head">
@@ -226,106 +335,25 @@ export function ItemsPanel({ items, drawings, onSelect, onClose }: Props) {
       ) : (
         <div className="item-groups">
           <p className="muted item-panel-hint">
-            Swipe left to delete. Drag ≡ to reorder on a page.
+            Swipe left to delete. Drag ≡ to reorder within a page.
           </p>
           {groupItems(sorted).map((group) => (
             <section key={group.kind} aria-label={group.heading}>
               <h3 className="item-group-heading">{group.heading}</h3>
-              <ul className="item-list" aria-label={group.heading}>
-                {group.items.map((item) => {
-                  const offset = offsetOf(item.id);
-                  const canReorder = pageSiblings(sorted, item).length > 1;
-                  const dragged = drag?.id === item.id;
-                  return (
-                    <li
-                      key={item.id}
-                      className={`swipe-row${dragged ? " swipe-row-dragged" : ""}`}
-                      data-testid="items-panel-row"
-                      ref={(el) => {
-                        if (el) rowEls.current.set(item.id, el);
-                        else rowEls.current.delete(item.id);
-                      }}
-                      style={{
-                        transform: `translateY(${dragShift(item.id)}px)`,
-                        transition: dragged || !drag ? "none" : undefined,
-                      }}
+              {pageGroups(group.items).map((pageGroup) => {
+                const title = `${names.get(pageGroup.drawingId) ?? "Drawing"} · page ${pageGroup.page}`;
+                return (
+                  <div key={pageGroup.key} className="item-page-group">
+                    <h4 className="item-page-heading">{title}</h4>
+                    <ul
+                      className="item-list"
+                      aria-label={`${group.heading}, ${title}`}
                     >
-                      <button
-                        type="button"
-                        className="swipe-delete"
-                        aria-label={`Delete ${label(item)}`}
-                        // Only reachable once the row is swiped open.
-                        aria-hidden={offset < 0 ? undefined : true}
-                        tabIndex={offset < 0 ? 0 : -1}
-                        onClick={() => {
-                          setOpenId(null);
-                          void deleteItemWithUndo(item);
-                        }}
-                      >
-                        Delete
-                      </button>
-                      <div
-                        className="swipe-content"
-                        style={{
-                          transform: `translateX(${offset}px)`,
-                          transition:
-                            swipe?.id === item.id ? "none" : undefined,
-                        }}
-                        onPointerDown={(e) => onRowPointerDown(e, item)}
-                        onPointerMove={onRowPointerMove}
-                        onPointerUp={onRowPointerUp}
-                        onPointerCancel={onRowPointerUp}
-                      >
-                        <button
-                          type="button"
-                          className="item-row"
-                          onClick={() => {
-                            // A swipe ends with a click; ignore it.
-                            if (swiped.current) {
-                              swiped.current = false;
-                              return;
-                            }
-                            onRowClick(item);
-                          }}
-                        >
-                          <span
-                            className={`item-badge${item.kind === "observation" ? " item-badge-observation" : ""}`}
-                            aria-hidden="true"
-                          >
-                            {item.letter}
-                          </span>
-                          <span className="item-row-text">
-                            <span>
-                              <strong>{item.letter}.</strong>{" "}
-                              {item.text.trim() || (
-                                <span className="muted">No text yet</span>
-                              )}
-                            </span>
-                            <span className="muted">
-                              {kindName(item.kind)} ·{" "}
-                              {names.get(item.drawingId) ?? "Drawing"}, page{" "}
-                              {item.page}
-                            </span>
-                          </span>
-                        </button>
-                        {canReorder && (
-                          <button
-                            type="button"
-                            className="drag-handle"
-                            aria-label={`Reorder ${label(item)}`}
-                            onPointerDown={(e) => onHandlePointerDown(e, item)}
-                            onPointerMove={onHandlePointerMove}
-                            onPointerUp={onHandlePointerUp}
-                            onPointerCancel={onHandlePointerUp}
-                          >
-                            ≡
-                          </button>
-                        )}
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
+                      {pageGroup.items.map(renderRow)}
+                    </ul>
+                  </div>
+                );
+              })}
             </section>
           ))}
         </div>
