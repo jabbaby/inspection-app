@@ -92,11 +92,37 @@ async function deleteOpenItem(page: Page) {
   await sheet(page)
     .getByRole("button", { name: /^Delete (instruction|observation) / })
     .click();
-  await page
-    .getByRole("dialog")
-    .getByRole("button", { name: "Delete" })
-    .click();
+  // No confirm: it goes at once (Undo brings it back).
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(sheet(page)).toHaveCount(0);
+}
+
+/** Drags with the mouse from one point to another in small steps. */
+async function mouseDrag(
+  page: Page,
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+) {
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(to.x, to.y, { steps: 10 });
+  await page.mouse.up();
+}
+
+const panelRows = (page: Page) => page.getByTestId("items-panel-row");
+
+/** Opens the Items tab with three instructions on page 1: A, B, C. */
+async function threeItemsInPanel(page: Page) {
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openDrawing(page, "S-101 Level 3");
+  for (const [i, fx] of [0.2, 0.4, 0.6].entries()) {
+    await addPinAt(page, fx, 0.5);
+    await typeItem(page, `Item ${i + 1}`);
+  }
+  await sheet(page).getByRole("button", { name: "Done" }).click();
+  await page.getByRole("button", { name: "Items", exact: true }).click();
+  await expect(panelRows(page)).toHaveCount(3);
 }
 
 test("adds drawings from Files, rejects non-PDFs and opens them", async ({
@@ -539,6 +565,65 @@ test("the Items tab lists items and jumps to them", async ({ page }) => {
     "S-102 Level 4 · page 1 of 3",
   );
   await expect(sheet(page).getByRole("heading")).toHaveText("Observation A");
+});
+
+test("Undo brings back a deleted item with its letter", async ({ page }) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openDrawing(page, "S-101 Level 3");
+  const undo = page.getByRole("button", { name: "Undo", exact: true });
+  await expect(undo).toBeDisabled();
+
+  await addPinAt(page, 0.3, 0.5);
+  await typeItem(page, "First");
+  await addPinAt(page, 0.5, 0.5);
+  await typeItem(page, "Second");
+  await deleteOpenItem(page);
+  await expect(page.getByTestId("viewer-pin")).toHaveCount(1);
+
+  await undo.click();
+  await expect(page.getByTestId("viewer-pin")).toHaveCount(2);
+  const c = await centre(pinByLetter(page, "B"));
+  await page.mouse.click(c.x, c.y);
+  await expect(sheet(page).getByRole("textbox")).toHaveValue("Second");
+  await expect(undo).toBeDisabled();
+});
+
+test("swiping an item left in the Items tab deletes it", async ({ page }) => {
+  await threeItemsInPanel(page);
+  const row = panelRows(page).nth(1);
+  const box = (await row.boundingBox())!;
+  await mouseDrag(
+    page,
+    { x: box.x + box.width - 60, y: box.y + box.height / 2 },
+    { x: box.x + box.width - 200, y: box.y + box.height / 2 },
+  );
+  await row.getByRole("button", { name: "Delete instruction B" }).click();
+
+  await expect(panelRows(page)).toHaveCount(2);
+  await expect(panelRows(page).nth(1)).toContainText("B. Item 3");
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(panelRows(page)).toHaveCount(3);
+  await expect(panelRows(page).nth(1)).toContainText("B. Item 2");
+});
+
+test("dragging the handle reorders items on a page", async ({ page }) => {
+  await threeItemsInPanel(page);
+  const handle = page.getByRole("button", { name: "Reorder instruction C" });
+  const first = (await panelRows(page).nth(0).boundingBox())!;
+  await mouseDrag(page, await centre(handle), {
+    x: (await centre(handle)).x,
+    y: first.y + 4,
+  });
+
+  // C moved to the top: it's now A, and the box follows.
+  await expect(panelRows(page).nth(0)).toContainText("A. Item 3");
+  await expect(panelRows(page).nth(1)).toContainText("B. Item 1");
+  await expect(page.getByTestId("observation-box")).toContainText(
+    "INSTRUCTIONS:A. ITEM 3B. ITEM 1C. ITEM 2",
+  );
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(panelRows(page).nth(0)).toContainText("A. Item 1");
 });
 
 test("deleting a drawing removes its items", async ({ page }) => {

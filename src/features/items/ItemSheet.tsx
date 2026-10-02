@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { ConfirmDialog } from "../../app/ConfirmDialog";
 import { saveStateLabel, useAutosave } from "../../app/useAutosave";
 import { db } from "../../db/db";
-import { deleteItem, updateItem, type ItemPatch } from "../../db/items";
+import { updateItem, type ItemPatch } from "../../db/items";
 import type { Item, ItemKind } from "../../db/types";
+import { deleteItemWithUndo } from "./itemActions";
 import { itemLabel, kindName } from "./letters";
 
 interface Props {
@@ -33,7 +33,6 @@ export function ItemSheet({
   const [text, setText] = useState(item.text);
   // Shown straight away; the saved value catches up.
   const [photoFlag, setPhotoFlag] = useState(item.requiresPhotoConfirmation);
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const autosave = useAutosave<ItemPatch>(
     (patch) => updateItem(db, item.id, patch),
     (a, b) => ({ ...a, ...b }),
@@ -129,31 +128,20 @@ export function ItemSheet({
           : "Observations go in this page's notes box, not the memo."}
       </p>
 
+      {/* No confirm: Undo in the toolbar puts it back. */}
       <button
         type="button"
         className="danger-outline"
-        onClick={() => setConfirmDelete(true)}
+        onClick={() => {
+          // Save any pending text first so Undo restores it too.
+          void autosave
+            .flush()
+            .then(() => deleteItemWithUndo(item))
+            .then(onClose);
+        }}
       >
         Delete {kindName(item.kind).toLowerCase()} {item.letter}
       </button>
-
-      <ConfirmDialog
-        open={confirmDelete}
-        title={`Delete ${kindName(item.kind).toLowerCase()} ${item.letter}?`}
-        confirmLabel="Delete"
-        danger
-        onCancel={() => setConfirmDelete(false)}
-        onConfirm={() => {
-          autosave.cancel();
-          setConfirmDelete(false);
-          void deleteItem(db, item.id).then(onClose);
-        }}
-      >
-        <p>
-          The pin and its text will be removed. Later items move up a letter so
-          there are no gaps.
-        </p>
-      </ConfirmDialog>
     </aside>
   );
 }

@@ -1,6 +1,7 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
+import { undoLast, useUndo } from "../../app/undo";
 import { db } from "../../db/db";
 import { listDrawings, setPageSizes } from "../../db/drawings";
 import { createItem, moveObservationBox, updateItem } from "../../db/items";
@@ -86,6 +87,7 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
     );
   }, []);
 
+  const nextUndo = useUndo(inspectionId);
   const [addPinMode, setAddPinMode] = useState(false);
   const [itemsOpen, setItemsOpen] = useState(false);
   const [fitRequest, setFitRequest] = useState(0);
@@ -234,6 +236,18 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
             ? `${currentDrawing.name} · page ${current.page} of ${current.pageCount}`
             : ""}
         </strong>
+        <button
+          type="button"
+          disabled={!nextUndo}
+          title={nextUndo ? `Undo: ${nextUndo.label}` : "Nothing to undo"}
+          onClick={() => {
+            // An undone delete would leave its sheet pointing at nothing.
+            select(null);
+            void undoLast(inspectionId);
+          }}
+        >
+          Undo
+        </button>
         <button
           type="button"
           aria-pressed={itemsOpen}

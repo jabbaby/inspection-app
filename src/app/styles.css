@@ -722,3 +722,72 @@ button.item-row {
   color: inherit;
   border: 1px solid #e5d9c8;
 }
+
+/* Items tab: swipe a row left to show Delete; drag ≡ to reorder. */
+.item-panel-hint {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.swipe-row {
+  position: relative;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  transition: transform 150ms ease;
+}
+
+.swipe-row-dragged {
+  z-index: 1;
+  overflow: visible;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.25);
+}
+
+.swipe-delete {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 88px;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--brand-red);
+  color: #fff;
+  font-weight: 700;
+}
+
+.swipe-content {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  background: #fff;
+  border-radius: 0.5rem;
+  transition: transform 200ms ease;
+  /* Vertical drags scroll the list; sideways ones swipe. */
+  touch-action: pan-y;
+}
+
+.swipe-content .item-row {
+  flex: 1;
+  min-width: 0;
+}
+
+.drag-handle {
+  flex: none;
+  width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 1px solid #e5d9c8;
+  border-left: 0;
+  border-radius: 0 0.5rem 0.5rem 0;
+  background: #fff;
+  color: var(--brand-grey);
+  font-size: 1.25rem;
+  cursor: grab;
+  touch-action: none;
+}
+
+.swipe-content:has(.drag-handle) .item-row {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
