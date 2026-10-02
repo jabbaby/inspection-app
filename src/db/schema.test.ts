@@ -27,7 +27,7 @@ describe("InspectionDb", () => {
       "settings",
       "snippets",
     ]);
-    expect(SCHEMA_VERSION).toBe(7);
+    expect(SCHEMA_VERSION).toBe(8);
   });
 
   test("finds an item by inspection and letter", async () => {
@@ -176,4 +176,15 @@ test("v7 upgrade gives items an empty arrow list", async () => {
 
   db = new InspectionDb(name);
   expect((await db.items.get("a"))?.arrows).toEqual([]);
+});
+
+test("v8 upgrade gives inspections an empty general photo list", async () => {
+  const name = `test-${crypto.randomUUID()}`;
+  const v7 = new Dexie(name);
+  v7.version(7).stores({ inspections: "id, jobNumber, updatedAt" });
+  await v7.table("inspections").add({ id: "insp", jobNumber: "SY1" });
+  v7.close();
+
+  db = new InspectionDb(name);
+  expect((await db.inspections.get("insp"))?.photoIds).toEqual([]);
 });

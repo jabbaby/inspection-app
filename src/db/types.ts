@@ -22,6 +22,8 @@ export interface Inspection {
   inspector: string;
   /** Workflow status. Values are settled in build step 4 (inspection CRUD). */
   status: string;
+  /** General photos: not tied to a pin; the appendix's General group. */
+  photoIds: string[];
   createdAt: number;
   updatedAt: number;
 }

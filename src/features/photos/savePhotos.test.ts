@@ -35,3 +35,9 @@ describe("batches", () => {
     expect(batches([])).toEqual([]);
   });
 });
+
+test("general photos are named General", () => {
+  expect(
+    photoFileName("SY000001", { item: null, number: 2 }, "image/jpeg"),
+  ).toBe("SY000001 General 2.jpg");
+});

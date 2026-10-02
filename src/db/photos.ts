@@ -16,14 +16,46 @@ export interface NewPhoto {
   original?: { data: ArrayBuffer; type: string };
 }
 
+/**
+ * Whose photo list a photo is in: an item's, or the inspection's own
+ * general photos (not tied to a pin; the appendix's General group).
+ */
+export type PhotoOwner = { itemId: string } | { inspectionId: string };
+
 function blob(data: ArrayBuffer, type: string): StoredBlob {
   return { id: crypto.randomUUID(), data, type, size: data.byteLength };
 }
 
-/** Adds photos to the end of an item's photos. */
+/** The owner's photo ids and inspection, or null if it's gone. */
+async function ownerPhotos(
+  db: InspectionDb,
+  owner: PhotoOwner,
+): Promise<{ ids: string[]; inspectionId: string } | null> {
+  if ("itemId" in owner) {
+    const item = await db.items.get(owner.itemId);
+    return item
+      ? { ids: item.photoIds, inspectionId: item.inspectionId }
+      : null;
+  }
+  const inspection = await db.inspections.get(owner.inspectionId);
+  return inspection
+    ? { ids: inspection.photoIds ?? [], inspectionId: inspection.id }
+    : null;
+}
+
+async function setOwnerPhotos(
+  db: InspectionDb,
+  owner: PhotoOwner,
+  ids: string[],
+): Promise<void> {
+  if ("itemId" in owner) await db.items.update(owner.itemId, { photoIds: ids });
+  else await db.inspections.update(owner.inspectionId, { photoIds: ids });
+}
+
+/** Adds photos to the end of an item's (or the inspection's) photos. */
 export async function addPhotos(
   db: InspectionDb,
-  itemId: string,
+  owner: PhotoOwner,
   photos: NewPhoto[],
   now = Date.now(),
 ): Promise<Photo[]> {
@@ -31,8 +63,8 @@ export async function addPhotos(
     "rw",
     [db.inspections, db.items, db.photos, db.blobs],
     async () => {
-      const item = await db.items.get(itemId);
-      if (!item) throw new Error(`Item ${itemId} not found`);
+      const list = await ownerPhotos(db, owner);
+      if (!list) throw new Error("Photo owner not found");
       const added: Photo[] = [];
       for (const p of photos) {
         const working = blob(p.data, p.type);
@@ -52,10 +84,8 @@ export async function addPhotos(
         await db.photos.add(photo);
         added.push(photo);
       }
-      await db.items.update(itemId, {
-        photoIds: [...item.photoIds, ...added.map((p) => p.id)],
-      });
-      await touchInspection(db, item.inspectionId, now);
+      await setOwnerPhotos(db, owner, [...list.ids, ...added.map((p) => p.id)]);
+      await touchInspection(db, list.inspectionId, now);
       return added;
     },
   );
@@ -63,17 +93,17 @@ export async function addPhotos(
 
 /** What deletePhoto removed, so restorePhoto can put it back exactly. */
 export interface DeletedPhoto {
-  itemId: string;
+  owner: PhotoOwner;
   photo: Photo;
   blobs: StoredBlob[];
-  /** Its place among the item's photos. */
+  /** Its place among the owner's photos. */
   index: number;
 }
 
-/** Deletes one photo (and its files) from an item. */
+/** Deletes one photo (and its files). */
 export async function deletePhoto(
   db: InspectionDb,
-  itemId: string,
+  owner: PhotoOwner,
   photoId: string,
   now = Date.now(),
 ): Promise<DeletedPhoto | null> {
@@ -81,26 +111,28 @@ export async function deletePhoto(
     "rw",
     [db.inspections, db.items, db.photos, db.blobs],
     async () => {
-      const [item, photo] = await Promise.all([
-        db.items.get(itemId),
+      const [list, photo] = await Promise.all([
+        ownerPhotos(db, owner),
         db.photos.get(photoId),
       ]);
-      if (!item || !photo) return null;
+      if (!list || !photo) return null;
       const blobs = (await db.blobs.bulkGet(photoBlobIds(photo))).filter(
         (b) => b !== undefined,
       );
       await db.blobs.bulkDelete(photoBlobIds(photo));
       await db.photos.delete(photoId);
-      await db.items.update(itemId, {
-        photoIds: item.photoIds.filter((id) => id !== photoId),
-      });
-      await touchInspection(db, item.inspectionId, now);
-      return { itemId, photo, blobs, index: item.photoIds.indexOf(photoId) };
+      await setOwnerPhotos(
+        db,
+        owner,
+        list.ids.filter((id) => id !== photoId),
+      );
+      await touchInspection(db, list.inspectionId, now);
+      return { owner, photo, blobs, index: list.ids.indexOf(photoId) };
     },
   );
 }
 
-/** Puts a deleted photo back (undo). Does nothing if its item is gone. */
+/** Puts a deleted photo back (undo). Does nothing if its owner is gone. */
 export async function restorePhoto(
   db: InspectionDb,
   deleted: DeletedPhoto,
@@ -110,14 +142,14 @@ export async function restorePhoto(
     "rw",
     [db.inspections, db.items, db.photos, db.blobs],
     async () => {
-      const item = await db.items.get(deleted.itemId);
-      if (!item) return;
+      const list = await ownerPhotos(db, deleted.owner);
+      if (!list) return;
       await db.blobs.bulkPut(deleted.blobs);
       await db.photos.put(deleted.photo);
-      const ids = item.photoIds.filter((id) => id !== deleted.photo.id);
+      const ids = list.ids.filter((id) => id !== deleted.photo.id);
       ids.splice(Math.max(0, deleted.index), 0, deleted.photo.id);
-      await db.items.update(item.id, { photoIds: ids });
-      await touchInspection(db, item.inspectionId, now);
+      await setOwnerPhotos(db, deleted.owner, ids);
+      await touchInspection(db, list.inspectionId, now);
     },
   );
 }
@@ -170,29 +202,44 @@ export async function removeOriginals(
 }
 
 export interface InspectionPhoto {
-  item: Item;
+  /** The photo's item, or null for a general photo. */
+  item: Item | null;
   photo: Photo;
-  /** 1-based number among the item's photos. */
+  /** 1-based number among its item's (or the general) photos. */
   number: number;
 }
 
-/** Every photo in an inspection, in item list order, then photo order. */
+/**
+ * Every photo in an inspection: item photos in item list order, then the
+ * general photos, each in their own order.
+ */
 export async function listInspectionPhotos(
   db: InspectionDb,
   inspectionId: string,
 ): Promise<InspectionPhoto[]> {
-  const items = (
-    await db.items.where("inspectionId").equals(inspectionId).toArray()
-  ).sort(compareItems);
+  const [items, inspection] = await Promise.all([
+    db.items.where("inspectionId").equals(inspectionId).toArray(),
+    db.inspections.get(inspectionId),
+  ]);
+  items.sort(compareItems);
+  const general = inspection?.photoIds ?? [];
   const photos = new Map(
-    (await db.photos.bulkGet(items.flatMap((item) => item.photoIds)))
+    (
+      await db.photos.bulkGet([
+        ...items.flatMap((item) => item.photoIds),
+        ...general,
+      ])
+    )
       .filter((p) => p !== undefined)
       .map((p) => [p.id, p]),
   );
-  return items.flatMap((item) =>
-    item.photoIds.flatMap((id, i) => {
+  const entries = (item: Item | null, ids: string[]) =>
+    ids.flatMap((id, i) => {
       const photo = photos.get(id);
       return photo ? [{ item, photo, number: i + 1 }] : [];
-    }),
-  );
+    });
+  return [
+    ...items.flatMap((item) => entries(item, item.photoIds)),
+    ...entries(null, general),
+  ];
 }

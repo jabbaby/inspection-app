@@ -18,7 +18,7 @@ export async function addPhotosWithUndo(
   item: Item,
   photos: NewPhoto[],
 ): Promise<void> {
-  const added = await addPhotos(db, item.id, photos);
+  const added = await addPhotos(db, { itemId: item.id }, photos);
   let removed: DeletedPhoto[] = [];
   pushUndo(item.inspectionId, {
     label:
@@ -29,7 +29,7 @@ export async function addPhotosWithUndo(
       removed = [];
       // Newest first, so each comes back in its old place on redo.
       for (const photo of [...added].reverse()) {
-        const d = await deletePhoto(db, item.id, photo.id);
+        const d = await deletePhoto(db, { itemId: item.id }, photo.id);
         if (d) removed.unshift(d);
       }
     },
@@ -43,13 +43,14 @@ export async function deletePhotoWithUndo(
   item: Item,
   photoId: string,
 ): Promise<void> {
-  let deleted = await deletePhoto(db, item.id, photoId);
+  let deleted = await deletePhoto(db, { itemId: item.id }, photoId);
   if (!deleted) return;
   pushUndo(item.inspectionId, {
     label: `Delete photo from ${itemName(item)}`,
     undo: () => restorePhoto(db, deleted!),
     redo: async () => {
-      deleted = (await deletePhoto(db, item.id, photoId)) ?? deleted;
+      deleted =
+        (await deletePhoto(db, { itemId: item.id }, photoId)) ?? deleted;
     },
   });
 }

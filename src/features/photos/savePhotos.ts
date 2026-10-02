@@ -19,7 +19,7 @@ const EXTENSIONS: Record<string, string> = {
   "image/heif": "heif",
 };
 
-/** e.g. "SY000001 Instruction A 1.jpg", safe for Files. */
+/** e.g. "SY000001 Instruction A 1.jpg" or "SY000001 General 2.jpg", safe for Files. */
 export function photoFileName(
   jobNumber: string,
   entry: Pick<InspectionPhoto, "item" | "number">,
@@ -28,7 +28,9 @@ export function photoFileName(
   const ext = EXTENSIONS[type] ?? "jpg";
   const name = [
     jobNumber.trim(),
-    `${kindName(entry.item.kind)} ${entry.item.letter}`,
+    entry.item
+      ? `${kindName(entry.item.kind)} ${entry.item.letter}`
+      : "General",
     String(entry.number),
   ]
     .filter(Boolean)

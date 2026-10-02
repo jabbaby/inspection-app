@@ -64,7 +64,10 @@ afterEach(async () => {
 
 describe("photos", () => {
   test("are added to the end of an item, camera shots with their originals", async () => {
-    const [a, b] = await addPhotos(db, item.id, [camera(1), library(2)]);
+    const [a, b] = await addPhotos(db, { itemId: item.id }, [
+      camera(1),
+      library(2),
+    ]);
     expect((await db.items.get(item.id))?.photoIds).toEqual([a.id, b.id]);
     expect(a.originalBlobId).toBeDefined();
     expect(b.originalBlobId).toBeUndefined();
@@ -72,12 +75,12 @@ describe("photos", () => {
   });
 
   test("delete with both files, and come back where they were on undo", async () => {
-    const [a, b, c] = await addPhotos(db, item.id, [
+    const [a, b, c] = await addPhotos(db, { itemId: item.id }, [
       camera(1),
       camera(2),
       camera(3),
     ]);
-    const deleted = await deletePhoto(db, item.id, b.id);
+    const deleted = await deletePhoto(db, { itemId: item.id }, b.id);
     expect((await db.items.get(item.id))?.photoIds).toEqual([a.id, c.id]);
     expect(await db.blobs.count()).toBe(1 + 4);
 
@@ -87,13 +90,16 @@ describe("photos", () => {
   });
 
   test("captions save", async () => {
-    const [a] = await addPhotos(db, item.id, [camera()]);
+    const [a] = await addPhotos(db, { itemId: item.id }, [camera()]);
     await setPhotoCaption(db, a.id, "Lap at grid C", inspection.id);
     expect((await db.photos.get(a.id))?.caption).toBe("Lap at grid C");
   });
 
   test("originals can be freed once saved; working copies stay", async () => {
-    const [a, b] = await addPhotos(db, item.id, [camera(1), library(2)]);
+    const [a, b] = await addPhotos(db, { itemId: item.id }, [
+      camera(1),
+      library(2),
+    ]);
     await markPhotosSaved(db, [a.id, b.id], 123);
     expect((await db.photos.get(a.id))?.savedAt).toBe(123);
 
@@ -104,7 +110,7 @@ describe("photos", () => {
   });
 
   test("go with their item, originals included", async () => {
-    await addPhotos(db, item.id, [camera(1), camera(2)]);
+    await addPhotos(db, { itemId: item.id }, [camera(1), camera(2)]);
     const deleted = await deleteItem(db, item.id);
     expect(await db.photos.count()).toBe(0);
     expect(await db.blobs.count()).toBe(1);
@@ -112,7 +118,7 @@ describe("photos", () => {
   });
 
   test("go with their inspection, originals included", async () => {
-    await addPhotos(db, item.id, [camera(1)]);
+    await addPhotos(db, { itemId: item.id }, [camera(1)]);
     await deleteInspection(db, inspection.id);
     expect(await db.blobs.count()).toBe(0);
   });
@@ -130,12 +136,45 @@ describe("photos", () => {
       { x: 0.6, y: 0.02 },
     );
     await updateItem(db, second.id, { kind: "observation" });
-    await addPhotos(db, item.id, [camera(1), camera(2)]);
-    await addPhotos(db, second.id, [camera(3)]);
+    await addPhotos(db, { itemId: item.id }, [camera(1), camera(2)]);
+    await addPhotos(db, { itemId: second.id }, [camera(3)]);
     const listed = await listInspectionPhotos(db, inspection.id);
     // Observations come first in the lists.
     expect(
-      listed.map((p) => `${p.item.kind} ${p.item.letter} ${p.number}`),
+      listed.map((p) => `${p.item?.kind} ${p.item?.letter} ${p.number}`),
     ).toEqual(["observation A 1", "instruction A 1", "instruction A 2"]);
+  });
+});
+
+describe("general photos", () => {
+  test("belong to the inspection, list after the items, and go with it", async () => {
+    const owner = { inspectionId: inspection.id };
+    await addPhotos(db, { itemId: item.id }, [camera(1)]);
+    const [g1, g2] = await addPhotos(db, owner, [camera(2), library(3)]);
+    expect((await db.inspections.get(inspection.id))?.photoIds).toEqual([
+      g1.id,
+      g2.id,
+    ]);
+
+    const listed = await listInspectionPhotos(db, inspection.id);
+    expect(
+      listed.map((p) =>
+        p.item ? `${p.item.letter}${p.number}` : `G${p.number}`,
+      ),
+    ).toEqual(["A1", "G1", "G2"]);
+
+    const deleted = await deletePhoto(db, owner, g1.id);
+    expect((await db.inspections.get(inspection.id))?.photoIds).toEqual([
+      g2.id,
+    ]);
+    await restorePhoto(db, deleted!);
+    expect((await db.inspections.get(inspection.id))?.photoIds).toEqual([
+      g1.id,
+      g2.id,
+    ]);
+
+    await deleteInspection(db, inspection.id);
+    expect(await db.photos.count()).toBe(0);
+    expect(await db.blobs.count()).toBe(0);
   });
 });

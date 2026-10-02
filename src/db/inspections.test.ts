@@ -37,6 +37,7 @@ describe("createInspection", () => {
       date: "2026-10-01",
       inspector: "Test Engineer",
       status: "draft",
+      photoIds: [],
       createdAt: now.getTime(),
       updatedAt: now.getTime(),
     });

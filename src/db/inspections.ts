@@ -1,3 +1,4 @@
+import type { UpdateSpec } from "dexie";
 import { todayIso } from "../lib/dates";
 import type { InspectionDb } from "./schema";
 import {
@@ -42,6 +43,7 @@ export async function createInspection(
     date: todayIso(now),
     inspector: settings?.inspectorName ?? "",
     status: "draft",
+    photoIds: [],
     createdAt: now.getTime(),
     updatedAt: now.getTime(),
   };
@@ -62,7 +64,10 @@ export async function updateInspection(
   for (const [key, value] of Object.entries(client ?? {})) {
     changes[`client.${key}`] = value;
   }
-  const updated = await db.inspections.update(id, changes);
+  const updated = await db.inspections.update(
+    id,
+    changes as UpdateSpec<Inspection>,
+  );
   if (updated === 0) throw new Error(`Inspection ${id} not found`);
 }
 
@@ -94,7 +99,11 @@ export async function deleteInspection(
         .equals(id)
         .toArray();
       const items = await db.items.where("inspectionId").equals(id).toArray();
-      const photoIds = items.flatMap((item) => item.photoIds);
+      const inspection = await db.inspections.get(id);
+      const photoIds = [
+        ...items.flatMap((item) => item.photoIds),
+        ...(inspection?.photoIds ?? []),
+      ];
       const photos = (await db.photos.bulkGet(photoIds)).filter(
         (p) => p !== undefined,
       );
