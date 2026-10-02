@@ -19,7 +19,7 @@ import type {
  * Version of the inspection data format. The inspection file (SPEC section 9)
  * writes this as `schemaVersion`; bump it when stored records change shape.
  */
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 export const DB_NAME = "inspection-app";
 
@@ -130,6 +130,15 @@ export class InspectionDb extends Dexie {
         .toCollection()
         .modify((item) => {
           item.sequence ??= item.createdAt;
+        });
+    });
+    // v7: items gain arrows (pointing from the pin to spots on its page).
+    this.version(7).upgrade(async (tx) => {
+      await tx
+        .table<Item>("items")
+        .toCollection()
+        .modify((item) => {
+          item.arrows ??= [];
         });
     });
   }

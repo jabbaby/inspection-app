@@ -71,6 +71,15 @@ export interface Item {
    * reorders them. Letters follow drawing, page, then sequence.
    */
   sequence: number;
+  /** Arrows from the pin to the spots it refers to, on the same page. */
+  arrows: ItemArrow[];
+}
+
+/** An arrow's tip, in normalised coordinates (0..1) of the item's page. */
+export interface ItemArrow {
+  id: string;
+  x: number;
+  y: number;
 }
 
 export interface Photo {

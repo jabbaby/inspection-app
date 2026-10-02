@@ -137,6 +137,7 @@ describe("deleteInspection", () => {
         photoIds: [`photo-${tag}`],
         createdAt: 0,
         sequence: 0,
+        arrows: [],
       });
       await db.observationBoxes.add({
         id: `box-${tag}`,

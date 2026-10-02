@@ -18,7 +18,10 @@ export interface NewItem {
 
 /** Fields the item sheet and pin dragging can change. */
 export type ItemPatch = Partial<
-  Pick<Item, "kind" | "text" | "requiresPhotoConfirmation" | "x" | "y">
+  Pick<
+    Item,
+    "kind" | "text" | "requiresPhotoConfirmation" | "x" | "y" | "arrows"
+  >
 >;
 
 /** Marks the inspection as changed (drives "Edited ..." on the list). */
@@ -67,6 +70,7 @@ export async function createItem(
           ...existing.map((other) => other.createdAt + 1),
         ),
         sequence: 0,
+        arrows: [],
       };
       // Placed last on its page.
       created.sequence = created.createdAt;

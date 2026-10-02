@@ -27,7 +27,7 @@ describe("InspectionDb", () => {
       "settings",
       "snippets",
     ]);
-    expect(SCHEMA_VERSION).toBe(6);
+    expect(SCHEMA_VERSION).toBe(7);
   });
 
   test("finds an item by inspection and letter", async () => {
@@ -46,6 +46,7 @@ describe("InspectionDb", () => {
       photoIds: [],
       createdAt: 0,
       sequence: 0,
+      arrows: [],
     });
 
     const item = await db.items
@@ -162,4 +163,17 @@ test("v6 upgrade gives items their sequence from the creation order", async () =
 
   db = new InspectionDb(name);
   expect((await db.items.get("a"))?.sequence).toBe(42);
+});
+
+test("v7 upgrade gives items an empty arrow list", async () => {
+  const name = `test-${crypto.randomUUID()}`;
+  const v6 = new Dexie(name);
+  v6.version(6).stores({
+    items: "id, inspectionId, [inspectionId+letter], drawingId",
+  });
+  await v6.table("items").add({ id: "a", inspectionId: "i", sequence: 1 });
+  v6.close();
+
+  db = new InspectionDb(name);
+  expect((await db.items.get("a"))?.arrows).toEqual([]);
 });
