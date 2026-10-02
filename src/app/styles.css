@@ -762,6 +762,17 @@ button.item-row {
   transition: transform 150ms ease;
 }
 
+/* Rows whose pins are on screen. */
+.swipe-row-in-view .item-row,
+.swipe-row-in-view .drag-handle {
+  background: var(--brand-cream);
+  border-color: var(--brand-maroon);
+}
+
+.swipe-row-in-view .swipe-content {
+  box-shadow: inset 4px 0 0 var(--brand-maroon);
+}
+
 .swipe-row-dragged {
   z-index: 1;
   overflow: visible;

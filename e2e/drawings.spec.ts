@@ -588,7 +588,6 @@ test("Undo brings back a deleted item with its letter", async ({ page }) => {
   const c = await centre(pinByLetter(page, "B"));
   await page.mouse.click(c.x, c.y);
   await expect(sheet(page).getByRole("textbox")).toHaveValue("Second");
-  await expect(undo).toBeDisabled();
 
   // Redo deletes it again; Undo brings it back again.
   const redo = page.getByRole("button", { name: "Redo", exact: true });
@@ -597,6 +596,47 @@ test("Undo brings back a deleted item with its letter", async ({ page }) => {
   await expect(redo).toBeDisabled();
   await undo.click();
   await expect(page.getByTestId("viewer-pin")).toHaveCount(2);
+
+  // Then the two pins themselves: undo the adds, newest first.
+  await undo.click();
+  await expect(page.getByTestId("viewer-pin")).toHaveCount(1);
+  await undo.click();
+  await expect(page.getByTestId("viewer-pin")).toHaveCount(0);
+  await expect(page.getByTestId("observation-box")).toHaveCount(0);
+  await expect(undo).toBeDisabled();
+
+  // Redo puts the first back, with its text and notes box.
+  await redo.click();
+  await expect(page.getByTestId("viewer-pin")).toHaveCount(1);
+  await expect(page.getByTestId("observation-box")).toContainText("A. FIRST");
+});
+
+test("the Items tab highlights items whose pins are on screen", async ({
+  page,
+}) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openDrawing(page, "S-101 Level 3");
+  await addPinAt(page, 0.3, 0.5);
+  await typeItem(page, "On page one");
+  await sheet(page).getByRole("button", { name: "Done" }).first().click();
+  const viewer = (await page.getByTestId("drawing-viewer").boundingBox())!;
+  const third = await stageBox(page, 2);
+  await scrollDocument(page, third.y - viewer.y - 20);
+  await addPinAt(page, 0.5, 0.3, 2);
+  await typeItem(page, "On page three");
+  await sheet(page).getByRole("button", { name: "Done" }).first().click();
+
+  await page.getByRole("button", { name: "Items", exact: true }).click();
+  const row = (text: string) => panelRows(page).filter({ hasText: text });
+  await expect(row("On page three")).toHaveAttribute("data-in-view", "true");
+  await expect(row("On page one")).toHaveAttribute("data-in-view", "false");
+
+  // Scroll back to page 1: the highlight follows.
+  const first = await stageBox(page, 0);
+  await scrollDocument(page, first.y - viewer.y - 20);
+  await expect(row("On page one")).toHaveAttribute("data-in-view", "true");
+  await expect(row("On page three")).toHaveAttribute("data-in-view", "false");
 });
 
 test("the item sheet's Done button closes it", async ({ page }) => {

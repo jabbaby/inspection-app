@@ -64,6 +64,8 @@ interface Props {
   onCurrentPage: (page: PageLayout) => void;
   /** Drawings with pages on or near the screen (their PDFs are needed). */
   onActiveDrawings: (drawingIds: string[]) => void;
+  /** Items whose pins are on screen changed. */
+  onVisiblePins: (itemIds: string[]) => void;
   renderPageOverlay: (page: PageLayout) => ReactNode;
   scrollTarget: ScrollTarget | null;
   /** Change to fit the current page to the view. */
@@ -130,6 +132,7 @@ export function DocumentViewer(props: Props) {
   const frame = useRef(0);
   const settleTimer = useRef(0);
   const currentKey = useRef<string | null>(null);
+  const visiblePinsKey = useRef<string | null>(null);
   const [activeKeys, setActiveKeys] = useState<Set<string>>(() => new Set());
   const [settled, setSettled] = useState<SettledView | null>(null);
   const [renderedKeys, setRenderedKeys] = useState<Set<string>>(
@@ -222,6 +225,22 @@ export function DocumentViewer(props: Props) {
       currentKey.current = centre.key;
       setCurrentPageKey(centre.key);
       latest.current.onCurrentPage(centre);
+    }
+    // Pins on screen right now (the Items list highlights them).
+    const { width, height } = viewSize.current;
+    const onScreen = latest.current.pins
+      .filter((pin) => {
+        const page = pagesRef.current.get(pin.pageKey);
+        if (!page) return false;
+        const p = pageToScreen(t, pagePointToDoc(page, pin));
+        return p.x >= 0 && p.x <= width && p.y >= 0 && p.y <= height;
+      })
+      .map((pin) => pin.id)
+      .sort()
+      .join(",");
+    if (onScreen !== visiblePinsKey.current) {
+      visiblePinsKey.current = onScreen;
+      latest.current.onVisiblePins(onScreen ? onScreen.split(",") : []);
     }
   }
 
@@ -382,6 +401,8 @@ export function DocumentViewer(props: Props) {
 
   useLayoutEffect(() => {
     positionPins();
+    // Added, moved or deleted pins can change which are on screen.
+    requestLayout();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pins]);
 

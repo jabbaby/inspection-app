@@ -6,6 +6,8 @@ import { compareItems, groupItems, kindName } from "./letters";
 interface Props {
   items: Item[];
   drawings: Drawing[];
+  /** Items whose pins are on screen: highlighted. */
+  inView: Set<string>;
   onSelect: (item: Item) => void;
   onClose: () => void;
 }
@@ -77,7 +79,13 @@ function dropIndex(drag: Drag): number {
  * drawings view. Swipe a row left for Delete (undoable); drag the handle to
  * reorder items of the same kind on the same page, which re-letters them.
  */
-export function ItemsPanel({ items, drawings, onSelect, onClose }: Props) {
+export function ItemsPanel({
+  items,
+  drawings,
+  inView,
+  onSelect,
+  onClose,
+}: Props) {
   const names = new Map(drawings.map((d) => [d.id, d.name]));
   const sorted = [...items].sort(compareItems);
   const rowEls = useRef(new Map<string, HTMLElement>());
@@ -243,8 +251,15 @@ export function ItemsPanel({ items, drawings, onSelect, onClose }: Props) {
     return (
       <li
         key={item.id}
-        className={`swipe-row${dragged ? " swipe-row-dragged" : ""}`}
+        className={[
+          "swipe-row",
+          dragged ? "swipe-row-dragged" : "",
+          inView.has(item.id) ? "swipe-row-in-view" : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
         data-testid="items-panel-row"
+        data-in-view={inView.has(item.id)}
         ref={(el) => {
           if (el) rowEls.current.set(item.id, el);
           else rowEls.current.delete(item.id);
