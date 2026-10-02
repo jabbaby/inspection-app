@@ -1,12 +1,33 @@
 /**
- * Job details form values <-> inspection records. Shared by the inspection
- * home and the memo editor, which edit the same job details.
+ * Job details form values <-> records. Shared by the Pre-inspection tab
+ * and the memo editor, which edit the same job details: the project's
+ * (job number and name, client, address) and the inspection's own (item
+ * inspected, date, inspector).
  */
-import type { InspectionPatch } from "../../db/inspections";
-import type { Inspection } from "../../db/types";
-import type { JobDetailsValues } from "./JobDetailsForm";
+import type { JobPatch } from "../../db/projects";
+import type { JobInspection } from "../../db/types";
+import type { JobDetailsValues, ProjectField } from "./JobDetailsForm";
 
-export function toValues(i: Inspection): JobDetailsValues {
+export { mergeJobPatches as mergePatches } from "../../db/projects";
+
+/** The project's fields (shared by its inspections), in form order. */
+export const PROJECT_FIELDS: readonly ProjectField[] = [
+  "jobNumber",
+  "jobName",
+  "clientName",
+  "clientCompany",
+  "address1",
+  "address2",
+];
+
+/** The inspection's own fields. */
+export const INSPECTION_FIELDS: readonly (keyof JobDetailsValues)[] = [
+  "itemInspected",
+  "date",
+  "inspector",
+];
+
+export function toValues(i: JobInspection): JobDetailsValues {
   return {
     jobNumber: i.jobNumber,
     jobName: i.jobName,
@@ -20,36 +41,29 @@ export function toValues(i: Inspection): JobDetailsValues {
   };
 }
 
-export function toPatch(
-  key: keyof JobDetailsValues,
-  value: string,
-): InspectionPatch {
+export function toPatch(key: keyof JobDetailsValues, value: string): JobPatch {
   switch (key) {
     case "clientName":
-      return { client: { name: value } };
+      return { project: { client: { name: value } } };
     case "clientCompany":
-      return { client: { company: value } };
+      return { project: { client: { company: value } } };
     case "address1":
-      return { client: { address1: value } };
+      return { project: { client: { address1: value } } };
     case "address2":
-      return { client: { address2: value } };
+      return { project: { client: { address2: value } } };
+    case "jobNumber":
+    case "jobName":
+      return { project: { [key]: value } };
     default:
-      return { [key]: value };
+      return { inspection: { [key]: value } };
   }
-}
-
-export function mergePatches(
-  a: InspectionPatch,
-  b: InspectionPatch,
-): InspectionPatch {
-  return { ...a, ...b, client: { ...a.client, ...b.client } };
 }
 
 /** The inspection with form values applied (for a live memo preview). */
 export function withValues(
-  inspection: Inspection,
+  inspection: JobInspection,
   v: JobDetailsValues,
-): Inspection {
+): JobInspection {
   return {
     ...inspection,
     jobNumber: v.jobNumber,

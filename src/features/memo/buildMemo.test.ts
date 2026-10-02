@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 import starterSnippets from "../../content/snippets.json";
 import { emptyClient } from "../../db/inspections";
 import { blankMemo } from "../../db/memos";
-import type { Inspection, Item, Memo, Snippet } from "../../db/types";
+import type { Item, JobInspection, Memo, Snippet } from "../../db/types";
 import {
   buildMemoPdfInput,
   defaultSalutation,
@@ -26,8 +26,9 @@ const item = (letter: string, text: string, extra: Partial<Item> = {}): Item =>
     ...extra,
   }) as Item;
 
-const inspection: Inspection = {
+const inspection: JobInspection = {
   id: "insp",
+  projectId: "project",
   jobNumber: "SY000001",
   jobName: "Example Apartments",
   itemInspected: "Level 3 slab reinforcement",

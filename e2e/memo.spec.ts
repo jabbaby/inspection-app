@@ -3,16 +3,24 @@ import {
   TYPICAL_DRAWING,
   buildSyntheticDrawing,
 } from "../src/features/drawings/fixtures/syntheticDrawing";
-import { openTab, stageBox, waitForServiceWorker } from "./helpers";
+import {
+  openTab,
+  stageBox,
+  startInspection,
+  waitForServiceWorker,
+} from "./helpers";
 
 const field = (page: Page, label: string) =>
   page.getByLabel(label, { exact: true });
 
-async function newInspection(page: Page) {
+/** An inspection in project SY000001 (`existing`: already made). */
+async function newInspection(page: Page, existing = false) {
   await page.goto("./");
-  await page.getByRole("button", { name: "New inspection" }).click();
-  await field(page, "Job number").fill("SY000001");
-  await field(page, "Job name").fill("Example Apartments");
+  await startInspection(page, {
+    jobNumber: "SY000001",
+    jobName: "Example Apartments",
+    existing,
+  });
   await field(page, "Item inspected").fill("Level 3 slab reinforcement");
   await field(page, "Client name").fill("Alex Example");
   await field(page, "Client company").fill("Example Builders Pty Ltd");
@@ -118,7 +126,10 @@ test("create a memo from the instructions, with a live preview", async ({
   await expect(page.getByTestId("memo-paragraph-1")).toContainText(
     "the Level 3 slab as",
   );
-  await expect(page.getByTestId("memo-save-state")).toHaveText("Saved");
+  await expect(page.getByTestId("memo-save-state")).toHaveText("Saved", {
+    // The PDF preview redraws after each edit, slow on a busy test machine.
+    timeout: 15_000,
+  });
   await openTab(page, "Pre-inspection");
   await expect(field(page, "Item inspected")).toHaveValue("Level 3 slab");
 
@@ -128,7 +139,10 @@ test("create a memo from the instructions, with a live preview", async ({
     page.getByRole("heading", { name: "Site Instruction Memo · SIM-001" }),
   ).toBeVisible();
   await field(page, "Salutation").fill("Hi Alex,");
-  await expect(page.getByTestId("memo-save-state")).toHaveText("Saved");
+  await expect(page.getByTestId("memo-save-state")).toHaveText("Saved", {
+    // The PDF preview redraws after each edit, slow on a busy test machine.
+    timeout: 15_000,
+  });
   await page.reload();
   await expect(field(page, "Salutation")).toHaveValue("Hi Alex,");
 });
@@ -136,12 +150,16 @@ test("create a memo from the instructions, with a live preview", async ({
 test("a memo needs a job number and name; references count per job", async ({
   page,
 }) => {
+  // No project yet: no memo.
   await page.goto("./");
-  await page.getByRole("button", { name: "New inspection" }).click();
+  await startInspection(page, null);
   await openTab(page, "Site memo");
   await expect(
     page.getByRole("button", { name: "Create memo" }),
   ).toBeDisabled();
+  await expect(
+    page.getByText("Put this inspection in a project"),
+  ).toBeVisible();
 
   await newInspection(page);
   await createMemo(page);
@@ -149,7 +167,7 @@ test("a memo needs a job number and name; references count per job", async ({
   // No instructions: the memo says Ok to proceed.
   await expect(page.getByTestId("memo-lead-in")).toHaveText("Ok to proceed.");
 
-  await newInspection(page);
+  await newInspection(page, true);
   await createMemo(page);
   await expect(field(page, "Reference")).toHaveValue("SIM-002");
 });
@@ -348,7 +366,10 @@ test("a signature drawn in Settings goes on new memos; a memo can upload its own
     page.locator('[data-testid="memo-preview"][data-ready="true"]'),
   ).toBeVisible({ timeout: 20_000 });
   await page.getByLabel("Include signature").uncheck();
-  await expect(page.getByTestId("memo-save-state")).toHaveText("Saved");
+  await expect(page.getByTestId("memo-save-state")).toHaveText("Saved", {
+    // The PDF preview redraws after each edit, slow on a busy test machine.
+    timeout: 15_000,
+  });
   await page.reload();
   await expect(page.getByLabel("Include signature")).not.toBeChecked();
   await expect(

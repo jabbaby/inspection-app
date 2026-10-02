@@ -1,4 +1,3 @@
-import type { UpdateSpec } from "dexie";
 import { todayIso } from "../lib/dates";
 import type { InspectionDb } from "./schema";
 import {
@@ -6,16 +5,14 @@ import {
   photoBlobIds,
   type Client,
   type Inspection,
+  type JobInspection,
 } from "./types";
 
-/** Fields the job details form edits. Client fields are merged, not replaced. */
+/** The inspection's own job details (the rest are its project's). */
 export interface InspectionPatch {
-  jobNumber?: string;
-  jobName?: string;
   itemInspected?: string;
   date?: string;
   inspector?: string;
-  client?: Partial<Client>;
 }
 
 /** Job fields a memo needs (SIM reference and filename depend on them). */
@@ -27,19 +24,19 @@ export function emptyClient(): Client {
 
 /**
  * Creates a draft inspection dated today, with the inspector taken from
- * Settings. Nothing is required up front: details can be filled in later.
+ * Settings, in a project (or none yet: "Needs a project"). Nothing else is
+ * required up front: details can be filled in later.
  */
 export async function createInspection(
   db: InspectionDb,
   now: Date = new Date(),
+  projectId: string | null = null,
 ): Promise<Inspection> {
   const settings = await db.settings.get(SETTINGS_ID);
   const inspection: Inspection = {
     id: crypto.randomUUID(),
-    jobNumber: "",
-    jobName: "",
+    projectId,
     itemInspected: "",
-    client: emptyClient(),
     date: todayIso(now),
     inspector: settings?.inspectorName ?? "",
     status: "draft",
@@ -51,23 +48,17 @@ export async function createInspection(
   return inspection;
 }
 
-/** Saves changed fields and bumps updatedAt. Client fields are merged. */
+/** Saves changed fields and bumps updatedAt. */
 export async function updateInspection(
   db: InspectionDb,
   id: string,
   patch: InspectionPatch,
   now: number = Date.now(),
 ): Promise<void> {
-  const { client, ...top } = patch;
-  const changes: Record<string, unknown> = { ...top, updatedAt: now };
-  // Dotted key paths update one client field without overwriting the others.
-  for (const [key, value] of Object.entries(client ?? {})) {
-    changes[`client.${key}`] = value;
-  }
-  const updated = await db.inspections.update(
-    id,
-    changes as UpdateSpec<Inspection>,
-  );
+  const updated = await db.inspections.update(id, {
+    ...patch,
+    updatedAt: now,
+  });
   if (updated === 0) throw new Error(`Inspection ${id} not found`);
 }
 
@@ -128,7 +119,9 @@ export async function deleteInspection(
   );
 }
 
-export function missingJobFields(inspection: Inspection): RequiredJobField[] {
+export function missingJobFields(
+  inspection: Pick<JobInspection, "jobNumber" | "jobName">,
+): RequiredJobField[] {
   const missing: RequiredJobField[] = [];
   if (!inspection.jobNumber.trim()) missing.push("jobNumber");
   if (!inspection.jobName.trim()) missing.push("jobName");

@@ -10,7 +10,7 @@ afterEach(async () => {
 });
 
 describe("InspectionDb", () => {
-  test("opens with every v1 table", async () => {
+  test("opens with every table", async () => {
     db = new InspectionDb(`test-${crypto.randomUUID()}`);
     await db.open();
 
@@ -24,10 +24,11 @@ describe("InspectionDb", () => {
       "memos",
       "observationBoxes",
       "photos",
+      "projects",
       "settings",
       "snippets",
     ]);
-    expect(SCHEMA_VERSION).toBe(9);
+    expect(SCHEMA_VERSION).toBe(10);
   });
 
   test("finds an item by inspection and letter", async () => {
@@ -80,7 +81,9 @@ describe("upgrade from v1", () => {
     const withItems = await db.inspections.get("with-items");
     const empty = await db.inspections.get("empty");
     expect(withItems?.itemInspected).toBe("");
-    expect(withItems?.jobName).toBe("Tower");
+    // Job details now live on the inspection's project (v10).
+    const project = await db.projects.get(withItems?.projectId ?? "");
+    expect(project?.jobName).toBe("Tower");
     expect(empty?.itemInspected).toBe("");
   });
 });

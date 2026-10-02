@@ -4,7 +4,7 @@ import { waitForServiceWorker } from "./helpers";
 test("loads the shell with Inspections and Settings only", async ({ page }) => {
   await page.goto("./");
 
-  const nav = page.getByRole("navigation");
+  const nav = page.getByRole("navigation", { name: "Main" });
   await expect(nav.getByRole("link")).toHaveText(["Inspections", "Settings"]);
   await expect(page.getByText("No inspections yet")).toBeVisible();
   await expect(page.getByText(/^Version \d+\.\d+\.\d+ \(.+\)$/)).toBeVisible();

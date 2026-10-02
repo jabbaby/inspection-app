@@ -3,7 +3,7 @@ import { Link } from "react-router";
 import { db } from "../../db/db";
 import { missingJobFields } from "../../db/inspections";
 import { createMemo } from "../../db/memos";
-import type { Inspection } from "../../db/types";
+import type { JobInspection } from "../../db/types";
 import { tabPath } from "../inspections/tabPath";
 
 /**
@@ -11,9 +11,10 @@ import { tabPath } from "../inspections/tabPath";
  * next SIM reference (the tab then shows the editor). A memo needs a job
  * number and job name first.
  */
-export function CreateMemo({ inspection }: { inspection: Inspection }) {
+export function CreateMemo({ inspection }: { inspection: JobInspection }) {
   const [error, setError] = useState<string | null>(null);
-  const canCreate = missingJobFields(inspection).length === 0;
+  const hasProject = inspection.projectId !== null;
+  const canCreate = hasProject && missingJobFields(inspection).length === 0;
 
   return (
     <div aria-labelledby="memo-heading">
@@ -38,7 +39,13 @@ export function CreateMemo({ inspection }: { inspection: Inspection }) {
           Create memo
         </button>
       </p>
-      {!canCreate && (
+      {!hasProject && (
+        <p className="muted">
+          Put this inspection in a project first, on{" "}
+          <Link to={tabPath(inspection.id, "details")}>Pre-inspection</Link>.
+        </p>
+      )}
+      {hasProject && !canCreate && (
         <p className="muted">
           Add a job number and job name on{" "}
           <Link to={tabPath(inspection.id, "details")}>Pre-inspection</Link>{" "}

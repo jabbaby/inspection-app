@@ -1,11 +1,8 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import {
-  createInspection,
-  deleteInspection,
-  updateInspection,
-} from "./inspections";
+import { createInspection, deleteInspection, emptyClient } from "./inspections";
 import { createMemo, getMemo, memoReference, updateMemo } from "./memos";
+import { createProject } from "./projects";
 import { InspectionDb } from "./schema";
 import { ensureSeeded } from "./seed";
 import { SETTINGS_ID } from "./types";
@@ -30,13 +27,16 @@ async function inspectionFor(
   jobNumber: string,
   jobName = "Example Apartments",
 ) {
-  const inspection = await createInspection(db, new Date(2026, 9, 1));
-  await updateInspection(db, inspection.id, {
+  const project = await createProject(db, {
     jobNumber,
     jobName,
-    client: { name: "Alex Example", company: "Example Builders Pty Ltd" },
+    client: {
+      ...emptyClient(),
+      name: "Alex Example",
+      company: "Example Builders Pty Ltd",
+    },
   });
-  return inspection;
+  return createInspection(db, new Date(2026, 9, 1), project.id);
 }
 
 describe("memos", () => {

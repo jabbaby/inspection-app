@@ -6,6 +6,7 @@ import {
 } from "../features/inspections/InspectionHome";
 import { tabPath } from "../features/inspections/tabPath";
 import { InspectionsPage } from "../features/inspections/InspectionsPage";
+import { ProjectPage } from "../features/projects/ProjectPage";
 import { SettingsPage } from "../features/settings/SettingsPage";
 import { DocumentScreen } from "../features/drawings/DocumentScreen";
 import { MemoScreen } from "../features/memo/MemoScreen";
@@ -22,6 +23,7 @@ const router = createHashRouter([
       { path: "inspections/:id", element: <OpenInspection /> },
       { path: "inspections/:id/details", element: <PreInspectionScreen /> },
       { path: "inspections/:id/inspection", element: <InspectionScreen /> },
+      { path: "projects/:id", element: <ProjectPage /> },
       { path: "settings", element: <SettingsPage /> },
       { path: "inspections/:id/document", element: <DocumentScreen /> },
       { path: "inspections/:id/memo", element: <MemoScreen /> },

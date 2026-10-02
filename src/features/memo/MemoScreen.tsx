@@ -4,12 +4,18 @@ import { Link, useParams } from "react-router";
 import { AutoGrowTextarea } from "../../app/AutoGrowTextarea";
 import { saveStateLabel, useAutosave } from "../../app/useAutosave";
 import { db } from "../../db/db";
-import { updateInspection, type InspectionPatch } from "../../db/inspections";
 import { getMemo, updateMemo, type MemoPatch } from "../../db/memos";
+import {
+  contactKey,
+  loadJobInspection,
+  rememberContacts,
+  saveJob,
+  type JobPatch,
+} from "../../db/projects";
 import { setMemoSignature } from "../../db/signatures";
 import {
   SETTINGS_ID,
-  type Inspection,
+  type JobInspection,
   type Memo,
   type Recipient,
   type SentVia,
@@ -50,7 +56,7 @@ export function MemoScreen() {
   const { id = "" } = useParams();
   const found = useLiveQuery(
     async () => ({
-      inspection: (await db.inspections.get(id)) ?? null,
+      inspection: (await loadJobInspection(db, id)) ?? null,
       memoId: (await getMemo(db, id))?.id ?? null,
     }),
     [id],
@@ -94,20 +100,21 @@ export function MemoScreen() {
 type Load =
   | { status: "loading" }
   | { status: "missing" }
-  | { status: "ready"; inspection: Inspection; memo: Memo };
+  | { status: "ready"; inspection: JobInspection; memo: Memo };
 
 /**
  * The Site Instruction Memo editor (SPEC section 4): the form, with a live
  * preview of the exported page. Saves as you type. Job details are the
- * inspection's own, so editing them here changes them everywhere.
+ * project's and the inspection's own, so editing them here changes them
+ * everywhere.
  */
 function MemoEditorFor({ inspectionId }: { inspectionId: string }) {
   const [load, setLoad] = useState<Load>({ status: "loading" });
   // Loaded once: the form then owns its values, so typing is never overwritten.
   const [job, setJob] = useState<JobDetailsValues | null>(null);
   const [memo, setMemo] = useState<Memo | null>(null);
-  const jobSave = useAutosave<InspectionPatch>(
-    (patch) => updateInspection(db, inspectionId, patch),
+  const jobSave = useAutosave<JobPatch>(
+    (patch) => saveJob(db, inspectionId, patch),
     mergePatches,
   );
   const memoSave = useAutosave<MemoPatch>(
@@ -119,6 +126,12 @@ function MemoEditorFor({ inspectionId }: { inspectionId: string }) {
     [inspectionId],
   );
   const snippets = useLiveQuery(() => db.snippets.toArray(), []);
+  const contacts = useLiveQuery(async () => {
+    const inspection = await db.inspections.get(inspectionId);
+    return inspection?.projectId
+      ? ((await db.projects.get(inspection.projectId))?.contacts ?? [])
+      : [];
+  }, [inspectionId]);
   const mySignatureId = useLiveQuery(
     async () => (await db.settings.get(SETTINGS_ID))?.signatureBlobId ?? null,
     [],
@@ -135,7 +148,7 @@ function MemoEditorFor({ inspectionId }: { inspectionId: string }) {
   useEffect(() => {
     let current = true;
     void Promise.all([
-      db.inspections.get(inspectionId),
+      loadJobInspection(db, inspectionId),
       getMemo(db, inspectionId),
     ]).then(([inspection, found]) => {
       if (!current) return;
@@ -198,6 +211,18 @@ function MemoEditorFor({ inspectionId }: { inspectionId: string }) {
           ? "saved"
           : "idle";
 
+  // Recipients typed in are remembered as the project's contacts.
+  const projectId = load.inspection.projectId;
+  const rememberRecipient = (i: number) => {
+    void memoSave.flush();
+    const r = memo.recipients[i];
+    if (projectId && r) void rememberContacts(db, projectId, [r]);
+  };
+  const usedKeys = new Set(memo.recipients.map(contactKey));
+  const unusedContacts = (contacts ?? []).filter(
+    (c) => !usedKeys.has(contactKey(c)),
+  );
+
   const setRecipient = (i: number, change: Partial<Recipient>) =>
     patch({
       recipients: memo.recipients.map((r, j) =>
@@ -237,8 +262,9 @@ function MemoEditorFor({ inspectionId }: { inspectionId: string }) {
 
           <h2>Job details</h2>
           <p className="muted">
-            Shared with the inspection: changing them here changes them there
-            too.
+            Shared with the inspection and its project: changing them here
+            changes them there too (job number, name, client and address change
+            for every inspection in the project).
           </p>
           <JobDetailsForm
             values={job}
@@ -264,7 +290,13 @@ function MemoEditorFor({ inspectionId }: { inspectionId: string }) {
             </thead>
             <tbody>
               {memo.recipients.map((r, i) => (
-                <tr key={i}>
+                <tr
+                  key={i}
+                  onBlur={(e) => {
+                    if (!e.currentTarget.contains(e.relatedTarget as Node))
+                      rememberRecipient(i);
+                  }}
+                >
                   <td>
                     <input
                       aria-label={`Recipient ${i + 1} company`}
@@ -343,6 +375,38 @@ function MemoEditorFor({ inspectionId }: { inspectionId: string }) {
             >
               Add recipient
             </button>
+            {unusedContacts.length > 0 &&
+              memo.recipients.length < MAX_RECIPIENTS && (
+                <select
+                  aria-label="Add from contacts"
+                  value=""
+                  onChange={(e) => {
+                    const contact = unusedContacts.find(
+                      (c) => c.id === e.target.value,
+                    );
+                    if (!contact) return;
+                    const to = !memo.recipients.some((r) => r.to);
+                    patch({
+                      recipients: [
+                        ...memo.recipients,
+                        {
+                          company: contact.company,
+                          attn: contact.attn,
+                          to,
+                          copy: !to,
+                        },
+                      ],
+                    });
+                  }}
+                >
+                  <option value="">Add from contacts…</option>
+                  {unusedContacts.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {[c.attn, c.company].filter(Boolean).join(", ")}
+                    </option>
+                  ))}
+                </select>
+              )}
           </p>
           {!memo.recipients.some((r) => r.to) && (
             <p className="notice" data-testid="no-to-recipient">

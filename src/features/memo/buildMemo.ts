@@ -5,7 +5,7 @@
  */
 import type {
   Client,
-  Inspection,
+  JobInspection,
   Item,
   Memo,
   MemoFields,
@@ -111,7 +111,7 @@ export function memoConditions(
 }
 
 /** Memo fields for the page: job details from the inspection, the rest from the memo. */
-export function memoFields(memo: Memo, inspection: Inspection): MemoFields {
+export function memoFields(memo: Memo, inspection: JobInspection): MemoFields {
   return {
     clientName: inspection.client.name,
     clientCompany: inspection.client.company,
@@ -137,7 +137,7 @@ export function memoFields(memo: Memo, inspection: Inspection): MemoFields {
 /** Everything the memo PDF needs. */
 export function buildMemoPdfInput(
   memo: Memo,
-  inspection: Inspection,
+  inspection: JobInspection,
   items: Item[],
   conditionSnippets: Snippet[],
 ): MemoPdfInput {

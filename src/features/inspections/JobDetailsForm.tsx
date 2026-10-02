@@ -1,5 +1,14 @@
 import type { HTMLAttributes } from "react";
 
+/** Fields shared by every inspection in a project. */
+export type ProjectField =
+  | "jobNumber"
+  | "jobName"
+  | "clientName"
+  | "clientCompany"
+  | "address1"
+  | "address2";
+
 export interface JobDetailsValues {
   jobNumber: string;
   jobName: string;
@@ -38,20 +47,30 @@ const FIELDS: Field[] = [
 ];
 
 interface Props {
+  /** Which fields to show (all by default), e.g. only the project's. */
+  only?: readonly (keyof JobDetailsValues)[];
+  /** Accessible name of the form. */
+  label?: string;
   values: JobDetailsValues;
   onChange: (key: keyof JobDetailsValues, value: string) => void;
   onBlur: () => void;
 }
 
 /** Job details, saved as you type by the parent (no Save button). */
-export function JobDetailsForm({ values, onChange, onBlur }: Props) {
+export function JobDetailsForm({
+  only,
+  label = "Job details",
+  values,
+  onChange,
+  onBlur,
+}: Props) {
   return (
     <form
       className="form-grid"
-      aria-label="Job details"
+      aria-label={label}
       onSubmit={(e) => e.preventDefault()}
     >
-      {FIELDS.map((field) => (
+      {FIELDS.filter((f) => !only || only.includes(f.key)).map((field) => (
         <label key={field.key} className="field">
           <span>{field.label}</span>
           <input

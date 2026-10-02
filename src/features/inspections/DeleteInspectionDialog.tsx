@@ -1,10 +1,10 @@
 import { ConfirmDialog } from "../../app/ConfirmDialog";
-import type { Inspection } from "../../db/types";
+import type { JobInspection } from "../../db/types";
 import { inspectionTitle } from "./inspectionTitle";
 
 interface Props {
-  inspection: Inspection | null;
-  onConfirm: (inspection: Inspection) => void;
+  inspection: JobInspection | null;
+  onConfirm: (inspection: JobInspection) => void;
   onCancel: () => void;
 }
 

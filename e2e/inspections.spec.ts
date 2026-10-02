@@ -1,15 +1,15 @@
 import { expect, test, type Page } from "@playwright/test";
-import { openTab, waitForServiceWorker } from "./helpers";
+import { openTab, startInspection, waitForServiceWorker } from "./helpers";
 
 const field = (page: Page, label: string) =>
   page.getByLabel(label, { exact: true });
 
 async function newInspection(page: Page) {
   await page.goto("./");
-  await page.getByRole("button", { name: "New inspection" }).click();
   // A new inspection opens on its job details.
+  await startInspection(page, { jobNumber: "SY000001", jobName: "" });
   await expect(page).toHaveURL(/#\/inspections\/[0-9a-f-]{36}\/details$/);
-  await expect(field(page, "Job number")).toBeVisible();
+  await expect(field(page, "Job number")).toHaveValue("SY000001");
 }
 
 async function fillJob(page: Page) {
@@ -33,7 +33,7 @@ test("creates an inspection, autosaves every field and keeps it after reload", a
   });
   await expect(field(page, "Date")).toHaveValue(today);
   await expect(page.getByTestId("missing-fields")).toHaveText(
-    "Job number and job name are needed before a memo can be created.",
+    "Job name is needed before a memo can be created.",
   );
 
   await fillJob(page);
@@ -159,7 +159,7 @@ test(
     await context.setOffline(true);
     await page.reload();
 
-    await page.getByRole("button", { name: "New inspection" }).click();
+    await startInspection(page, { jobNumber: "SY000001", jobName: "" });
     await fillJob(page);
     await page.reload();
     await expect(field(page, "Job number")).toHaveValue("SY000001");

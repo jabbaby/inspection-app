@@ -1,6 +1,7 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useRef, useState } from "react";
 import { db } from "../../db/db";
+import { loadJobInspection } from "../../db/projects";
 import { ConfirmDialog } from "../../app/ConfirmDialog";
 import type { NewPhoto } from "../../db/photos";
 import type { Item, Photo } from "../../db/types";
@@ -53,7 +54,7 @@ export function PhotoSet({
   const [deleting, setDeleting] = useState<Photo | null>(null);
   const jobNumber =
     useLiveQuery(
-      async () => (await db.inspections.get(inspectionId))?.jobNumber,
+      async () => (await loadJobInspection(db, inspectionId))?.jobNumber,
       [inspectionId],
     ) ?? "";
   const photos =

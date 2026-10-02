@@ -17,7 +17,7 @@ Reply with the step number and what you saw (no need to edit this file).
 4. **Inspection.** Shows **Open markup** (red), then Drawings, Items and Photos. On an inspection with no drawings, it says to add one instead of Open markup.
 5. **Site memo.** With no memo: **Create memo** (greyed out, with a link to Pre-inspection, if the job number or name is missing). With a memo: the editor, headed "Site Instruction Memo · SIM-…", with the preview.
 6. **Create from the tab.** On an inspection without a memo, tap **Create memo**: the editor appears in the same tab.
-7. **Back button.** Move between tabs, then use the browser/app Back gesture: it steps back through the tabs.
+7. **Back (Safari only).** In Safari (not the home-screen app, which has no Back), move between tabs, then tap Back: it steps back through the tabs.
 
 ## Markup (viewer)
 8. **Open markup.** Tap **Open markup**: the drawings open at the top.

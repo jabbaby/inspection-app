@@ -10,13 +10,30 @@ export interface Client {
   address2: string;
 }
 
-export interface Inspection {
+/** A job's saved details, shared by all its inspections (SPEC section 8). */
+export interface Project {
   id: string;
   jobNumber: string;
   jobName: string;
+  client: Client;
+  /** Memo recipients used before, offered when adding recipients. */
+  contacts: Contact[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface Contact {
+  id: string;
+  company: string;
+  attn: string;
+}
+
+export interface Inspection {
+  id: string;
+  /** Its project; null until it's put in one ("Needs a project"). */
+  projectId: string | null;
   /** e.g. "Level 3 slab reinforcement". Prefills the memo and heads the observations box. */
   itemInspected: string;
-  client: Client;
   /** ISO date (YYYY-MM-DD). */
   date: string;
   inspector: string;
@@ -24,9 +41,18 @@ export interface Inspection {
   status: string;
   /** General photos: not tied to a pin; the appendix's General group. */
   photoIds: string[];
+  /**
+   * Job details an inspection had before projects existed, kept when it had
+   * no job number (so it wasn't put in a project) to start one from.
+   */
+  unsorted?: { jobName: string; client: Client };
   createdAt: number;
   updatedAt: number;
 }
+
+/** An inspection with its project's job details, as screens and the memo read them. */
+export type JobInspection = Inspection &
+  Pick<Project, "jobNumber" | "jobName" | "client">;
 
 export interface Drawing {
   id: string;

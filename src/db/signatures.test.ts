@@ -1,11 +1,8 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import {
-  createInspection,
-  deleteInspection,
-  updateInspection,
-} from "./inspections";
+import { createInspection, deleteInspection } from "./inspections";
 import { createMemo } from "./memos";
+import { createProject } from "./projects";
 import { InspectionDb } from "./schema";
 import { ensureSeeded } from "./seed";
 import {
@@ -29,11 +26,15 @@ afterEach(async () => {
 const png = (n: number) => new Uint8Array([137, 80, 78, 71, n]);
 
 async function newMemo() {
-  const inspection = await createInspection(db, new Date(2026, 9, 1));
-  await updateInspection(db, inspection.id, {
+  const project = await createProject(db, {
     jobNumber: "SY000001",
     jobName: "Example Apartments",
   });
+  const inspection = await createInspection(
+    db,
+    new Date(2026, 9, 1),
+    project.id,
+  );
   return createMemo(db, inspection.id);
 }
 

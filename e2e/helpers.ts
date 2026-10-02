@@ -100,3 +100,31 @@ export async function openTab(
     .getByRole("link", { name, exact: true })
     .click();
 }
+
+/**
+ * New inspection from the Inspections page: in a new project (or, with
+ * `existing`, the project that already has that job number), or with
+ * none (null: Skip for now). Ends on its Pre-inspection tab.
+ */
+export async function startInspection(
+  page: Page,
+  project: { jobNumber: string; jobName: string; existing?: boolean } | null,
+) {
+  await page.getByRole("button", { name: "New inspection" }).click();
+  const dialog = page.getByRole("dialog", { name: "New inspection" });
+  if (!project) {
+    await dialog.getByRole("button", { name: "Skip for now" }).click();
+  } else {
+    const form = dialog.getByRole("form", { name: "New project" });
+    await form
+      .getByLabel("Job number", { exact: true })
+      .fill(project.jobNumber);
+    await form.getByLabel("Job name", { exact: true }).fill(project.jobName);
+    await dialog
+      .getByRole("button", {
+        name: project.existing ? "Use that project" : "Create project",
+      })
+      .click();
+  }
+  await expect(page).toHaveURL(/\/details$/);
+}

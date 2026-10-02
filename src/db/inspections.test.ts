@@ -8,6 +8,7 @@ import {
   updateInspection,
 } from "./inspections";
 import { blankMemo } from "./memos";
+import { jobInspection } from "./projects";
 import { InspectionDb } from "./schema";
 import { ensureSeeded } from "./seed";
 import { SETTINGS_ID } from "./types";
@@ -32,10 +33,8 @@ describe("createInspection", () => {
 
     expect(await db.inspections.get(created.id)).toEqual({
       id: created.id,
-      jobNumber: "",
-      jobName: "",
+      projectId: null,
       itemInspected: "",
-      client: { name: "", company: "", address1: "", address2: "" },
       date: "2026-10-01",
       inspector: "Test Engineer",
       status: "draft",
@@ -52,36 +51,21 @@ describe("createInspection", () => {
 });
 
 describe("updateInspection", () => {
-  test("saves fields, merges client fields and bumps updatedAt", async () => {
+  test("saves fields and bumps updatedAt", async () => {
     const created = await createInspection(db, new Date(2026, 9, 1));
-    await updateInspection(
-      db,
-      created.id,
-      { client: { company: "Example Builders" } },
-      1000,
-    );
-    await updateInspection(
-      db,
-      created.id,
-      { jobNumber: "SY000001", client: { name: "Alex Example" } },
-      2000,
-    );
+    await updateInspection(db, created.id, { itemInspected: "Slab" }, 1000);
+    await updateInspection(db, created.id, { inspector: "T. Engineer" }, 2000);
 
     const saved = await db.inspections.get(created.id);
-    expect(saved?.jobNumber).toBe("SY000001");
-    expect(saved?.client).toEqual({
-      name: "Alex Example",
-      company: "Example Builders",
-      address1: "",
-      address2: "",
-    });
+    expect(saved?.itemInspected).toBe("Slab");
+    expect(saved?.inspector).toBe("T. Engineer");
     expect(saved?.updatedAt).toBe(2000);
     expect(saved?.createdAt).toBe(created.createdAt);
   });
 
   test("fails for an unknown inspection", async () => {
     await expect(
-      updateInspection(db, "missing", { jobName: "x" }),
+      updateInspection(db, "missing", { itemInspected: "x" }),
     ).rejects.toThrow("not found");
   });
 });
@@ -190,7 +174,7 @@ describe("deleteInspection", () => {
 });
 
 test("missingJobFields flags job number and job name", async () => {
-  const created = await createInspection(db);
+  const created = jobInspection(await createInspection(db), null);
   expect(missingJobFields(created)).toEqual(["jobNumber", "jobName"]);
   expect(
     missingJobFields({ ...created, jobNumber: "SY1", jobName: "  " }),

@@ -51,14 +51,14 @@ The sample is a one-page **Site Instruction Memo**, not a long report. Anatomy:
 **Per-job fields (filled in the app)**
 | Field | Notes |
 |---|---|
-| Client name | text |
-| Client company name | text |
-| Address line 1 / 2 | text |
+| Client name | text, from the inspection's **project** (shared by its inspections) |
+| Client company name | text, from the project |
+| Address line 1 / 2 | text, from the project |
 | Date | defaults to today |
-| Job number | text |
-| Job name | text |
+| Job number | text, from the project |
+| Job name | text, from the project |
 | Memo reference | auto-generated per job (e.g. `SIM-001`, `SIM-002`), editable. Shown in the memo header with the item inspected, e.g. "SIM-001 – Level 3 slab reinforcement". The sample template has no reference field; it is placed in the right-hand header column on its own line under Job name, in the same style as Job name. |
-| Recipients table | up to 5 rows: Company, Attn, and To or Copy (checkbox pair; at least one "To", warned if none). A new memo starts with the client as the first "To". |
+| Recipients table | up to 5 rows: Company, Attn, and To or Copy (checkbox pair; at least one "To", warned if none). A new memo starts with the client as the first "To". **Add from contacts** offers the project's contacts not already listed (added as "To" if there is none yet, otherwise "Copy"); a recipient typed in is added to the project's contacts when you leave its row (no duplicates: same company and attn, ignoring case and spaces), and a new memo's client is added too. |
 | Site visit requested by | defaults to "client name, client company"; editable, with Reset |
 | Reason for visit | the item inspected (e.g. "Level 3 slab reinforcement"); prefilled from the inspection's Item inspected |
 | Inspector | the engineer's name |
@@ -140,10 +140,14 @@ Export must work offline.
 Stored locally in IndexedDB. File bytes (PDFs, photos) are stored in a `blobs` table as ArrayBuffer records `{ id, data, type, size }` and referenced by id. (Not Blob objects: Blob storage in IndexedDB is not supported by every WebKit build.)
 
 ```ts
-Project        { id, name?, createdAt }                    // optional grouping; may be dropped for POC
-Inspection     { id, jobNumber, jobName, itemInspected, client{...}, date, inspector, status,
+Project        { id, jobNumber, jobName, client{ name, company, address1, address2 },
+                 contacts[]: { id, company, attn }, createdAt, updatedAt }
+               // a job: its details are shared by all its inspections and their memos
+Inspection     { id, projectId|null, itemInspected, date, inspector, status,
                  photoIds[],   // general photos (not tied to a pin)
+                 unsorted?{ jobName, client },   // details from before projects, when it had no job number
                  createdAt, updatedAt }
+               // projectId null: "Needs a project" (no memo until it has one)
 Drawing        { id, inspectionId, name, pdfBlobId, pageCount, fileSize, pageSizes, createdAt }
                // name defaults to the file name; pageSizes [w, h] per page lay out the document;
                // createdAt orders drawings in the document
@@ -180,7 +184,7 @@ Pin coordinates are stored relative to the page (0..1), so they stay correct at 
 ## 9. Inspection file (move between devices)
 
 A single zip with a custom extension (e.g. `.inspection`) containing:
-- `inspection.json` (all records above for that inspection, plus a `schemaVersion`)
+- `inspection.json` (all records above for that inspection, including its project, plus a `schemaVersion`)
 - `drawings/` original PDFs
 - `photos/` compressed photos
 
@@ -213,8 +217,9 @@ Brand tokens from the sample: red `#DA1A32`, cream `#FFF2DF`, dark maroon `#580B
 
 ## 12. Screens
 
-1. **Inspections list** (new, open, import, back up)
-2. **Inspection**, in three tabs under its title, each with its own address (so Back steps through them): **Pre-inspection** (job details and Delete inspection), **Inspection** (**Open markup**, which opens the drawings viewer, then the Drawings, Items and Photos sections; tapping a drawing or item opens the viewer there) and **Site memo** (Create memo, then the memo editor; export later). A new inspection opens on Pre-inspection; an existing one on Inspection. Job details save automatically as you type (no Save button). Nothing is required to save; a missing job number or job name is flagged, and both are required before a memo is created (step 7). New inspections are dated today and take the inspector name from Settings. Deleting an inspection (after confirmation) removes its drawings, items, photos, memos and observation boxes; memo counters are kept so SIM references are never reused.
+1. **Inspections** (new, open, import, back up), in two tabs: **Recent** (the last 10 inspections edited) and **Projects** (searchable by job number, name or client; most recent activity first; inspections without a project listed first under **Needs a project**). **New inspection** asks for its project: choose one (searchable), start a new one (job number required; a job number already used, ignoring case and spaces, is flagged with **Use that project**, or **Create a new one anyway**), or **Skip for now** (flagged Needs a project). Inspections without a project open on Pre-inspection.
+1a. **Project** page: its details (job number, job name, client, address; autosaved, flagged if another project has the same job number), its inspections with **New inspection**, its contacts (edit, add, remove) and **Delete project** (asks first, saying how many inspections, with their drawings, photos and memos, go with it; memo counters are kept).
+2. **Inspection**, in three tabs under its title, each with its own address (so Back steps through them): **Pre-inspection** (its project: a link to it, **Change project** (its memo keeps its reference) and the project's details, marked as shared by every inspection in it; or, without one, a **Needs a project** flag with **Create new project** (starting from the client and address it had) and **Assign to project**; then the inspection's own details (item inspected, date, inspector) and Delete inspection), **Inspection** (**Open markup**, which opens the drawings viewer, then the Drawings, Items and Photos sections; tapping a drawing or item opens the viewer there) and **Site memo** (Create memo, then the memo editor; export later). A new inspection opens on Pre-inspection; an existing one on Inspection. Job details save automatically as you type (no Save button). Nothing is required to save; a missing job number or job name is flagged, and both are required before a memo is created (step 7). New inspections are dated today and take the inspector name from Settings. Deleting an inspection (after confirmation) removes its drawings, items, photos, memos and observation boxes; memo counters are kept so SIM references are never reused.
 3. **Drawing viewer** (pan/zoom, drop pin, item sheet with instruction + photos). All of an inspection's drawings appear as **one continuous scrolling document** (GoodNotes style): every page of every drawing stacked vertically, in the order the drawings were added, each page shown at the same width, with the drawing's name above its first page. Its toolbar has the inspection's tabs (Inspection highlighted), a label with the current drawing and page (cut short with "…" if long), Undo, Redo, Items, **Fit page** (fits the current page) and Add pin; in portrait the buttons sit on a second row. The toolbar keeps its shape whatever the label says, so the drawing never shifts under a tap. Only pages on or near the screen are rendered, and drawing PDFs are opened only while needed. Opened with **Open markup**, or from the Inspection tab's Drawings list (scrolls to that drawing) or Items list (scrolls to that pin). An **Items** button opens a panel listing every item: observations, then instructions, each in letter order and grouped under a page subheading (e.g. "S-101 Level 3 · page 1"); rows show just the letter and text. Rows whose pins are on screen are highlighted (cream with a maroon edge), updating when scrolling or zooming pauses. Tapping one scrolls to its pin and opens its sheet. Swiping a row left shows a **Delete** button (deletes at once, undoable). Items of the same kind on the same page have a drag handle (≡) to reorder them, which re-letters them and reorders the notes box; reordering across pages isn't possible because letters follow the document. **Undo** and **Redo** buttons (arrow icons) in the toolbar reverse and re-apply the latest pin added, item deleted, reorder, or arrow added, moved or removed (undoing an add removes the pin with anything typed since, and its notes box if it was the page's first pin); doing something new clears Redo. The history is per inspection and lasts until the app closes (the data itself is always saved). Later features (markup, edits) will add to the same Undo and Redo. Deleting a whole drawing still asks first. The item sheet is a side panel in landscape and below the drawing in portrait; opening it keeps the current zoom and pans only if the selected pin would be hidden.
 4. **Memo editor** (the Site memo tab): **Create memo** (needs a job number and job name) gives the memo the job's next SIM reference and shows the editor, which the tab opens from then on. The editor has the form (reference; job details, shared with the inspection so editing them here changes them there; recipients; visit details; letter; conditions; sign-off) beside a **live preview** in landscape, below it in portrait. The preview is the real PDF built by the export renderer and drawn with pdf.js, so it shows exactly what will be exported, and works offline. Everything saves as you type.
 5. **Export** (preview, generate PDF, share sheet)

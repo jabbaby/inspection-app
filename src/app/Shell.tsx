@@ -11,7 +11,7 @@ export function Shell() {
     <div className="shell">
       <header className="shell-header">
         <span className="shell-title">Site Inspection Companion</span>
-        <nav className="shell-nav">
+        <nav className="shell-nav" aria-label="Main">
           <Link
             to="/"
             className={inInspections ? "active" : undefined}

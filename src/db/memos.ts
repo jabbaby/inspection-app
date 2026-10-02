@@ -1,8 +1,9 @@
 import { touchInspection } from "./items";
+import { loadJobInspection, rememberContacts } from "./projects";
 import type { InspectionDb } from "./schema";
 import {
   SETTINGS_ID,
-  type Inspection,
+  type JobInspection,
   type Memo,
   type Settings,
 } from "./types";
@@ -16,7 +17,7 @@ export function memoReference(seq: number): string {
 
 /** A new memo's starting values (SPEC section 4). */
 export function blankMemo(
-  inspection: Pick<Inspection, "id" | "client">,
+  inspection: Pick<JobInspection, "id" | "client">,
   reference: string,
   settings: Pick<
     Settings,
@@ -81,11 +82,12 @@ export async function createMemo(
       db.settings,
       db.snippets,
       db.blobs,
+      db.projects,
     ],
     async () => {
       const existing = await getMemo(db, inspectionId);
       if (existing) return existing;
-      const inspection = await db.inspections.get(inspectionId);
+      const inspection = await loadJobInspection(db, inspectionId);
       if (!inspection) throw new Error(`Inspection ${inspectionId} not found`);
       const jobNumber = inspection.jobNumber.trim();
       if (!jobNumber || !inspection.jobName.trim())
@@ -120,6 +122,9 @@ export async function createMemo(
         await db.blobs.add({ ...mine, id: memo.signatureBlobId });
       }
       await db.memos.add(memo);
+      // The client is offered as a contact from now on.
+      if (inspection.projectId)
+        await rememberContacts(db, inspection.projectId, memo.recipients);
       await touchInspection(db, inspectionId, now);
       return memo;
     },

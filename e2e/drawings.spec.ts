@@ -9,6 +9,7 @@ import {
   scrollDocument,
   openTab,
   stageBox,
+  startInspection,
   touchTap,
   waitForServiceWorker,
 } from "./helpers";
@@ -23,9 +24,10 @@ const HEADER =
 /** New inspection with the fields the observations box header uses. */
 async function setupInspection(page: Page) {
   await page.goto("./");
-  await page.getByRole("button", { name: "New inspection" }).click();
-  await field(page, "Job number").fill("SY000001");
-  await field(page, "Job name").fill("Example Apartments");
+  await startInspection(page, {
+    jobNumber: "SY000001",
+    jobName: "Example Apartments",
+  });
   await field(page, "Item inspected").fill("Level 3 slab reinforcement");
   await field(page, "Inspector").fill("Test Engineer");
   await field(page, "Date").fill("2026-10-01");
@@ -951,7 +953,8 @@ test(
     await context.setOffline(true);
     await page.reload();
 
-    await page.getByRole("button", { name: "New inspection" }).click();
+    // No project yet: drawings and pins work all the same.
+    await startInspection(page, null);
     await openTab(page, "Inspection");
     await page
       .getByRole("button", { name: "Add synthetic test drawing" })

@@ -1,7 +1,10 @@
 import { Dexie, type EntityTable } from "dexie";
 import { indexForLetter } from "../features/items/letters";
+import { emptyClient } from "./inspections";
 import { letterChanges } from "./items";
+import { mergeContacts } from "./projects";
 import type {
+  Client,
   Drawing,
   Inspection,
   Item,
@@ -10,6 +13,7 @@ import type {
   MemoTemplate,
   ObservationBox,
   Photo,
+  Project,
   Settings,
   Snippet,
   StoredBlob,
@@ -19,7 +23,7 @@ import type {
  * Version of the inspection data format. The inspection file (SPEC section 9)
  * writes this as `schemaVersion`; bump it when stored records change shape.
  */
-export const SCHEMA_VERSION = 9;
+export const SCHEMA_VERSION = 10;
 
 export const DB_NAME = "inspection-app";
 
@@ -28,6 +32,7 @@ export const DB_NAME = "inspection-app";
 // an inspection file or PDF pack.
 
 export class InspectionDb extends Dexie {
+  projects!: EntityTable<Project, "id">;
   inspections!: EntityTable<Inspection, "id">;
   drawings!: EntityTable<Drawing, "id">;
   items!: EntityTable<Item, "id">;
@@ -160,5 +165,71 @@ export class InspectionDb extends Dexie {
           memo.includeSignature ??= true;
         });
     });
+    // v10: job details move from inspections to projects. Inspections with
+    // the same job number share one project (the most recently edited one's
+    // details win); its contacts are its memos' recipients. Inspections
+    // with no job number aren't put in a project: they are flagged "Needs
+    // a project" and keep their details to start one from.
+    this.version(10)
+      .stores({
+        projects: "id, jobNumber, updatedAt",
+        inspections: "id, projectId, updatedAt",
+      })
+      .upgrade(async (tx) => {
+        type Legacy = Inspection & {
+          jobNumber?: string;
+          jobName?: string;
+          client?: Client;
+        };
+        const inspections = await tx.table<Legacy>("inspections").toArray();
+        const memos = await tx.table<Memo>("memos").toArray();
+        const byJob = new Map<string, Legacy[]>();
+        for (const inspection of inspections) {
+          const jobNumber = inspection.jobNumber?.trim() ?? "";
+          if (jobNumber)
+            byJob.set(jobNumber, [...(byJob.get(jobNumber) ?? []), inspection]);
+        }
+        const projectFor = new Map<string, string>();
+        for (const [jobNumber, group] of byJob) {
+          const latest = group.reduce((a, b) =>
+            b.updatedAt > a.updatedAt ? b : a,
+          );
+          const ids = new Set(group.map((i) => i.id));
+          const contacts = mergeContacts(
+            [],
+            memos
+              .filter((m) => ids.has(m.inspectionId))
+              .flatMap((m) => m.recipients),
+          );
+          const project: Project = {
+            id: crypto.randomUUID(),
+            jobNumber,
+            jobName: latest.jobName ?? "",
+            client: { ...emptyClient(), ...latest.client },
+            contacts,
+            createdAt: Math.min(...group.map((i) => i.createdAt)),
+            updatedAt: latest.updatedAt,
+          };
+          await tx.table<Project>("projects").add(project);
+          for (const i of group) projectFor.set(i.id, project.id);
+        }
+        await tx
+          .table<Legacy>("inspections")
+          .toCollection()
+          .modify((inspection) => {
+            const projectId = projectFor.get(inspection.id) ?? null;
+            const client = { ...emptyClient(), ...inspection.client };
+            const jobName = inspection.jobName ?? "";
+            inspection.projectId = projectId;
+            if (
+              !projectId &&
+              (jobName.trim() || Object.values(client).some((v) => v.trim()))
+            )
+              inspection.unsorted = { jobName, client };
+            delete inspection.jobNumber;
+            delete inspection.jobName;
+            delete inspection.client;
+          });
+      });
   }
 }
