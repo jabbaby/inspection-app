@@ -27,7 +27,7 @@ describe("InspectionDb", () => {
       "settings",
       "snippets",
     ]);
-    expect(SCHEMA_VERSION).toBe(4);
+    expect(SCHEMA_VERSION).toBe(5);
   });
 
   test("finds an item by inspection and letter", async () => {
@@ -99,54 +99,52 @@ test("v3 upgrade gives existing drawings a createdAt", async () => {
   expect(new Set(drawings.map((d) => d.createdAt)).size).toBe(2);
 });
 
-test("v4 upgrade letters instructions and observations separately", async () => {
+test("v5 upgrade letters each kind in document order", async () => {
   const name = `test-${crypto.randomUUID()}`;
   const v3 = new Dexie(name);
   v3.version(3).stores({
     inspections: "id, jobNumber, updatedAt",
+    drawings: "id, inspectionId",
     items: "id, inspectionId, [inspectionId+letter], drawingId",
   });
   await v3
     .table("inspections")
     .add({ id: "insp", jobNumber: "SY1", nextLetterIndex: 5 });
-  // Old letters ran across both kinds, with a gap after a deletion.
-  await v3.table("items").bulkAdd([
-    {
-      id: "a",
-      inspectionId: "insp",
-      kind: "instruction",
-      letter: "A",
-      createdAt: 1,
-    },
-    {
-      id: "b",
-      inspectionId: "insp",
-      kind: "observation",
-      letter: "B",
-      createdAt: 2,
-    },
-    {
-      id: "d",
-      inspectionId: "insp",
-      kind: "instruction",
-      letter: "D",
-      createdAt: 4,
-    },
-    {
-      id: "e",
-      inspectionId: "insp",
-      kind: "observation",
-      letter: "E",
-      createdAt: 5,
-    },
+  await v3.table("drawings").bulkAdd([
+    { id: "d1", inspectionId: "insp", createdAt: 10 },
+    { id: "d2", inspectionId: "insp", createdAt: 20 },
   ]);
+  // Old letters ran across both kinds in time order, with a gap.
+  const item = (
+    id: string,
+    kind: string,
+    letter: string,
+    drawingId: string,
+    page: number,
+    createdAt: number,
+  ) => ({ id, inspectionId: "insp", kind, letter, drawingId, page, createdAt });
+  await v3
+    .table("items")
+    .bulkAdd([
+      item("a", "instruction", "A", "d2", 1, 1),
+      item("b", "observation", "B", "d1", 1, 2),
+      item("d", "instruction", "D", "d1", 2, 4),
+      item("e", "observation", "E", "d1", 1, 5),
+      item("f", "instruction", "F", "d1", 2, 6),
+    ]);
   v3.close();
 
   db = new InspectionDb(name);
   const letters = Object.fromEntries(
-    (await db.items.toArray()).map((item) => [item.id, item.letter]),
+    (await db.items.toArray()).map((i) => [i.id, `${i.kind} ${i.letter}`]),
   );
-  expect(letters).toEqual({ a: "A", d: "B", b: "A", e: "B" });
+  expect(letters).toEqual({
+    d: "instruction A",
+    f: "instruction B",
+    a: "instruction C",
+    b: "observation A",
+    e: "observation B",
+  });
   expect(await db.inspections.get("insp")).not.toHaveProperty(
     "nextLetterIndex",
   );

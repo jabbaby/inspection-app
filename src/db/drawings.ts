@@ -46,7 +46,17 @@ export async function addDrawing(
         pageCount: drawing.pageCount,
         fileSize: drawing.pdf.byteLength,
         pageSizes: drawing.pageSizes,
-        createdAt: now,
+        // Strictly after the others, so document order never ties (several
+        // files added at once).
+        createdAt: Math.max(
+          now,
+          ...(
+            await db.drawings
+              .where("inspectionId")
+              .equals(inspectionId)
+              .toArray()
+          ).map((d) => d.createdAt + 1),
+        ),
       };
       await db.drawings.add(record);
       await touchInspection(db, inspectionId, now);

@@ -19,7 +19,7 @@ import type {
  * Version of the inspection data format. The inspection file (SPEC section 9)
  * writes this as `schemaVersion`; bump it when stored records change shape.
  */
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 export const DB_NAME = "inspection-app";
 
@@ -87,9 +87,9 @@ export class InspectionDb extends Dexie {
           drawing.createdAt ??= base + order++;
         });
     });
-    // v4: instructions and observations are lettered separately (A, B, C...
-    // each), so letters are always derived from the items and the
-    // inspection's letter counter goes.
+    // v4: instructions and observations are lettered separately, so
+    // letters are always derived from the items and the inspection's
+    // letter counter goes.
     this.version(4).upgrade(async (tx) => {
       await tx
         .table<Inspection & { nextLetterIndex?: number }>("inspections")
@@ -97,16 +97,26 @@ export class InspectionDb extends Dexie {
         .modify((inspection) => {
           delete inspection.nextLetterIndex;
         });
+    });
+    // v5: letters follow document order (drawing, page, then placement on
+    // the page), per kind. Re-letter existing items to match.
+    this.version(5).upgrade(async (tx) => {
       const items = await tx.table<Item>("items").toArray();
+      const drawings = await tx.table<Drawing>("drawings").toArray();
+      drawings.sort((a, b) => a.createdAt - b.createdAt);
       const byInspection = new Map<string, Item[]>();
       for (const item of items)
         byInspection.set(item.inspectionId, [
           ...(byInspection.get(item.inspectionId) ?? []),
           item,
         ]);
-      for (const group of byInspection.values())
-        for (const { id, letter } of letterChanges(group))
+      for (const [inspectionId, group] of byInspection) {
+        const order = drawings
+          .filter((d) => d.inspectionId === inspectionId)
+          .map((d) => d.id);
+        for (const { id, letter } of letterChanges(group, order))
           await tx.table<Item>("items").update(id, { letter });
+      }
     });
   }
 }

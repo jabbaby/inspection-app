@@ -45,29 +45,43 @@ const pin = (drawingId: string, page = 1, x = 0.5, y = 0.5) =>
   createItem(db, { inspectionId: inspection.id, drawingId, page, x, y }, BOX);
 
 describe("items", () => {
-  test("new items are instructions lettered across the whole inspection", async () => {
+  test("new items are instructions, lettered in document order", async () => {
     const d1 = await drawing("S-101");
     const d2 = await drawing("S-102");
     const a = await pin(d1.id);
     const b = await pin(d2.id);
-    const c = await pin(d1.id, 2);
-
-    expect([a.letter, b.letter, c.letter]).toEqual(["A", "B", "C"]);
+    expect([a.letter, b.letter]).toEqual(["A", "B"]);
     expect(a).toMatchObject({
       kind: "instruction",
       text: "",
       requiresPhotoConfirmation: false,
     });
+
+    // A later pin on an earlier page takes its place in the document: the
+    // S-102 pin moves along to C.
+    const c = await pin(d1.id, 2);
+    expect(c.letter).toBe("B");
+    expect((await db.items.get(b.id))?.letter).toBe("C");
+
+    // On one page, pins keep the order they were placed in.
+    const a2 = await pin(d1.id, 1, 0.1, 0.1);
+    expect(a2.letter).toBe("B");
     expect(c.createdAt).toBeGreaterThan(b.createdAt);
     expect(b.createdAt).toBeGreaterThan(a.createdAt);
   });
 
-  test("re-letters the rest in creation order when one is deleted", async () => {
+  test("drawings added together keep their order", async () => {
+    const d1 = await drawing("S-101");
+    const d2 = await drawing("S-102");
+    expect(d2.createdAt).toBeGreaterThan(d1.createdAt);
+  });
+
+  test("re-letters the rest when one is deleted", async () => {
     const d1 = await drawing("S-101");
     const d2 = await drawing("S-102");
     const a = await pin(d1.id);
-    const b = await pin(d2.id);
-    const c = await pin(d1.id, 2);
+    const b = await pin(d1.id, 2);
+    const c = await pin(d2.id);
     const dItem = await pin(d2.id);
 
     await deleteItem(db, b.id);
@@ -78,7 +92,7 @@ describe("items", () => {
       await letters(c.id),
       await letters(dItem.id),
     ]).toEqual(["A", "B", "C"]);
-    expect((await pin(d1.id)).letter).toBe("D");
+    expect((await pin(d2.id)).letter).toBe("D");
   });
 
   test("re-letters past Z without gaps", async () => {

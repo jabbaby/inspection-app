@@ -325,6 +325,36 @@ test("pins stay on their spot through a pinch zoom", async ({ page }) => {
   expect(Math.abs(after.y - (box.y + box.height * n.y))).toBeLessThan(1);
 });
 
+test("letters follow the pins' order in the document", async ({ page }) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openDrawing(page, "S-101 Level 3");
+
+  // A pin on page 2 first is A...
+  const viewer = (await page.getByTestId("drawing-viewer").boundingBox())!;
+  const second = await stageBox(page, 1);
+  await scrollDocument(page, second.y - viewer.y - 20);
+  await expect(
+    page.locator(
+      '[data-testid="doc-page"][data-key$=":2"][data-rendered="true"]',
+    ),
+  ).toBeVisible();
+  await addPinAt(page, 0.5, 0.5, 1);
+  await typeItem(page, "On page two");
+  await expect(sheet(page).getByRole("heading")).toHaveText("Instruction A");
+  await sheet(page).getByRole("button", { name: "Done" }).click();
+
+  // ...until a pin goes on page 1: that becomes A and page 2's becomes B.
+  const first = await stageBox(page, 0);
+  await scrollDocument(page, first.y - viewer.y - 20);
+  await addPinAt(page, 0.3, 0.3, 0);
+  await expect(sheet(page).getByRole("heading")).toHaveText("Instruction A");
+  await sheet(page).getByRole("button", { name: "Done" }).click();
+  await expect(
+    page.locator('[data-testid="viewer-pin"][data-letter="B"]'),
+  ).toHaveAttribute("data-page", /:2$/);
+});
+
 test("the items list opens the right drawing page and item", async ({
   page,
 }) => {
@@ -354,8 +384,13 @@ test("the items list opens the right drawing page and item", async ({
   await typeItem(page, "Second on page two");
 
   await page.goto(home);
-  const items = page.getByRole("list", { name: "Items" }).getByRole("listitem");
-  // Observations first, each kind lettered from A.
+  // Observations first, under headings, each kind lettered from A.
+  const section = page.locator('[aria-labelledby="items-heading"]');
+  await expect(section.getByRole("heading", { level: 3 })).toHaveText([
+    "Observations",
+    "Instructions",
+  ]);
+  const items = section.getByRole("listitem");
   await expect(items).toHaveCount(2);
   await expect(items.nth(0)).toContainText("A. Second on page two");
   await expect(items.nth(0)).toContainText(

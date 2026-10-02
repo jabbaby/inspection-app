@@ -25,8 +25,9 @@ export async function touchInspection(
 }
 
 /**
- * Creates an instruction item with the next instruction letter. The first
- * pin on a page also creates that page's notes box at `boxPosition`.
+ * Creates an instruction item, lettered by its place in the document (which
+ * may re-letter pins further on). The first pin on a page also creates that
+ * page's notes box at `boxPosition`.
  */
 export async function createItem(
   db: InspectionDb,
@@ -36,7 +37,7 @@ export async function createItem(
 ): Promise<Item> {
   return db.transaction(
     "rw",
-    [db.inspections, db.items, db.observationBoxes],
+    [db.inspections, db.drawings, db.items, db.observationBoxes],
     async () => {
       const inspection = await db.inspections.get(item.inspectionId);
       if (!inspection)
@@ -48,9 +49,8 @@ export async function createItem(
       const created: Item = {
         id: crypto.randomUUID(),
         ...item,
-        letter: letterForIndex(
-          existing.filter((other) => other.kind === "instruction").length,
-        ),
+        // Placeholder until re-lettered below.
+        letter: letterForIndex(existing.length),
         kind: "instruction" satisfies ItemKind,
         text: "",
         requiresPhotoConfirmation: false,
@@ -62,6 +62,7 @@ export async function createItem(
         ),
       };
       await db.items.add(created);
+      await reletterInspection(db, item.inspectionId);
       await touchInspection(db, item.inspectionId, now);
       const box = await db.observationBoxes
         .where("[drawingId+page]")
@@ -75,7 +76,7 @@ export async function createItem(
           ...boxPosition,
         });
       }
-      return created;
+      return (await db.items.get(created.id))!;
     },
   );
 }
@@ -86,15 +87,19 @@ export async function updateItem(
   patch: ItemPatch,
   now = Date.now(),
 ): Promise<void> {
-  await db.transaction("rw", [db.inspections, db.items], async () => {
-    const item = await db.items.get(id);
-    if (!item) throw new Error(`Item ${id} not found`);
-    await db.items.update(id, patch);
-    // Switching kind moves it to the other list: re-letter both.
-    if (patch.kind && patch.kind !== item.kind)
-      await reletterInspection(db, item.inspectionId);
-    await touchInspection(db, item.inspectionId, now);
-  });
+  await db.transaction(
+    "rw",
+    [db.inspections, db.drawings, db.items],
+    async () => {
+      const item = await db.items.get(id);
+      if (!item) throw new Error(`Item ${id} not found`);
+      await db.items.update(id, patch);
+      // Switching kind moves it to the other list: re-letter both.
+      if (patch.kind && patch.kind !== item.kind)
+        await reletterInspection(db, item.inspectionId);
+      await touchInspection(db, item.inspectionId, now);
+    },
+  );
 }
 
 /** Deletes items with their photos and photo images (no transaction of its own). */
@@ -113,16 +118,25 @@ export async function deleteItemRecords(
 
 /**
  * Letters for items, per kind: instructions A, B, C... and observations
- * A, B, C... each in the order their pins were created, with no gaps.
- * Returns only the items whose letter changes.
+ * A, B, C... each in document order (drawing order, then page, then the
+ * order pins were placed on the page), with no gaps. `drawingOrder` lists
+ * the inspection's drawing ids in document order. Returns only the items
+ * whose letter changes.
  */
-export function letterChanges(items: Item[]): { id: string; letter: string }[] {
+export function letterChanges(
+  items: Item[],
+  drawingOrder: string[],
+): { id: string; letter: string }[] {
+  const rank = new Map(drawingOrder.map((id, i) => [id, i]));
+  const drawingRank = (item: Item) => rank.get(item.drawingId) ?? Infinity;
   const changes: { id: string; letter: string }[] = [];
   for (const kind of ["instruction", "observation"] as const) {
     const ofKind = items
       .filter((item) => item.kind === kind)
       .sort(
         (a, b) =>
+          drawingRank(a) - drawingRank(b) ||
+          a.page - b.page ||
           a.createdAt - b.createdAt ||
           indexForLetter(a.letter) - indexForLetter(b.letter),
       );
@@ -136,17 +150,19 @@ export function letterChanges(items: Item[]): { id: string; letter: string }[] {
 
 /**
  * Re-letters an inspection's items (see letterChanges). Run inside a
- * transaction that includes items.
+ * transaction that includes drawings and items.
  */
 export async function reletterInspection(
   db: InspectionDb,
   inspectionId: string,
 ): Promise<void> {
-  const items = await db.items
-    .where("inspectionId")
-    .equals(inspectionId)
-    .toArray();
-  for (const { id, letter } of letterChanges(items))
+  const [items, drawings] = await Promise.all([
+    db.items.where("inspectionId").equals(inspectionId).toArray(),
+    db.drawings.where("inspectionId").equals(inspectionId).toArray(),
+  ]);
+  drawings.sort((a, b) => a.createdAt - b.createdAt);
+  const order = drawings.map((d) => d.id);
+  for (const { id, letter } of letterChanges(items, order))
     await db.items.update(id, { letter });
 }
 
@@ -162,7 +178,14 @@ export async function deleteItem(
 ): Promise<void> {
   await db.transaction(
     "rw",
-    [db.inspections, db.items, db.photos, db.blobs, db.observationBoxes],
+    [
+      db.inspections,
+      db.drawings,
+      db.items,
+      db.photos,
+      db.blobs,
+      db.observationBoxes,
+    ],
     async () => {
       const item = await db.items.get(id);
       if (!item) return;
