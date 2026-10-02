@@ -154,21 +154,39 @@ export interface MemoFields {
   signOffTitle: string;
 }
 
-export interface MemoBlock {
-  /** Snippet or item this block came from, if any. */
-  sourceId?: string;
-  text: string;
-}
-
+/**
+ * A Site Instruction Memo (SPEC section 4), one per inspection. Job details
+ * (client, address, date, job number and name, item inspected, inspector)
+ * are not copied here: the memo shows the inspection's, so they never
+ * disagree. Instruction lines come from the items; only rewordings are kept.
+ */
 export interface Memo {
   id: string;
   inspectionId: string;
   templateId: string;
   /** SIM-NNN, per job number (SPEC 7a). Editable. */
   reference: string;
-  fields: MemoFields;
-  bodyBlocks: MemoBlock[];
-  conditionBlocks: MemoBlock[];
+  recipients: Recipient[];
+  /** Null: the default (client name, client company). */
+  siteVisitRequestedBy: string | null;
+  /** Null: the inspection's item inspected. */
+  reasonForVisit: string | null;
+  sentVia: SentVia;
+  /** Null: "Dear {first name}," from the first To recipient. */
+  salutation: string | null;
+  /** Body paragraph 2: the prefilled message it started from, and its text. */
+  bodySnippetId: string | null;
+  bodyText: string;
+  /**
+   * Standard conditions (condition snippets) ticked or unticked by the
+   * engineer. A snippet not listed uses its default.
+   */
+  conditionChoices: Record<string, boolean>;
+  /** Instruction lines reworded for this memo, by item id (without letter). */
+  itemOverrides: Record<string, string>;
+  signOffName: string;
+  signOffTitle: string;
+  createdAt: number;
   updatedAt: number;
 }
 

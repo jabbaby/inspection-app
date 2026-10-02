@@ -3,9 +3,11 @@ import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import {
   createInspection,
   deleteInspection,
+  emptyClient,
   missingJobFields,
   updateInspection,
 } from "./inspections";
+import { blankMemo } from "./memos";
 import { InspectionDb } from "./schema";
 import { ensureSeeded } from "./seed";
 import { SETTINGS_ID } from "./types";
@@ -149,14 +151,14 @@ describe("deleteInspection", () => {
         y: 0.1,
       });
       await db.memos.add({
+        ...blankMemo(
+          { id: inspectionId, client: emptyClient() },
+          "SIM-001",
+          { inspectorName: "", inspectorTitle: "", defaultSentVia: "Email" },
+          null,
+          0,
+        ),
         id: `memo-${tag}`,
-        inspectionId,
-        templateId: "northrop",
-        reference: "SIM-001",
-        fields: {} as never,
-        bodyBlocks: [],
-        conditionBlocks: [],
-        updatedAt: 0,
       });
     };
     await seed(keep.id, "keep");

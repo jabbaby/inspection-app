@@ -1,0 +1,128 @@
+import { touchInspection } from "./items";
+import type { InspectionDb } from "./schema";
+import {
+  SETTINGS_ID,
+  type Inspection,
+  type Memo,
+  type Settings,
+} from "./types";
+
+export const MEMO_TEMPLATE_ID = "northrop";
+
+/** "SIM-001" for sequence 1 (SPEC 7a). */
+export function memoReference(seq: number): string {
+  return `SIM-${String(seq).padStart(3, "0")}`;
+}
+
+/** A new memo's starting values (SPEC section 4). */
+export function blankMemo(
+  inspection: Pick<Inspection, "id" | "client">,
+  reference: string,
+  settings: Pick<
+    Settings,
+    "inspectorName" | "inspectorTitle" | "defaultSentVia"
+  >,
+  body: { id: string; text: string } | null,
+  now = Date.now(),
+): Memo {
+  const { name, company } = inspection.client;
+  return {
+    id: crypto.randomUUID(),
+    inspectionId: inspection.id,
+    templateId: MEMO_TEMPLATE_ID,
+    reference,
+    // The client is the first "To" recipient when job details have one.
+    recipients: [
+      { company: company.trim(), attn: name.trim(), to: true, copy: false },
+    ],
+    siteVisitRequestedBy: null,
+    reasonForVisit: null,
+    sentVia: settings.defaultSentVia,
+    salutation: null,
+    bodySnippetId: body?.id ?? null,
+    bodyText: body?.text ?? "",
+    conditionChoices: {},
+    itemOverrides: {},
+    signOffName: settings.inspectorName,
+    signOffTitle: settings.inspectorTitle,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+/** The inspection's memo, if it has one. */
+export async function getMemo(
+  db: InspectionDb,
+  inspectionId: string,
+): Promise<Memo | undefined> {
+  return db.memos.where("inspectionId").equals(inspectionId).first();
+}
+
+/** The body message a new memo starts with (SPEC section 4). */
+const DEFAULT_BODY_ID = "body-works-generally-in-accordance";
+
+/**
+ * Creates the inspection's memo with the job's next SIM reference, or
+ * returns the one it already has. Needs a job number and job name.
+ */
+export async function createMemo(
+  db: InspectionDb,
+  inspectionId: string,
+  now = Date.now(),
+): Promise<Memo> {
+  return db.transaction(
+    "rw",
+    [db.inspections, db.memos, db.memoCounters, db.settings, db.snippets],
+    async () => {
+      const existing = await getMemo(db, inspectionId);
+      if (existing) return existing;
+      const inspection = await db.inspections.get(inspectionId);
+      if (!inspection) throw new Error(`Inspection ${inspectionId} not found`);
+      const jobNumber = inspection.jobNumber.trim();
+      if (!jobNumber || !inspection.jobName.trim())
+        throw new Error("A memo needs a job number and job name");
+
+      // SIM references count per job number and are never reused.
+      const counter = await db.memoCounters.get(jobNumber);
+      const seq = (counter?.lastSeq ?? 0) + 1;
+      await db.memoCounters.put({ jobNumber, lastSeq: seq });
+
+      const settings = await db.settings.get(SETTINGS_ID);
+      const bodies = await db.snippets.where("kind").equals("body").toArray();
+      const body = bodies.find((s) => s.id === DEFAULT_BODY_ID) ?? bodies[0];
+      const memo = blankMemo(
+        inspection,
+        memoReference(seq),
+        {
+          inspectorName: settings?.inspectorName ?? "",
+          inspectorTitle: settings?.inspectorTitle ?? "",
+          defaultSentVia: settings?.defaultSentVia ?? "Email",
+        },
+        body ?? null,
+        now,
+      );
+      await db.memos.add(memo);
+      await touchInspection(db, inspectionId, now);
+      return memo;
+    },
+  );
+}
+
+/** Fields the memo editor changes (everything but identity and times). */
+export type MemoPatch = Partial<
+  Omit<Memo, "id" | "inspectionId" | "templateId" | "createdAt" | "updatedAt">
+>;
+
+export async function updateMemo(
+  db: InspectionDb,
+  id: string,
+  patch: MemoPatch,
+  now = Date.now(),
+): Promise<void> {
+  await db.transaction("rw", [db.inspections, db.memos], async () => {
+    const memo = await db.memos.get(id);
+    if (!memo) throw new Error(`Memo ${id} not found`);
+    await db.memos.update(id, { ...patch, updatedAt: now });
+    await touchInspection(db, memo.inspectionId, now);
+  });
+}
