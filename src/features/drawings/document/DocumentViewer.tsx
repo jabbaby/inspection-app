@@ -543,6 +543,10 @@ export function DocumentViewer(props: Props) {
   }
 
   function onPointerDown(e: React.PointerEvent) {
+    // A first finger (or the mouse) means nothing else is down: forget any
+    // pointer whose "up" was lost, or every later tap would look like part
+    // of a two-finger gesture and Add pin would stop working.
+    if (e.isPrimary) pointers.current.clear();
     // Pencil is reserved for markup; it only acts while placing a pin.
     if (e.pointerType === "pen" && !latest.current.addPinMode) {
       pointers.current.set(e.pointerId, { ...local(e), type: "pen" });
@@ -704,6 +708,11 @@ export function DocumentViewer(props: Props) {
         });
       }
     };
+    /** A pointer lifted anywhere: stop tracking it (the viewer may have missed it). */
+    const forgetPointer = (e: PointerEvent) => {
+      pointers.current.delete(e.pointerId);
+      if (tap.current?.id === e.pointerId) tap.current = null;
+    };
     const onTouchEnd = (e: TouchEvent) => {
       const list = fingers(e.touches);
       if (!pinch.current) return;
@@ -729,8 +738,12 @@ export function DocumentViewer(props: Props) {
     container.addEventListener("scroll", onScroll, { passive: true });
     container.addEventListener("touchstart", onTouchStart, { passive: false });
     container.addEventListener("touchmove", onTouchMove, { passive: false });
-    container.addEventListener("touchend", onTouchEnd);
-    container.addEventListener("touchcancel", onTouchEnd);
+    // Ends are heard on the whole document: a touch whose target was removed
+    // or redrawn mid-gesture never bubbles its end up to the viewer.
+    document.addEventListener("touchend", onTouchEnd);
+    document.addEventListener("touchcancel", onTouchEnd);
+    window.addEventListener("pointerup", forgetPointer);
+    window.addEventListener("pointercancel", forgetPointer);
     container.addEventListener("wheel", onWheel, { passive: false });
     document.addEventListener("gesturestart", stopGesture);
     document.addEventListener("gesturechange", stopGesture);
@@ -738,8 +751,10 @@ export function DocumentViewer(props: Props) {
       container.removeEventListener("scroll", onScroll);
       container.removeEventListener("touchstart", onTouchStart);
       container.removeEventListener("touchmove", onTouchMove);
-      container.removeEventListener("touchend", onTouchEnd);
-      container.removeEventListener("touchcancel", onTouchEnd);
+      document.removeEventListener("touchend", onTouchEnd);
+      document.removeEventListener("touchcancel", onTouchEnd);
+      window.removeEventListener("pointerup", forgetPointer);
+      window.removeEventListener("pointercancel", forgetPointer);
       container.removeEventListener("wheel", onWheel);
       document.removeEventListener("gesturestart", stopGesture);
       document.removeEventListener("gesturechange", stopGesture);

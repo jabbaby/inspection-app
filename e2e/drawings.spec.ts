@@ -524,6 +524,55 @@ test("at fit width the document only scrolls up and down", async ({ page }) => {
     .toBeGreaterThan(0);
 });
 
+test("a lost finger-up doesn't stop Add pin working", async ({ page }) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openDrawing(page, "S-101 Level 3");
+  const viewer = page.getByTestId("drawing-viewer");
+  const at = await centre(viewer);
+
+  // A finger goes down, but its "up" never reaches the viewer (as when the
+  // element under it is removed or redrawn mid-touch), nor does touchend.
+  await viewer.evaluate((el, at) => {
+    el.dispatchEvent(
+      new PointerEvent("pointerdown", {
+        pointerId: 40,
+        pointerType: "touch",
+        clientX: at.x,
+        clientY: at.y,
+        bubbles: true,
+        cancelable: true,
+        isPrimary: true,
+      }),
+    );
+    const start = new Event("touchstart", { bubbles: true, cancelable: true });
+    Object.defineProperty(start, "touches", {
+      value: [
+        { clientX: at.x - 40, clientY: at.y },
+        { clientX: at.x + 40, clientY: at.y },
+      ],
+    });
+    el.dispatchEvent(start);
+  }, at);
+  // The lift lands elsewhere in the page.
+  await page.evaluate(() => {
+    document.body.dispatchEvent(
+      new PointerEvent("pointerup", {
+        pointerId: 40,
+        pointerType: "touch",
+        bubbles: true,
+      }),
+    );
+    const end = new Event("touchend", { bubbles: true });
+    Object.defineProperty(end, "touches", { value: [] });
+    document.body.dispatchEvent(end);
+  });
+
+  await page.getByRole("button", { name: "Add pin" }).click();
+  await touchTap(page, at);
+  await expect(page.getByTestId("viewer-pin")).toHaveCount(1);
+});
+
 test("a touch while the document scrolls doesn't place a pin", async ({
   page,
 }) => {
