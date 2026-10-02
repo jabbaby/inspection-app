@@ -822,7 +822,19 @@ button.item-row {
   cursor: grab;
 }
 
-.photo-viewer-image img {
+/* A strip of the current photo and its neighbours, moved while swiping. */
+.photo-track {
+  position: absolute;
+  inset: 0;
+  will-change: transform;
+}
+
+.photo-slide {
+  position: absolute;
+  inset: 0;
+}
+
+.photo-slide img {
   position: absolute;
   inset: 0;
   margin: auto;

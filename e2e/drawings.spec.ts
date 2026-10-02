@@ -1152,3 +1152,30 @@ test("more than 20 photos save in batches", async ({ page }) => {
   await expect(dialog).toContainText("All 21 photos have been saved.");
   expect((await sharedBatches(page)).map((b) => b.length)).toEqual([20, 1]);
 });
+
+test("photo viewer: a quick flick changes photo; neighbours are preloaded", async ({
+  page,
+}) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openDrawing(page, "S-101 Level 3");
+  await addPinAt(page, 0.3, 0.5);
+  await addPhotos(page, "photo-library-input", [
+    await syntheticJpeg(page, 800, 600),
+    await syntheticJpeg(page, 600, 800),
+  ]);
+  await page.getByTestId("photo-thumb").first().click();
+  const viewer = page.getByTestId("photo-viewer");
+  // The next photo is already in the strip, ready to slide in.
+  await expect(viewer.locator(".photo-slide img")).toHaveCount(2);
+
+  // A short, fast flick (well under a quarter of the width).
+  const area = (await page.getByTestId("photo-viewer-swipe").boundingBox())!;
+  const y = area.y + area.height / 2;
+  const x = area.x + area.width / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x - 40, y, { steps: 2 });
+  await page.mouse.up();
+  await expect(viewer).toContainText("photo 2 of 2");
+});
