@@ -2,7 +2,13 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { useState } from "react";
 import { ConfirmDialog } from "../../app/ConfirmDialog";
 import { db } from "../../db/db";
-import { listInspectionPhotos, removeOriginals } from "../../db/photos";
+import {
+  addPhotos,
+  deletePhoto,
+  listInspectionPhotos,
+  removeOriginals,
+} from "../../db/photos";
+import { PhotoSet } from "./PhotoSet";
 import { SavePhotosDialog } from "./SavePhotosDialog";
 
 function megabytes(bytes: number) {
@@ -10,8 +16,10 @@ function megabytes(bytes: number) {
 }
 
 /**
- * Inspection home: every photo in the inspection. Save them all to the iPad
- * (camera shots at full size), then free the space the full-size copies take.
+ * Inspection home: general photos (not tied to a pin; the appendix's
+ * General group), then every photo in the inspection: save them all to the
+ * iPad (camera shots at full size), then free the space the full-size
+ * copies take.
  */
 export function PhotosSection({
   inspectionId,
@@ -24,10 +32,14 @@ export function PhotosSection({
     () => listInspectionPhotos(db, inspectionId),
     [inspectionId],
   );
+  const generalIds = useLiveQuery(
+    async () => (await db.inspections.get(inspectionId))?.photoIds ?? [],
+    [inspectionId],
+  );
   const [saving, setSaving] = useState(false);
   const [confirmFree, setConfirmFree] = useState(false);
   const [freed, setFreed] = useState<string | null>(null);
-  if (!entries) return null;
+  if (!entries || !generalIds) return null;
 
   const originals = entries.filter((e) => e.photo.originalBlobId);
   const originalBytes = originals.reduce(
@@ -43,9 +55,23 @@ export function PhotosSection({
   return (
     <div className="later-section" aria-labelledby="photos-heading">
       <h2 id="photos-heading">Photos</h2>
-      {entries.length === 0 ? (
-        <p className="muted">No photos yet. Add them from an item.</p>
-      ) : (
+      <p className="muted">
+        General photos aren&rsquo;t tied to a pin, e.g. overall views. They go
+        at the end of the photo appendix. Add photos for an item from its pin.
+      </p>
+      <PhotoSet
+        photoIds={generalIds}
+        inspectionId={inspectionId}
+        item={null}
+        title="General"
+        label="General photos"
+        onAdd={async (photos) => {
+          await addPhotos(db, { inspectionId }, photos);
+        }}
+        onDelete={(photo) => void deletePhoto(db, { inspectionId }, photo.id)}
+        confirmDelete
+      />
+      {entries.length > 0 && (
         <>
           <p data-testid="photos-summary">
             {entries.length === 1 ? "1 photo" : `${entries.length} photos`}

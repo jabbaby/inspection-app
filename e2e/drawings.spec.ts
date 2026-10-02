@@ -1179,3 +1179,38 @@ test("photo viewer: a quick flick changes photo; neighbours are preloaded", asyn
   await page.mouse.up();
   await expect(viewer).toContainText("photo 2 of 2");
 });
+
+test("general photos on the inspection home save as General and delete with a confirm", async ({
+  page,
+}) => {
+  await stubShareSheet(page);
+  await setupInspection(page);
+  const section = page.locator('[aria-labelledby="photos-heading"]');
+  const general = section.getByRole("group", { name: "General photos" });
+  await addPhotos(page, "photo-library-input", [
+    await syntheticJpeg(page, 800, 600),
+    await syntheticJpeg(page, 600, 800),
+  ]);
+  await expect(general).toContainText("General photos (2)");
+
+  await general.getByRole("button", { name: "Save to iPad" }).click();
+  const dialog = page.getByTestId("save-photos-dialog");
+  await dialog.getByRole("button", { name: "Save 2 photos" }).click();
+  await expect(dialog).toContainText("All 2 photos have been saved.");
+  expect((await sharedBatches(page))[0].map((f) => f.name)).toEqual([
+    "SY000001 General 1.jpg",
+    "SY000001 General 2.jpg",
+  ]);
+  await dialog.getByRole("button", { name: "Done" }).click();
+
+  // The viewer names them General; deleting asks first (no Undo here).
+  await general.getByTestId("photo-thumb").first().click();
+  const viewer = page.getByTestId("photo-viewer");
+  await expect(viewer).toContainText("General · photo 1 of 2");
+  await viewer.getByRole("button", { name: "Delete photo" }).click();
+  await page
+    .getByRole("dialog", { name: "Delete this photo?" })
+    .getByRole("button", { name: "Delete" })
+    .click();
+  await expect(general).toContainText("General photos (1)");
+});
