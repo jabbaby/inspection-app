@@ -41,6 +41,9 @@ export interface DocPin {
   y: number;
   kind: "instruction" | "observation";
   selected: boolean;
+  /** Arrow tips (normalised on the pin's page); handles show when selected. */
+  arrows: { id: string; x: number; y: number }[];
+  selectedArrowId: string | null;
 }
 
 /** Where to scroll: a drawing's first page, or a point on a page. */
@@ -61,6 +64,10 @@ interface Props {
   onMovePin: (id: string, to: Point) => void;
   onMovePinEnd: (id: string, to: Point) => void;
   onSelectPin: (id: string) => void;
+  /** Arrow tip handles (the selected item's): tap selects, drag moves. */
+  onSelectArrow: (itemId: string, arrowId: string) => void;
+  onMoveArrow: (itemId: string, arrowId: string, to: Point) => void;
+  onMoveArrowEnd: (itemId: string, arrowId: string, to: Point) => void;
   /** The page at the centre of the view changed. */
   onCurrentPage: (page: PageLayout) => void;
   /** Drawings with pages on or near the screen (their PDFs are needed). */
@@ -186,6 +193,12 @@ export function DocumentViewer(props: Props) {
       if (!el || !page) continue;
       const p = pagePointToDoc(page, pin);
       el.style.transform = `translate(${left + p.x * scale}px, ${PAD + p.y * scale}px)`;
+      for (const arrow of pin.arrows) {
+        const handle = pinEls.current.get(`${pin.id}:${arrow.id}`);
+        if (!handle) continue;
+        const a = pagePointToDoc(page, arrow);
+        handle.style.transform = `translate(${left + a.x * scale}px, ${PAD + a.y * scale}px)`;
+      }
     }
   }
 
@@ -497,6 +510,8 @@ export function DocumentViewer(props: Props) {
   } | null>(null);
   const dragging = useRef<{
     id: string;
+    /** Set when dragging one of the pin's arrow tips instead of the pin. */
+    arrowId: string | null;
     pointerId: number;
     start: Point;
     moved: boolean;
@@ -519,7 +534,11 @@ export function DocumentViewer(props: Props) {
     if (performance.now() - lastScroll.current > SCROLL_STOP_MS) return;
     if (e.pointerType === "mouse") return;
     stopTouch.current = e.pointerId;
-    if ((e.target as Element).closest(".viewer-pin, .observation-box"))
+    if (
+      (e.target as Element).closest(
+        ".viewer-pin, .arrow-handle, .observation-box",
+      )
+    )
       e.stopPropagation();
   }
 
@@ -739,11 +758,16 @@ export function DocumentViewer(props: Props) {
     });
   }
 
-  function onPinPointerDown(e: React.PointerEvent, id: string) {
+  function onPinPointerDown(
+    e: React.PointerEvent,
+    id: string,
+    arrowId: string | null = null,
+  ) {
     e.stopPropagation();
     capture(e);
     dragging.current = {
       id,
+      arrowId,
       pointerId: e.pointerId,
       start: local(e),
       moved: false,
@@ -762,7 +786,9 @@ export function DocumentViewer(props: Props) {
       return;
     drag.moved = true;
     drag.last = pinPosition(pin, p);
-    latest.current.onMovePin(drag.id, drag.last);
+    if (drag.arrowId)
+      latest.current.onMoveArrow(drag.id, drag.arrowId, drag.last);
+    else latest.current.onMovePin(drag.id, drag.last);
   }
 
   function onPinPointerUp(e: React.PointerEvent) {
@@ -770,6 +796,12 @@ export function DocumentViewer(props: Props) {
     if (drag?.pointerId !== e.pointerId) return;
     dragging.current = null;
     if (e.type !== "pointerup") return;
+    if (drag.arrowId) {
+      if (drag.moved && drag.last)
+        latest.current.onMoveArrowEnd(drag.id, drag.arrowId, drag.last);
+      else if (!drag.moved) latest.current.onSelectArrow(drag.id, drag.arrowId);
+      return;
+    }
     if (drag.moved && drag.last)
       latest.current.onMovePinEnd(drag.id, drag.last);
     else if (!drag.moved) latest.current.onSelectPin(drag.id);
@@ -878,6 +910,38 @@ export function DocumentViewer(props: Props) {
               {pin.letter}
             </button>
           ))}
+          {pins
+            .filter((pin) => pin.selected)
+            .flatMap((pin) =>
+              pin.arrows.map((arrow, i) => (
+                <button
+                  key={`${pin.id}:${arrow.id}`}
+                  type="button"
+                  className={[
+                    "arrow-handle",
+                    arrow.id === pin.selectedArrowId
+                      ? "arrow-handle-selected"
+                      : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                  data-testid="arrow-handle"
+                  data-x={arrow.x.toFixed(4)}
+                  data-y={arrow.y.toFixed(4)}
+                  aria-label={`Arrow ${i + 1} of ${kindName(pin.kind).toLowerCase()} ${pin.letter}`}
+                  aria-pressed={arrow.id === pin.selectedArrowId}
+                  ref={(el) => {
+                    const key = `${pin.id}:${arrow.id}`;
+                    if (el) pinEls.current.set(key, el);
+                    else pinEls.current.delete(key);
+                  }}
+                  onPointerDown={(e) => onPinPointerDown(e, pin.id, arrow.id)}
+                  onPointerMove={(e) => onPinPointerMove(e, pin)}
+                  onPointerUp={onPinPointerUp}
+                  onPointerCancel={onPinPointerUp}
+                />
+              )),
+            )}
         </div>
       </div>
     </div>

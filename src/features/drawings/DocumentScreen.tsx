@@ -5,8 +5,10 @@ import { redoLast, undoLast, useUndo } from "../../app/undo";
 import { db } from "../../db/db";
 import { listDrawings, setPageSizes } from "../../db/drawings";
 import { moveObservationBox, updateItem } from "../../db/items";
-import { createItemWithUndo } from "../items/itemActions";
-import type { Drawing } from "../../db/types";
+import { createItemWithUndo, setArrowsWithUndo } from "../items/itemActions";
+import { kindName } from "../items/letters";
+import { ArrowsOverlay } from "./ArrowsOverlay";
+import type { Drawing, Item } from "../../db/types";
 import { ItemSheet } from "../items/ItemSheet";
 import { ItemsPanel } from "../items/ItemsPanel";
 import {
@@ -121,6 +123,15 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
   const [pinsInView, setPinsInView] = useState<Set<string>>(() => new Set());
   const [scrollTarget, setScrollTarget] = useState<ScrollTarget | null>(null);
   const [backfillError, setBackfillError] = useState<string | null>(null);
+  // Arrows: the item waiting for a tap, the selected tip, a tip being dragged.
+  const [placingArrow, setPlacingArrow] = useState<string | null>(null);
+  const [arrowMessage, setArrowMessage] = useState<string | null>(null);
+  const [selectedArrow, setSelectedArrow] = useState<string | null>(null);
+  const [draggingArrow, setDraggingArrow] = useState<{
+    itemId: string;
+    arrowId: string;
+    to: Point;
+  } | null>(null);
 
   // Drawings added before page sizes were stored get them measured once.
   const missingSizes =
@@ -187,19 +198,61 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
     }
   }, [layout, items, selected, startDrawing]);
 
-  const pins: DocPin[] = (items ?? []).map((item) => ({
-    id: item.id,
-    letter: item.letter,
-    kind: item.kind,
-    selected: item.id === selectedId,
-    pageKey: pageKey(item.drawingId, item.page),
-    ...(dragging[item.id] ?? { x: item.x, y: item.y }),
-  }));
+  /** An item as shown right now: a pin or arrow tip mid-drag included. */
+  function live(item: Item) {
+    const arrows = (item.arrows ?? []).map((arrow) =>
+      draggingArrow?.itemId === item.id && draggingArrow.arrowId === arrow.id
+        ? { ...arrow, ...draggingArrow.to }
+        : arrow,
+    );
+    return { ...item, ...(dragging[item.id] ?? {}), arrows };
+  }
+
+  const pins: DocPin[] = (items ?? []).map((item) => {
+    const shown = live(item);
+    return {
+      id: item.id,
+      letter: item.letter,
+      kind: item.kind,
+      selected: item.id === selectedId,
+      pageKey: pageKey(item.drawingId, item.page),
+      x: shown.x,
+      y: shown.y,
+      arrows: shown.arrows,
+      selectedArrowId: item.id === selectedId ? selectedArrow : null,
+    };
+  });
 
   function select(itemId: string | null) {
     const next: Record<string, string> = {};
     if (itemId) next.item = itemId;
     setParams(next, { replace: true });
+    if (itemId !== selectedId) {
+      setSelectedArrow(null);
+      setPlacingArrow(null);
+      setArrowMessage(null);
+    }
+  }
+
+  async function placeArrow(page: PageLayout, at: Point) {
+    const item = items?.find((i) => i.id === placingArrow);
+    if (!item) return setPlacingArrow(null);
+    if (page.drawingId !== item.drawingId || page.page !== item.page) {
+      // Arrows stay on the pin's page; keep waiting for a tap there.
+      setArrowMessage(
+        `Tap on page ${item.page} of this drawing, where the pin is.`,
+      );
+      return;
+    }
+    const arrow = { id: crypto.randomUUID(), ...at };
+    setPlacingArrow(null);
+    setArrowMessage(null);
+    await setArrowsWithUndo(
+      item,
+      [...(item.arrows ?? []), arrow],
+      `Add arrow to ${kindName(item.kind).toLowerCase()} ${item.letter}`,
+    );
+    setSelectedArrow(arrow.id);
   }
 
   async function placePin(page: PageLayout, at: Point) {
@@ -216,22 +269,27 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
     const box = boxes?.find(
       (b) => b.drawingId === page.drawingId && b.page === page.page,
     );
-    if (!box || !inspection) return null;
+    if (!inspection) return null;
     const pageItems = (items ?? []).filter(
       (item) => item.drawingId === page.drawingId && item.page === page.page,
     );
     return (
-      <ObservationBoxOverlay
-        box={box}
-        lines={boxLines({
-          header: boxHeader(inspection),
-          observationHeading: heading ?? DEFAULT_HEADING,
-          items: pageItems,
-        })}
-        onMoveEnd={(to) =>
-          void moveObservationBox(db, box.id, to, inspectionId)
-        }
-      />
+      <>
+        <ArrowsOverlay items={pageItems.map(live)} />
+        {box && (
+          <ObservationBoxOverlay
+            box={box}
+            lines={boxLines({
+              header: boxHeader(inspection),
+              observationHeading: heading ?? DEFAULT_HEADING,
+              items: pageItems,
+            })}
+            onMoveEnd={(to) =>
+              void moveObservationBox(db, box.id, to, inspectionId)
+            }
+          />
+        )}
+      </>
     );
   }
 
@@ -310,7 +368,10 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
           type="button"
           aria-pressed={addPinMode}
           className={addPinMode ? "toggle-on" : "primary"}
-          onClick={() => setAddPinMode((on) => !on)}
+          onClick={() => {
+            setPlacingArrow(null);
+            setAddPinMode((on) => !on);
+          }}
           disabled={layout.pages.length === 0}
         >
           {addPinMode ? "Tap the drawing…" : "Add pin"}
@@ -336,8 +397,10 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
             layout={layout}
             docs={docs}
             pins={pins}
-            addPinMode={addPinMode}
-            onPlacePin={(page, at) => void placePin(page, at)}
+            addPinMode={addPinMode || placingArrow !== null}
+            onPlacePin={(page, at) =>
+              void (placingArrow ? placeArrow(page, at) : placePin(page, at))
+            }
             onMovePin={(itemId, to) =>
               setDragging((d) => ({ ...d, [itemId]: to }))
             }
@@ -351,6 +414,25 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
               );
             }}
             onSelectPin={(itemId) => select(itemId)}
+            onSelectArrow={(itemId, arrowId) => {
+              select(itemId);
+              setSelectedArrow(arrowId);
+            }}
+            onMoveArrow={(itemId, arrowId, to) =>
+              setDraggingArrow({ itemId, arrowId, to })
+            }
+            onMoveArrowEnd={(itemId, arrowId, to) => {
+              const item = items?.find((i) => i.id === itemId);
+              if (!item) return;
+              setSelectedArrow(arrowId);
+              void setArrowsWithUndo(
+                item,
+                (item.arrows ?? []).map((a) =>
+                  a.id === arrowId ? { ...a, ...to } : a,
+                ),
+                "Move arrow",
+              ).then(() => setDraggingArrow(null));
+            }}
             onCurrentPage={setCurrent}
             onActiveDrawings={setNeeded}
             onVisiblePins={(ids) => setPinsInView(new Set(ids))}
@@ -369,6 +451,28 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
             onClose={() => {
               setJustPlaced(null);
               select(null);
+            }}
+            arrows={{
+              placing: placingArrow === selected.id,
+              selectedId: selectedArrow,
+              message: arrowMessage,
+              onAdd: () => {
+                setAddPinMode(false);
+                setPlacingArrow(selected.id);
+                setArrowMessage(null);
+              },
+              onCancel: () => {
+                setPlacingArrow(null);
+                setArrowMessage(null);
+              },
+              onRemove: (arrowId) => {
+                setSelectedArrow(null);
+                void setArrowsWithUndo(
+                  selected,
+                  (selected.arrows ?? []).filter((a) => a.id !== arrowId),
+                  `Remove arrow from ${kindName(selected.kind).toLowerCase()} ${selected.letter}`,
+                );
+              },
             }}
           />
         ) : (

@@ -752,6 +752,78 @@ test("dragging the handle reorders items on a page", async ({ page }) => {
   await expect(panelRows(page).nth(0)).toContainText("A. Item 1");
 });
 
+test("arrows point from a pin to spots on its page", async ({ page }) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openDrawing(page, "S-101 Level 3");
+  await addPinAt(page, 0.3, 0.5);
+  await typeItem(page, "Lap at grid C");
+  const arrows = page.getByTestId("arrow");
+  const handles = page.getByTestId("arrow-handle");
+  const box = await stageBox(page);
+
+  // Add arrow, then tap the drawing: an arrow and its tip handle appear.
+  await sheet(page).getByRole("button", { name: "Add arrow" }).click();
+  await expect(sheet(page).getByRole("status").last()).toHaveText(
+    "Tap the drawing where the arrow should point.",
+  );
+  await page.mouse.click(box.x + box.width * 0.6, box.y + box.height * 0.3);
+  await expect(arrows).toHaveCount(1);
+  await expect(handles).toHaveCount(1);
+  await expect(handles.first()).toHaveAttribute("data-x", /^0\.(59|60)/);
+
+  // A second arrow from the same pin.
+  await sheet(page).getByRole("button", { name: "Add arrow" }).click();
+  // The sheet grew, so measure the page again.
+  const box2 = await stageBox(page);
+  await page.mouse.click(box2.x + box2.width * 0.5, box2.y + box2.height * 0.6);
+  await expect(arrows).toHaveCount(2);
+  await expect(sheet(page)).toContainText("Arrows (2)");
+
+  // Drag the first tip somewhere else; Undo puts it back.
+  const tip = await centre(handles.first());
+  await page.mouse.move(tip.x, tip.y);
+  await page.mouse.down();
+  await page.mouse.move(tip.x - 100, tip.y + 60, { steps: 6 });
+  await page.mouse.up();
+  await expect(handles.first()).not.toHaveAttribute("data-x", /^0\.(59|60)/);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  // Undo closes the sheet; reopen the item to see its handles.
+  const pin = await centre(pinByLetter(page, "A"));
+  await page.mouse.click(pin.x, pin.y);
+  await expect(handles.first()).toHaveAttribute("data-x", /^0\.(59|60)/);
+
+  // Select a tip and remove it.
+  await handles.first().click();
+  await expect(handles.first()).toHaveAttribute("aria-pressed", "true");
+  await sheet(page).getByRole("button", { name: "Remove arrow" }).click();
+  await expect(arrows).toHaveCount(1);
+  await expect(handles.first()).not.toHaveAttribute("data-x", /^0\.(59|60)/);
+});
+
+test("an arrow must point to a spot on its pin's page", async ({ page }) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openDrawing(page, "S-101 Level 3");
+  await addPinAt(page, 0.3, 0.3);
+  await sheet(page).getByRole("button", { name: "Add arrow" }).click();
+
+  // Tap page 2: it keeps waiting, with a hint.
+  const viewer = (await page.getByTestId("drawing-viewer").boundingBox())!;
+  const second = await stageBox(page, 1);
+  await scrollDocument(page, second.y - viewer.y - 20);
+  const two = await stageBox(page, 1);
+  await page.mouse.click(two.x + two.width / 2, two.y + two.height / 2);
+  await expect(sheet(page)).toContainText(
+    "Tap on page 1 of this drawing, where the pin is.",
+  );
+  await expect(page.getByTestId("arrow")).toHaveCount(0);
+  await sheet(page).getByRole("button", { name: "Cancel" }).click();
+  await expect(
+    sheet(page).getByRole("button", { name: "Add arrow" }),
+  ).toBeVisible();
+});
+
 test("deleting a drawing removes its items", async ({ page }) => {
   await setupInspection(page);
   const home = page.url();

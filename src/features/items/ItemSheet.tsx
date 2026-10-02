@@ -13,6 +13,69 @@ interface Props {
   onClose: () => void;
   /** Label for the close button, e.g. "‹ Items" when opened from the list. */
   closeLabel?: string;
+  /** Arrows: the screen handles placing (tap the drawing) and selection. */
+  arrows?: {
+    placing: boolean;
+    /** The tapped arrow tip, which Remove arrow removes. */
+    selectedId: string | null;
+    /** Shown while placing, e.g. after a tap on another page. */
+    message: string | null;
+    onAdd: () => void;
+    onCancel: () => void;
+    onRemove: (arrowId: string) => void;
+  };
+}
+
+/** Add arrow / Remove arrow, or the "tap the drawing" prompt while placing. */
+function ArrowControls({
+  count,
+  only,
+  placing,
+  selectedId,
+  message,
+  onAdd,
+  onCancel,
+  onRemove,
+}: NonNullable<Props["arrows"]> & { count: number; only: string | null }) {
+  // With a single arrow there's nothing to choose.
+  const removable = selectedId ?? only;
+  return (
+    <div className="item-arrows" role="group" aria-label="Arrows">
+      <span className="item-arrows-label">
+        Arrows{count > 0 ? ` (${count})` : ""}
+      </span>
+      {placing ? (
+        <>
+          <p className="item-arrows-prompt" role="status">
+            {message ?? "Tap the drawing where the arrow should point."}
+          </p>
+          <button type="button" onClick={onCancel}>
+            Cancel
+          </button>
+        </>
+      ) : (
+        <>
+          <div className="item-arrows-buttons">
+            <button type="button" onClick={onAdd}>
+              Add arrow
+            </button>
+            <button
+              type="button"
+              disabled={!removable}
+              onClick={() => removable && onRemove(removable)}
+            >
+              Remove arrow
+            </button>
+          </div>
+          {count > 1 && (
+            <p className="muted item-arrows-hint">
+              Tap an arrow&rsquo;s end to select it; drag to move it.
+            </p>
+          )}
+        </>
+      )}
+    </div>
+  );
 }
 
 const KINDS: { kind: ItemKind; label: string }[] = [
@@ -29,6 +92,7 @@ export function ItemSheet({
   autoFocus,
   onClose,
   closeLabel = "Done",
+  arrows,
 }: Props) {
   const [text, setText] = useState(item.text);
   // Shown straight away; the saved value catches up.
@@ -120,6 +184,14 @@ export function ItemSheet({
           />
           Photo confirmation required before proceeding
         </label>
+      )}
+
+      {arrows && (
+        <ArrowControls
+          count={item.arrows?.length ?? 0}
+          only={item.arrows?.length === 1 ? item.arrows[0].id : null}
+          {...arrows}
+        />
       )}
 
       <p className="muted item-sheet-note">

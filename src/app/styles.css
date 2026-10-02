@@ -725,6 +725,64 @@ button.item-row {
   border: 1px solid #e5d9c8;
 }
 
+/* Arrows from pins (drawn in page units, under the notes box). */
+.arrows-overlay {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+/* The selected item's arrow tips: drag to move, tap to select. */
+.arrow-handle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 28px;
+  height: 28px;
+  min-height: 0;
+  margin: -14px 0 0 -14px;
+  padding: 0;
+  border-radius: 50%;
+  /* A hollow ring, so the arrowhead shows through. */
+  border: 2px solid var(--brand-maroon);
+  background: transparent;
+  box-shadow: 0 0 0 1px #fff;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.arrow-handle-selected {
+  border-width: 4px;
+  background: rgb(88 11 7 / 0.15);
+}
+
+.item-arrows {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.item-arrows-label {
+  font-weight: 600;
+}
+
+.item-arrows-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.item-arrows-prompt {
+  margin: 0;
+  color: var(--brand-maroon);
+  font-weight: 600;
+}
+
+.item-arrows-hint {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
 /* Undo / redo arrows in the drawings toolbar. */
 .undo-group {
   display: inline-flex;

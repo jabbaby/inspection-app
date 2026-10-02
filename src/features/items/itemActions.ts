@@ -6,10 +6,11 @@ import {
   deleteItem,
   reorderItems,
   restoreItem,
+  updateItem,
   type DeletedItem,
   type NewItem,
 } from "../../db/items";
-import type { Item } from "../../db/types";
+import type { Item, ItemArrow } from "../../db/types";
 import { kindName } from "./letters";
 
 /** Places a new pin; Undo removes it (with anything typed since), Redo puts it back. */
@@ -42,6 +43,26 @@ export async function deleteItemWithUndo(item: Item): Promise<void> {
       // Keep what this delete removed, for the next Undo.
       deleted = (await deleteItem(db, item.id)) ?? deleted;
     },
+  });
+}
+
+/** Sets an item's arrows (add, move or remove one); Undo restores the old set. */
+export async function setArrowsWithUndo(
+  item: Item,
+  arrows: ItemArrow[],
+  label: string,
+): Promise<void> {
+  const previous = item.arrows ?? [];
+  await updateItem(db, item.id, { arrows });
+  // The item may be gone by the time these run (deleted since).
+  const apply = (next: ItemArrow[]) => async () => {
+    if (await db.items.get(item.id))
+      await updateItem(db, item.id, { arrows: next });
+  };
+  pushUndo(item.inspectionId, {
+    label,
+    undo: apply(previous),
+    redo: apply(arrows),
   });
 }
 
