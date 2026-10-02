@@ -414,6 +414,7 @@ function drawRecipients(w: MemoWriter, recipients: Recipient[], top: number) {
     MAROON,
   );
   w.text(h.attn, c3 + r.textInset, headBaseline, regular, r.headerSize, MAROON);
+  w.hLine(c0, c4, headTop);
   w.hLine(c0, c4, headTop + r.headerHeight);
   let segmentTop = headTop;
 
@@ -424,7 +425,11 @@ function drawRecipients(w: MemoWriter, recipients: Recipient[], top: number) {
     const height = r.rowHeight + (lines - 1) * 11.5;
     const pageBefore = w.page;
     const rowTop = w.block(0, height);
-    if (w.page !== pageBefore) segmentTop = rowTop;
+    if (w.page !== pageBefore) {
+      // Rows carried onto a new page get a top edge of their own.
+      segmentTop = rowTop;
+      w.hLine(c0, c4, rowTop);
+    }
 
     drawCheckbox(w, (c0 + c1) / 2, rowTop + r.rowHeight / 2, recipient.to);
     drawCheckbox(w, (c1 + c2) / 2, rowTop + r.rowHeight / 2, recipient.copy);

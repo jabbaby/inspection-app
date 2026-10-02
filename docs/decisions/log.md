@@ -72,3 +72,4 @@ Format: `YYYY-MM-DD | decision | why | changed in SPEC section`
 2026-10-02 | Salutation defaults to 'Dear {first name},' of the first To recipient; site visit requested by defaults to the client; reason for visit to item inspected | engineer decision | 4
 2026-10-02 | Memo editor preview is the real export PDF drawn with pdf.js; Settings edits prefilled messages; Spike A sample memo panel removed | WYSIWYG with the export; SPEC step 7 | 4, 12
 2026-10-02 | Inspection home lists observations and instructions side by side in landscape (stacked in portrait); text boxes in forms use body-size text and grow to fit | engineer markup on the step 7 build | 5, 12
+2026-10-03 | Memo recipients table gets a grey rule along the top of its heading row | engineer markup: table looked open at the top | n/a
