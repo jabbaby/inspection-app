@@ -109,6 +109,7 @@ Northrop branding is **hard-coded** for the POC. Brand assets come from the samp
 
 ## 6. Photos
 
+- **General photos** (not tied to a pin, e.g. overall views) are added on the inspection home's Photos section, with the same Take photo / Choose photos, viewer, captions, originals and Save to iPad as item photos (saved as `SY000001 General 1.jpg`). The inspection home has no Undo button, so deleting a general photo asks first.
 - Each item's sheet has a **Photos** section: **Take photo** opens the camera; **Choose photos** opens the library (several at once). Photos taken in the iPad's Camera app are saved to Photos automatically and can be added with Choose photos.
 - Photos attach to an item and also appear in the **photo appendix** at the end of the PDF pack, grouped by item (e.g. Instruction A) with captions. Captions are optional; a photo without one shows none.
 - Every photo gets a **working copy**: JPEG, long edge 1600 px (never enlarged), quality 0.8, the right way up. The camera stores which way up as an EXIF flag; Safari and Chrome apply it when decoding, and the working copy has no EXIF, so it can't be rotated twice. Photos are decoded one at a time to stay within iPad memory.
@@ -123,7 +124,7 @@ Northrop branding is **hard-coded** for the POC. Brand assets come from the samp
 One PDF, in this order:
 1. Memo page(s) (branded, A4).
 2. Marked-up drawing page(s): the original PDF pages that have pins, with lettered markers and (where there are observations) the observations text box burned in. **Each page keeps its native size** (the PDF will mix an A4 memo with larger drawing sheets). Marker size is defined relative to page size so letters stay legible on A1/A3 sheets. Watch file size and test with real large drawings.
-3. Photo appendix: photos by item (e.g. Instruction A) with captions.
+3. Photo appendix (engineer decisions, 2026-10-02): A4 pages, **4 photos per page** (2 × 2), using the working copies. Groups in this order: **instructions** A, B, C… (matching the memo's conditions), then **observations** A, B, C…, then **General** last. Each group is headed by the item's label and text, e.g. "Instruction A – Add N12 bar at grid C/4" ("General" for general photos). Each photo is labelled **Photo IA1**, IA2… (instruction A), **OA1**… (observation A) or **G1**… (general), followed by its caption if one was typed.
 
 Export must work offline.
 
@@ -140,6 +141,7 @@ Stored locally in IndexedDB. File bytes (PDFs, photos) are stored in a `blobs` t
 ```ts
 Project        { id, name?, createdAt }                    // optional grouping; may be dropped for POC
 Inspection     { id, jobNumber, jobName, itemInspected, client{...}, date, inspector, status,
+                 photoIds[],   // general photos (not tied to a pin)
                  createdAt, updatedAt }
 Drawing        { id, inspectionId, name, pdfBlobId, pageCount, fileSize, pageSizes, createdAt }
                // name defaults to the file name; pageSizes [w, h] per page lay out the document;
