@@ -7,6 +7,7 @@ import {
   centre,
   pinch,
   scrollDocument,
+  openTab,
   stageBox,
   touchTap,
   waitForServiceWorker,
@@ -29,6 +30,7 @@ async function setupInspection(page: Page) {
   await field(page, "Inspector").fill("Test Engineer");
   await field(page, "Date").fill("2026-10-01");
   await expect(page.getByTestId("save-state")).toHaveText("Saved");
+  await openTab(page, "Inspection");
 }
 
 async function uploadDrawings(
@@ -125,6 +127,32 @@ async function threeItemsInPanel(page: Page) {
   await page.getByRole("button", { name: "Items", exact: true }).click();
   await expect(panelRows(page)).toHaveCount(3);
 }
+
+test("Open markup opens the drawings, and the viewer keeps the tabs", async ({
+  page,
+}) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await page.getByRole("link", { name: "Open markup" }).click();
+  await expect(
+    page.locator('[data-testid="drawing-viewer"][data-ready="true"]'),
+  ).toBeVisible({ timeout: 20_000 });
+  const tabs = page.getByRole("navigation", { name: "Inspection sections" });
+  await expect(
+    tabs.getByRole("link", { name: "Inspection", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
+  await expect(page.getByTestId("page-indicator")).toHaveText(
+    "S-101 Level 3 · page 1 of 3",
+  );
+
+  await openTab(page, "Site memo");
+  await expect(page).toHaveURL(/\/memo$/);
+  await openTab(page, "Inspection");
+  await expect(page).toHaveURL(/\/inspection$/);
+  await expect(
+    page.getByRole("link", { name: /^S-101 Level 3/ }),
+  ).toBeVisible();
+});
 
 test("adds drawings from Files, rejects non-PDFs and opens them", async ({
   page,
@@ -924,6 +952,7 @@ test(
     await page.reload();
 
     await page.getByRole("button", { name: "New inspection" }).click();
+    await openTab(page, "Inspection");
     await page
       .getByRole("button", { name: "Add synthetic test drawing" })
       .click();

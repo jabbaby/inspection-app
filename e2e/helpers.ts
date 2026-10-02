@@ -89,3 +89,14 @@ export async function touchTap(page: Page, at: { x: number; y: number }) {
       );
   }, at);
 }
+
+/** Opens an inspection tab: Pre-inspection, Inspection or Site memo. */
+export async function openTab(
+  page: Page,
+  name: "Pre-inspection" | "Inspection" | "Site memo",
+) {
+  await page
+    .getByRole("navigation", { name: "Inspection sections" })
+    .getByRole("link", { name, exact: true })
+    .click();
+}

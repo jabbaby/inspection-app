@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { waitForServiceWorker } from "./helpers";
+import { openTab, waitForServiceWorker } from "./helpers";
 
 const field = (page: Page, label: string) =>
   page.getByLabel(label, { exact: true });
@@ -7,7 +7,8 @@ const field = (page: Page, label: string) =>
 async function newInspection(page: Page) {
   await page.goto("./");
   await page.getByRole("button", { name: "New inspection" }).click();
-  await expect(page).toHaveURL(/#\/inspections\/[0-9a-f-]{36}$/);
+  // A new inspection opens on its job details.
+  await expect(page).toHaveURL(/#\/inspections\/[0-9a-f-]{36}\/details$/);
   await expect(field(page, "Job number")).toBeVisible();
 }
 
@@ -113,6 +114,39 @@ test("new inspections take the inspector from My details", async ({ page }) => {
 
   await newInspection(page);
   await expect(field(page, "Inspector")).toHaveValue("Test Engineer");
+});
+
+test("an inspection has Pre-inspection, Inspection and Site memo tabs", async ({
+  page,
+}) => {
+  await newInspection(page);
+  await fillJob(page);
+  const tabs = page.getByRole("navigation", { name: "Inspection sections" });
+  const tab = (name: string) => tabs.getByRole("link", { name, exact: true });
+  await expect(tab("Pre-inspection")).toHaveAttribute("aria-current", "page");
+
+  // Opening it again goes to the Inspection tab.
+  await page.getByRole("link", { name: "‹ Inspections" }).click();
+  await page
+    .getByRole("link", { name: /^SY000001 – Example Apartments/ })
+    .click();
+  await expect(page).toHaveURL(/\/inspection$/);
+  await expect(tab("Inspection")).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("heading", { name: "Drawings" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Photos" })).toBeVisible();
+  // No drawings yet, so nothing to mark up.
+  await expect(page.getByRole("link", { name: "Open markup" })).toHaveCount(0);
+  await expect(field(page, "Job number")).toHaveCount(0);
+
+  await openTab(page, "Site memo");
+  await expect(tab("Site memo")).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("button", { name: "Create memo" })).toBeEnabled();
+
+  await openTab(page, "Pre-inspection");
+  await expect(field(page, "Job number")).toHaveValue("SY000001");
+  await expect(
+    page.getByRole("button", { name: "Delete inspection" }),
+  ).toBeVisible();
 });
 
 // Tagged @offline: runs in the Chromium project only (see playwright.config.ts).

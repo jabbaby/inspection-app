@@ -7,6 +7,7 @@ import { createInspection, deleteInspection } from "../../db/inspections";
 import type { Inspection } from "../../db/types";
 import { formatDateTime, formatLongDate } from "../../lib/dates";
 import { DeleteInspectionDialog } from "./DeleteInspectionDialog";
+import { tabPath } from "./tabPath";
 import { inspectionTitle } from "./inspectionTitle";
 
 export function InspectionsPage() {
@@ -22,7 +23,8 @@ export function InspectionsPage() {
     setCreating(true);
     try {
       const inspection = await createInspection(db);
-      navigate(`/inspections/${inspection.id}`);
+      // A new inspection starts with its job details.
+      navigate(tabPath(inspection.id, "details"));
     } finally {
       setCreating(false);
     }

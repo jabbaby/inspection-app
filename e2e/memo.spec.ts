@@ -3,7 +3,7 @@ import {
   TYPICAL_DRAWING,
   buildSyntheticDrawing,
 } from "../src/features/drawings/fixtures/syntheticDrawing";
-import { stageBox, waitForServiceWorker } from "./helpers";
+import { openTab, stageBox, waitForServiceWorker } from "./helpers";
 
 const field = (page: Page, label: string) =>
   page.getByLabel(label, { exact: true });
@@ -19,7 +19,14 @@ async function newInspection(page: Page) {
   await field(page, "Inspector").fill("Test Engineer");
   await field(page, "Date").fill("2026-10-01");
   await expect(page.getByTestId("save-state")).toHaveText("Saved");
+  await openTab(page, "Inspection");
   return page.url();
+}
+
+/** Site memo tab, then Create memo. */
+async function createMemo(page: Page) {
+  await openTab(page, "Site memo");
+  await page.getByRole("button", { name: "Create memo" }).click();
 }
 
 /** Two instructions (A needs photo confirmation) and one observation. */
@@ -67,7 +74,7 @@ test("create a memo from the instructions, with a live preview", async ({
   await addItems(page);
   await page.goto(home);
 
-  await page.getByRole("button", { name: "Create memo" }).click();
+  await createMemo(page);
   await expect(page).toHaveURL(/\/memo$/);
   await expect(field(page, "Reference")).toHaveValue("SIM-001");
   await expect(
@@ -112,14 +119,14 @@ test("create a memo from the instructions, with a live preview", async ({
     "the Level 3 slab as",
   );
   await expect(page.getByTestId("memo-save-state")).toHaveText("Saved");
-  await page.goto(home);
+  await openTab(page, "Pre-inspection");
   await expect(field(page, "Item inspected")).toHaveValue("Level 3 slab");
-  await expect(page.getByTestId("memo-reference")).toHaveText(
-    "SIM-001 · Site Instruction Memo",
-  );
 
-  // Edits are kept.
-  await page.getByRole("link", { name: "Open memo" }).click();
+  // Edits are kept; the tab opens the memo once there is one.
+  await openTab(page, "Site memo");
+  await expect(
+    page.getByRole("heading", { name: "Site Instruction Memo · SIM-001" }),
+  ).toBeVisible();
   await field(page, "Salutation").fill("Hi Alex,");
   await expect(page.getByTestId("memo-save-state")).toHaveText("Saved");
   await page.reload();
@@ -131,18 +138,19 @@ test("a memo needs a job number and name; references count per job", async ({
 }) => {
   await page.goto("./");
   await page.getByRole("button", { name: "New inspection" }).click();
+  await openTab(page, "Site memo");
   await expect(
     page.getByRole("button", { name: "Create memo" }),
   ).toBeDisabled();
 
   await newInspection(page);
-  await page.getByRole("button", { name: "Create memo" }).click();
+  await createMemo(page);
   await expect(field(page, "Reference")).toHaveValue("SIM-001");
   // No instructions: the memo says Ok to proceed.
   await expect(page.getByTestId("memo-lead-in")).toHaveText("Ok to proceed.");
 
   await newInspection(page);
-  await page.getByRole("button", { name: "Create memo" }).click();
+  await createMemo(page);
   await expect(field(page, "Reference")).toHaveValue("SIM-002");
 });
 
@@ -157,7 +165,7 @@ test(
     await page.reload();
 
     await newInspection(page);
-    await page.getByRole("button", { name: "Create memo" }).click();
+    await createMemo(page);
     // Fonts and images come from the precache.
     await expect(
       page.locator('[data-testid="memo-preview"][data-ready="true"]'),
@@ -194,7 +202,7 @@ test("prefilled messages are edited in Settings and offered in the memo", async 
 
   // The memo offers the new message, and ticks the reworded condition.
   await newInspection(page);
-  await page.getByRole("button", { name: "Create memo" }).click();
+  await createMemo(page);
   await page
     .getByLabel("Prefilled message")
     .selectOption({ label: "Partly complete" });
@@ -287,7 +295,7 @@ test("a signature drawn in Settings goes on new memos; a memo can upload its own
   await expect(mine.getByRole("img", { name: "My signature" })).toBeVisible();
 
   await newInspection(page);
-  await page.getByRole("button", { name: "Create memo" }).click();
+  await createMemo(page);
   const onMemo = page.getByRole("group", { name: "Signature on this memo" });
   await expect(
     onMemo.getByRole("img", { name: "Signature on this memo" }),

@@ -32,16 +32,63 @@ import {
   letterRange,
   memoInstructions,
 } from "./buildMemo";
+import { InspectionHeader } from "../inspections/InspectionTabs";
+import { inspectionTitle } from "../inspections/inspectionTitle";
 import { SignatureField } from "../signature/SignatureField";
+import { CreateMemo } from "./CreateMemo";
 import { MemoPreview } from "./MemoPreview";
 import { conditionsLeadIn, confirmationParagraph } from "./memoTemplate";
 
 const MAX_RECIPIENTS = 5;
 const SENT_VIA: SentVia[] = ["Aconex", "Email"];
 
+/**
+ * Site memo tab: Create memo until the inspection has one, then the
+ * editor.
+ */
 export function MemoScreen() {
   const { id = "" } = useParams();
-  return <MemoEditorFor key={id} inspectionId={id} />;
+  const found = useLiveQuery(
+    async () => ({
+      inspection: (await db.inspections.get(id)) ?? null,
+      memoId: (await getMemo(db, id))?.id ?? null,
+    }),
+    [id],
+  );
+  if (!found) return null;
+  const { inspection, memoId } = found;
+  if (!inspection)
+    return (
+      <section>
+        <p>
+          <Link to="/">‹ Inspections</Link>
+        </p>
+        <h1>Inspection not found</h1>
+      </section>
+    );
+  return (
+    <>
+      {memoId ? (
+        <MemoEditorFor key={memoId} inspectionId={id} />
+      ) : (
+        <section className="memo-screen">
+          <InspectionHeader
+            inspectionId={id}
+            title={inspectionTitle(inspection)}
+            current="memo"
+          />
+          <CreateMemo inspection={inspection} />
+        </section>
+      )}
+      <div className="later-section">
+        <h2>Export</h2>
+        <p className="muted">
+          One PDF pack: memo, marked-up drawings and photos. Coming in build
+          step 8.
+        </p>
+      </div>
+    </>
+  );
 }
 
 type Load =
@@ -108,10 +155,9 @@ function MemoEditorFor({ inspectionId }: { inspectionId: string }) {
     return (
       <section>
         <p>
-          <Link to={`/inspections/${inspectionId}`}>‹ Inspection</Link>
+          <Link to="/">‹ Inspections</Link>
         </p>
-        <h1>No memo yet</h1>
-        <p>Create the memo from the inspection.</p>
+        <h1>Memo not found</h1>
       </section>
     );
   }
@@ -161,11 +207,13 @@ function MemoEditorFor({ inspectionId }: { inspectionId: string }) {
 
   return (
     <section className="memo-screen">
-      <p>
-        <Link to={`/inspections/${inspectionId}`}>‹ Inspection</Link>
-      </p>
+      <InspectionHeader
+        inspectionId={inspectionId}
+        title={inspectionTitle(job)}
+        current="memo"
+      />
       <div className="page-heading">
-        <h1>Site Instruction Memo</h1>
+        <h2>Site Instruction Memo · {memo.reference}</h2>
         <span
           className="save-state"
           role="status"

@@ -1,6 +1,10 @@
-import { createHashRouter } from "react-router";
+import { Navigate, createHashRouter, useParams } from "react-router";
 import { RouterProvider } from "react-router/dom";
-import { InspectionHome } from "../features/inspections/InspectionHome";
+import {
+  InspectionScreen,
+  PreInspectionScreen,
+} from "../features/inspections/InspectionHome";
+import { tabPath } from "../features/inspections/tabPath";
 import { InspectionsPage } from "../features/inspections/InspectionsPage";
 import { SettingsPage } from "../features/settings/SettingsPage";
 import { DocumentScreen } from "../features/drawings/DocumentScreen";
@@ -14,13 +18,21 @@ const router = createHashRouter([
     element: <Shell />,
     children: [
       { index: true, element: <InspectionsPage /> },
-      { path: "inspections/:id", element: <InspectionHome /> },
+      // An inspection opens on its Inspection tab (SPEC section 12).
+      { path: "inspections/:id", element: <OpenInspection /> },
+      { path: "inspections/:id/details", element: <PreInspectionScreen /> },
+      { path: "inspections/:id/inspection", element: <InspectionScreen /> },
       { path: "settings", element: <SettingsPage /> },
       { path: "inspections/:id/document", element: <DocumentScreen /> },
       { path: "inspections/:id/memo", element: <MemoScreen /> },
     ],
   },
 ]);
+
+function OpenInspection() {
+  const { id = "" } = useParams();
+  return <Navigate to={tabPath(id, "inspection")} replace />;
+}
 
 export function App() {
   return <RouterProvider router={router} />;

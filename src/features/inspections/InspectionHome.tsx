@@ -1,3 +1,4 @@
+import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { saveStateLabel, useAutosave } from "../../app/useAutosave";
@@ -11,32 +12,37 @@ import {
 import type { Inspection } from "../../db/types";
 import { DrawingsSection } from "../drawings/DrawingsSection";
 import { ItemsSection } from "../items/ItemsSection";
-import { MemoSection } from "../memo/MemoSection";
 import { PhotosSection } from "../photos/PhotosSection";
 import { DeleteInspectionDialog } from "./DeleteInspectionDialog";
+import { InspectionHeader } from "./InspectionTabs";
 import { inspectionTitle } from "./inspectionTitle";
 import { JobDetailsForm, type JobDetailsValues } from "./JobDetailsForm";
 import { mergePatches, toPatch, toValues } from "./jobDetails";
-
-const LATER_SECTIONS = [
-  {
-    title: "Export",
-    step: 8,
-    text: "One PDF pack: memo, marked-up drawings and photos.",
-  },
-];
 
 type Load =
   | { status: "loading" }
   | { status: "missing" }
   | { status: "ready"; inspection: Inspection };
 
-export function InspectionHome() {
-  const { id = "" } = useParams();
-  return <InspectionHomeFor key={id} id={id} />;
+function NotFound() {
+  return (
+    <section>
+      <p>
+        <Link to="/">‹ Inspections</Link>
+      </p>
+      <h1>Inspection not found</h1>
+      <p>It may have been deleted on this device.</p>
+    </section>
+  );
 }
 
-function InspectionHomeFor({ id }: { id: string }) {
+/** Pre-inspection tab: the job details (autosaved) and Delete inspection. */
+export function PreInspectionScreen() {
+  const { id = "" } = useParams();
+  return <PreInspectionFor key={id} id={id} />;
+}
+
+function PreInspectionFor({ id }: { id: string }) {
   const navigate = useNavigate();
   const [load, setLoad] = useState<Load>({ status: "loading" });
   const [values, setValues] = useState<JobDetailsValues | null>(null);
@@ -64,17 +70,7 @@ function InspectionHomeFor({ id }: { id: string }) {
   }, [id]);
 
   if (load.status === "loading") return null;
-  if (load.status === "missing" || !values) {
-    return (
-      <section>
-        <p>
-          <Link to="/">‹ Inspections</Link>
-        </p>
-        <h1>Inspection not found</h1>
-        <p>It may have been deleted on this device.</p>
-      </section>
-    );
-  }
+  if (load.status === "missing" || !values) return <NotFound />;
 
   const missing = missingJobFields({
     ...load.inspection,
@@ -84,15 +80,16 @@ function InspectionHomeFor({ id }: { id: string }) {
 
   return (
     <section className="inspection-home">
-      <p>
-        <Link to="/">‹ Inspections</Link>
-      </p>
-      <div className="page-heading">
-        <h1 data-testid="inspection-title">{inspectionTitle(values)}</h1>
-        <span className="save-state" role="status" data-testid="save-state">
-          {saveStateLabel(autosave.state)}
-        </span>
-      </div>
+      <InspectionHeader
+        inspectionId={id}
+        title={inspectionTitle(values)}
+        current="details"
+        status={
+          <span className="save-state" role="status" data-testid="save-state">
+            {saveStateLabel(autosave.state)}
+          </span>
+        }
+      />
 
       <h2>Job details</h2>
       {missing.length > 0 && (
@@ -113,21 +110,6 @@ function InspectionHomeFor({ id }: { id: string }) {
         }}
         onBlur={() => void autosave.flush()}
       />
-
-      <DrawingsSection inspectionId={id} />
-      <ItemsSection inspectionId={id} />
-      <PhotosSection inspectionId={id} jobNumber={values.jobNumber} />
-
-      <MemoSection inspectionId={id} canCreate={missing.length === 0} />
-
-      {LATER_SECTIONS.map((section) => (
-        <div key={section.title} className="later-section">
-          <h2>{section.title}</h2>
-          <p className="muted">
-            {section.text} Coming in build step {section.step}.
-          </p>
-        </div>
-      ))}
 
       <div className="later-section">
         <button
@@ -156,6 +138,48 @@ function InspectionHomeFor({ id }: { id: string }) {
           void deleteInspection(db, id).then(() => navigate("/"));
         }}
       />
+    </section>
+  );
+}
+
+/** Inspection tab: Open markup, then drawings, items and general photos. */
+export function InspectionScreen() {
+  const { id = "" } = useParams();
+  const data = useLiveQuery(
+    async () => ({
+      inspection: (await db.inspections.get(id)) ?? null,
+      drawingCount: await db.drawings.where("inspectionId").equals(id).count(),
+    }),
+    [id],
+  );
+  if (!data) return null;
+  const { inspection, drawingCount } = data;
+  if (!inspection) return <NotFound />;
+
+  return (
+    <section className="inspection-home">
+      <InspectionHeader
+        inspectionId={id}
+        title={inspectionTitle(inspection)}
+        current="inspection"
+      />
+      <p className="button-row">
+        {drawingCount > 0 ? (
+          <Link
+            className="button-link primary"
+            to={`/inspections/${id}/document`}
+          >
+            Open markup
+          </Link>
+        ) : (
+          <span className="muted">
+            Add a drawing below, then open it to mark it up.
+          </span>
+        )}
+      </p>
+      <DrawingsSection inspectionId={id} />
+      <ItemsSection inspectionId={id} />
+      <PhotosSection inspectionId={id} jobNumber={inspection.jobNumber} />
     </section>
   );
 }

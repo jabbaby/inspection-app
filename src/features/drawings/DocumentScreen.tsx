@@ -6,6 +6,8 @@ import { db } from "../../db/db";
 import { listDrawings, setPageSizes } from "../../db/drawings";
 import { moveObservationBox, updateItem } from "../../db/items";
 import { createItemWithUndo, setArrowsWithUndo } from "../items/itemActions";
+import { InspectionTabs } from "../inspections/InspectionTabs";
+import { tabPath } from "../inspections/tabPath";
 import { kindName } from "../items/letters";
 import { ArrowsOverlay } from "./ArrowsOverlay";
 import type { Drawing, Item } from "../../db/types";
@@ -311,71 +313,73 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
   return (
     <section className="drawing-screen">
       <div className="viewer-toolbar" role="toolbar" aria-label="Drawings">
-        <Link to={`/inspections/${inspectionId}`}>‹ Inspection</Link>
+        <InspectionTabs inspectionId={inspectionId} current="inspection" />
         <strong className="drawing-name" data-testid="page-indicator">
           {currentDrawing && current
             ? `${currentDrawing.name} · page ${current.page} of ${current.pageCount}`
             : ""}
         </strong>
-        <span className="undo-group" role="group" aria-label="History">
+        <span className="viewer-actions">
+          <span className="undo-group" role="group" aria-label="History">
+            <button
+              type="button"
+              className="icon-button"
+              aria-label="Undo"
+              disabled={!history.undo}
+              title={
+                history.undo ? `Undo: ${history.undo.label}` : "Nothing to undo"
+              }
+              onClick={() => {
+                // An undone change could leave the open sheet pointing at nothing.
+                select(null);
+                void undoLast(inspectionId);
+              }}
+            >
+              <UndoIcon />
+            </button>
+            <button
+              type="button"
+              className="icon-button"
+              aria-label="Redo"
+              disabled={!history.redo}
+              title={
+                history.redo ? `Redo: ${history.redo.label}` : "Nothing to redo"
+              }
+              onClick={() => {
+                select(null);
+                void redoLast(inspectionId);
+              }}
+            >
+              <UndoIcon redo />
+            </button>
+          </span>
           <button
             type="button"
-            className="icon-button"
-            aria-label="Undo"
-            disabled={!history.undo}
-            title={
-              history.undo ? `Undo: ${history.undo.label}` : "Nothing to undo"
-            }
+            aria-pressed={itemsOpen}
+            className={itemsOpen ? "toggle-on" : undefined}
             onClick={() => {
-              // An undone change could leave the open sheet pointing at nothing.
+              setItemsOpen((open) => !open);
               select(null);
-              void undoLast(inspectionId);
             }}
           >
-            <UndoIcon />
+            Items
+          </button>
+          <button type="button" onClick={() => setFitRequest((n) => n + 1)}>
+            Fit page
           </button>
           <button
             type="button"
-            className="icon-button"
-            aria-label="Redo"
-            disabled={!history.redo}
-            title={
-              history.redo ? `Redo: ${history.redo.label}` : "Nothing to redo"
-            }
+            aria-pressed={addPinMode}
+            className={addPinMode ? "toggle-on" : "primary"}
             onClick={() => {
-              select(null);
-              void redoLast(inspectionId);
+              setPlacingArrow(null);
+              setAddPinMode((on) => !on);
             }}
+            disabled={layout.pages.length === 0}
           >
-            <UndoIcon redo />
+            {addPinMode ? "Tap the drawing…" : "Add pin"}
           </button>
         </span>
-        <button
-          type="button"
-          aria-pressed={itemsOpen}
-          className={itemsOpen ? "toggle-on" : undefined}
-          onClick={() => {
-            setItemsOpen((open) => !open);
-            select(null);
-          }}
-        >
-          Items
-        </button>
-        <button type="button" onClick={() => setFitRequest((n) => n + 1)}>
-          Fit page
-        </button>
-        <button
-          type="button"
-          aria-pressed={addPinMode}
-          className={addPinMode ? "toggle-on" : "primary"}
-          onClick={() => {
-            setPlacingArrow(null);
-            setAddPinMode((on) => !on);
-          }}
-          disabled={layout.pages.length === 0}
-        >
-          {addPinMode ? "Tap the drawing…" : "Add pin"}
-        </button>
       </div>
 
       {loadError && (
@@ -389,8 +393,9 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
       >
         {drawings.length === 0 ? (
           <p className="muted">
-            No drawings yet. Add them from the{" "}
-            <Link to={`/inspections/${inspectionId}`}>inspection</Link>.
+            No drawings yet. Add them on the{" "}
+            <Link to={tabPath(inspectionId, "inspection")}>Inspection</Link>{" "}
+            tab.
           </p>
         ) : (
           <DocumentViewer
