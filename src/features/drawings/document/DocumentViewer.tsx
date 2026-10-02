@@ -249,8 +249,12 @@ export function DocumentViewer(props: Props) {
     });
   }
 
-  /** Reads the view from the scroll position (the browser keeps it in range). */
-  function readScroll() {
+  /**
+   * The view from the live scroll position. Pointer handlers call this
+   * rather than trusting the last scroll event, which the browser may not
+   * have delivered yet (it fires once per frame).
+   */
+  function currentTransform(): ViewTransform {
     const c = containerRef.current!;
     const scale = applied.current.scale;
     transform.current = {
@@ -258,6 +262,12 @@ export function DocumentViewer(props: Props) {
       x: padX(scale) - c.scrollLeft,
       y: PAD - c.scrollTop,
     };
+    return transform.current;
+  }
+
+  /** Reads the view from the scroll position (the browser keeps it in range). */
+  function readScroll() {
+    currentTransform();
     requestLayout();
     window.clearTimeout(settleTimer.current);
     settleTimer.current = window.setTimeout(settle, SETTLE_MS);
@@ -397,9 +407,9 @@ export function DocumentViewer(props: Props) {
       const { clientWidth: width, clientHeight: height } = container;
       if (width === old.width && height === old.height) return;
       const wasFitWidth =
-        Math.abs(transform.current.scale - fitWidthScale.current) < 1e-6;
+        Math.abs(currentTransform().scale - fitWidthScale.current) < 1e-6;
       const widthChanged = Math.abs(width - old.width) > 1;
-      const centreDocY = screenToPage(transform.current, {
+      const centreDocY = screenToPage(currentTransform(), {
         x: 0,
         y: old.height / 2,
       }).y;
@@ -411,7 +421,7 @@ export function DocumentViewer(props: Props) {
         setTransform({ scale, x: PAD, y: height / 2 - centreDocY * scale });
         return;
       }
-      setTransform(keepSelectedVisible(transform.current));
+      setTransform(keepSelectedVisible(currentTransform()));
     });
     observer.observe(container);
     return () => observer.disconnect();
@@ -495,7 +505,7 @@ export function DocumentViewer(props: Props) {
       if (prev.type === "mouse") {
         setTransform(
           panBy(
-            transform.current,
+            currentTransform(),
             p.x - pending.start.x,
             p.y - pending.start.y,
           ),
@@ -504,7 +514,7 @@ export function DocumentViewer(props: Props) {
       return;
     }
     if (prev.type === "mouse" && !tap.current) {
-      setTransform(panBy(transform.current, p.x - prev.x, p.y - prev.y));
+      setTransform(panBy(currentTransform(), p.x - prev.x, p.y - prev.y));
     }
   }
 
@@ -524,7 +534,7 @@ export function DocumentViewer(props: Props) {
     ) {
       const hit = hitPage(
         currentLayout(),
-        screenToPage(transform.current, local(e)),
+        screenToPage(currentTransform(), local(e)),
       );
       if (hit) latest.current.onPlacePin(hit.page, hit.at);
     }
@@ -570,7 +580,7 @@ export function DocumentViewer(props: Props) {
       const now = pinchOf(list);
       const before = pinch.current;
       let next = zoomAt(
-        transform.current,
+        currentTransform(),
         now.dist / before.dist,
         now.mid,
         zoomLimits(),
@@ -590,7 +600,7 @@ export function DocumentViewer(props: Props) {
       e.preventDefault();
       setTransform(
         zoomAt(
-          transform.current,
+          currentTransform(),
           Math.exp(-e.deltaY * 0.01),
           local(e),
           zoomLimits(),
@@ -623,7 +633,7 @@ export function DocumentViewer(props: Props) {
 
   function pinPosition(pin: DocPin, p: Point): Point {
     const page = pagesRef.current.get(pin.pageKey)!;
-    const doc = screenToPage(transform.current, p);
+    const doc = screenToPage(currentTransform(), p);
     return clampNormalised({
       x: doc.x / DOC_WIDTH,
       y: (doc.y - page.top) / page.height,
@@ -674,7 +684,7 @@ export function DocumentViewer(props: Props) {
           page.key,
           (clientX: number, clientY: number): Point => {
             const doc = screenToPage(
-              transform.current,
+              currentTransform(),
               local({ clientX, clientY }),
             );
             return {
@@ -684,8 +694,8 @@ export function DocumentViewer(props: Props) {
           },
         ]),
       ),
-    // local() and transform only read refs.
-
+    // local() and currentTransform() only read refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [layout],
   );
 
