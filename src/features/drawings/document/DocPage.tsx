@@ -30,6 +30,11 @@ interface Props {
     clientY: number,
   ) => { x: number; y: number };
   onRendered: (key: string) => void;
+  /**
+   * Registers a way to cancel the sharp render in progress (a pinch pauses
+   * drawing); returns the unregister function.
+   */
+  registerRender: (cancel: () => void) => () => void;
 }
 
 function isCancel(error: unknown): boolean {
@@ -60,6 +65,7 @@ export function DocPage({
   overlay,
   clientToNormalised,
   onRendered,
+  registerRender,
 }: Props) {
   const baseHost = useRef<HTMLDivElement>(null);
   const tileHost = useRef<HTMLDivElement>(null);
@@ -195,20 +201,27 @@ export function DocPage({
       }),
     });
     tileTask.current = task;
+    // A pinch cancels it; the next settled view draws it again.
+    const unregister = registerRender(() => task.cancel());
     task.promise.then(
       () => {
+        unregister();
         if (tileTask.current !== task) return releaseCanvas(canvas);
         clearHost(tileHost.current);
         tileHost.current?.appendChild(canvas);
         tileTask.current = null;
       },
       (error: unknown) => {
+        unregister();
         releaseCanvas(canvas);
         if (!isCancel(error)) console.error("Tile render failed", error);
       },
     );
-    return () => task.cancel();
-  }, [proxy, view, rendered, page]);
+    return () => {
+      unregister();
+      task.cancel();
+    };
+  }, [proxy, view, rendered, page, registerRender]);
 
   const coords = useMemo<ViewerCoords>(
     () => ({ pageSize: page.size, clientToNormalised }),

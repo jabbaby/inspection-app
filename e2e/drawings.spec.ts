@@ -334,7 +334,7 @@ test("a pinch previews as a picture and lays out once, around the fingers", asyn
   const at = await centre(pin);
 
   // Fingers down and apart, but not lifted yet.
-  const mid = await page.evaluate((at) => {
+  const mid = await page.evaluate(async (at) => {
     const el = document.querySelector<HTMLElement>(
       '[data-testid="drawing-viewer"]',
     )!;
@@ -352,6 +352,8 @@ test("a pinch previews as a picture and lays out once, around the fingers", asyn
     const before = { scrollTop: el.scrollTop, stage: stage.style.transform };
     fire("touchstart", 100);
     for (let d = 110; d <= 200; d += 10) fire("touchmove", d);
+    // The preview updates once per frame.
+    await new Promise((r) => requestAnimationFrame(() => r(null)));
     const sizer = el.querySelector<HTMLElement>(".doc-sizer")!;
     return {
       unchanged:

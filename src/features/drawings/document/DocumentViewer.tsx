@@ -135,6 +135,14 @@ export function DocumentViewer(props: Props) {
   const currentKey = useRef<string | null>(null);
   const visiblePinsKey = useRef<string | null>(null);
   const visiblePinsTimer = useRef(0);
+  /** Cancels page drawing in progress (pages register while drawing). */
+  const renderCancels = useRef(new Set<() => void>());
+  const registerRender = useCallback((cancel: () => void) => {
+    renderCancels.current.add(cancel);
+    return () => {
+      renderCancels.current.delete(cancel);
+    };
+  }, []);
   const [activeKeys, setActiveKeys] = useState<Set<string>>(() => new Set());
   const [settled, setSettled] = useState<SettledView | null>(null);
   const [renderedKeys, setRenderedKeys] = useState<Set<string>>(
@@ -477,6 +485,10 @@ export function DocumentViewer(props: Props) {
   const pinch = useRef<{
     startDist: number;
     startMid: Point;
+    /** The viewer's top-left on screen. */
+    origin: Point;
+    /** Pending preview update (one per frame). */
+    frame: number;
     /** The view when the pinch started (what the content is laid out for). */
     base: ViewTransform;
     scroll: Point;
@@ -592,8 +604,11 @@ export function DocumentViewer(props: Props) {
       Array.from(list).filter((t) => t.touchType !== "stylus");
     const hasStylus = (list: ArrayLike<TouchLike>) =>
       Array.from(list).some((t) => t.touchType === "stylus");
-    const pinchOf = (pair: TouchLike[]) => {
-      const [a, b] = pair.map((t) => local(t));
+    const pinchOf = (pair: TouchLike[], origin: Point) => {
+      const [a, b] = pair.map((t) => ({
+        x: t.clientX - origin.x,
+        y: t.clientY - origin.y,
+      }));
       return {
         dist: Math.hypot(a.x - b.x, a.y - b.y),
         mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
@@ -604,21 +619,31 @@ export function DocumentViewer(props: Props) {
     // or scrolled mid-gesture (Safari's async scrolling would fight it).
     // When the fingers lift, the new zoom is laid out once.
     const startPinch = (list: TouchLike[]) => {
-      const start = pinchOf(list);
+      // Measured once: the viewer doesn't move during a pinch.
+      const box = container.getBoundingClientRect();
+      const origin = { x: box.left, y: box.top };
+      const start = pinchOf(list, origin);
       const base = currentTransform();
       pinch.current = {
         startDist: start.dist,
         startMid: start.mid,
+        origin,
         base,
         scroll: { x: container.scrollLeft, y: container.scrollTop },
         target: base,
+        frame: 0,
       };
+      // Nothing else on the main thread mid-pinch: no pending sharpen, and
+      // no page drawing in progress (it redraws after the fingers lift).
+      window.clearTimeout(settleTimer.current);
+      for (const cancel of renderCancels.current) cancel();
       sizerRef.current!.style.willChange = "transform";
     };
     const endPinch = () => {
       const p = pinch.current;
       if (!p) return;
       pinch.current = null;
+      cancelAnimationFrame(p.frame);
       Object.assign(sizerRef.current!.style, {
         transform: "",
         willChange: "",
@@ -644,15 +669,21 @@ export function DocumentViewer(props: Props) {
       const p = pinch.current;
       if (list.length < 2 || !p) return;
       if (e.cancelable) e.preventDefault();
-      const now = pinchOf(list);
+      const now = pinchOf(list, p.origin);
       // Always from the start of the gesture, so nothing accumulates.
       p.target = panBy(
         zoomAt(p.base, now.dist / p.startDist, p.startMid, zoomLimits()),
         now.mid.x - p.startMid.x,
         now.mid.y - p.startMid.y,
       );
-      const t = previewTransform(p.base, p.target, p.scroll);
-      sizerRef.current!.style.transform = `translate(${t.x}px, ${t.y}px) scale(${t.k})`;
+      // At most one style change per frame, however fast touches arrive.
+      if (!p.frame) {
+        p.frame = requestAnimationFrame(() => {
+          p.frame = 0;
+          const t = previewTransform(p.base, p.target, p.scroll);
+          sizerRef.current!.style.transform = `translate(${t.x}px, ${t.y}px) scale(${t.k})`;
+        });
+      }
     };
     const onTouchEnd = (e: TouchEvent) => {
       const list = fingers(e.touches);
@@ -812,6 +843,7 @@ export function DocumentViewer(props: Props) {
               }
               clientToNormalised={coordFns.get(page.key)!}
               onRendered={onRendered}
+              registerRender={registerRender}
             />
           ))}
         </div>
