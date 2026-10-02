@@ -780,50 +780,71 @@ button.item-row {
   height: 100dvh;
   max-height: 100dvh;
   margin: 0;
-  padding: 0.75rem;
   border: 0;
   box-sizing: border-box;
-  background: #111;
-  color: #fff;
+  /* Clear of the iPad's status bar, rounded corners and home bar. */
+  padding: max(0.75rem, env(safe-area-inset-top))
+    max(0.75rem, env(safe-area-inset-right))
+    max(0.75rem, env(safe-area-inset-bottom))
+    max(0.75rem, env(safe-area-inset-left));
+  background: var(--brand-cream);
+  color: var(--brand-grey);
 }
 
 .photo-viewer[open] {
   display: grid;
-  grid-template-rows: auto 1fr auto auto;
+  /* The photo fits the screen; it never sizes the layout. */
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto auto auto;
   gap: 0.5rem;
 }
 
-.photo-viewer-head,
-.photo-viewer-foot {
+.photo-viewer-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
 }
 
+.photo-viewer-head strong {
+  color: var(--brand-maroon);
+  text-align: center;
+}
+
+/* Swipe sideways here to change photo. */
 .photo-viewer-image {
+  position: relative;
   min-height: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grab;
 }
 
 .photo-viewer-image img {
+  position: absolute;
+  inset: 0;
+  margin: auto;
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
+  box-shadow: 0 2px 12px rgb(0 0 0 / 0.2);
+  -webkit-user-drag: none;
 }
 
-.photo-caption {
-  flex: 1;
+.photo-viewer-hint {
+  margin: 0;
+  text-align: center;
+  font-size: 0.8rem;
 }
 
 .photo-caption input {
   width: 100%;
 }
 
-.photo-viewer .muted {
-  color: #bbb;
+.photo-viewer-actions {
+  margin: 0;
 }
 
 /* Arrows from pins (drawn in page units, under the notes box). */

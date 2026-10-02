@@ -1013,10 +1013,27 @@ test("photos: choose several, caption, delete and undo", async ({ page }) => {
   const viewer = page.getByTestId("photo-viewer");
   await expect(viewer).toContainText("photo 2 of 2");
   await viewer.getByLabel(/Caption/).fill("Lap at grid C");
-  await viewer.getByRole("button", { name: "Previous photo" }).click();
+
+  // Swipe right for the previous photo, then back with the arrow key.
+  const area = (await page.getByTestId("photo-viewer-swipe").boundingBox())!;
+  const y = area.y + area.height / 2;
+  await page.mouse.move(area.x + area.width * 0.3, y);
+  await page.mouse.down();
+  await page.mouse.move(area.x + area.width * 0.7, y, { steps: 8 });
+  await page.mouse.up();
   await expect(viewer).toContainText("photo 1 of 2");
-  await viewer.getByRole("button", { name: "Next photo" }).click();
+  // The arrow keys work too (when not typing a caption).
+  await viewer.getByRole("button", { name: "Close" }).focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(viewer).toContainText("photo 2 of 2");
   await expect(viewer.getByLabel(/Caption/)).toHaveValue("Lap at grid C");
+
+  // Save closes the viewer; the caption is kept.
+  await viewer.getByLabel(/Caption/).fill("Lap at grid C/4");
+  await viewer.getByRole("button", { name: "Save" }).click();
+  await expect(viewer).toHaveCount(0);
+  await page.getByTestId("photo-thumb").nth(1).click();
+  await expect(viewer.getByLabel(/Caption/)).toHaveValue("Lap at grid C/4");
 
   // Delete it, then Undo brings it back.
   await viewer.getByRole("button", { name: "Delete photo" }).click();
