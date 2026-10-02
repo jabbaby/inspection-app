@@ -5,7 +5,6 @@ import {
 } from "../src/features/drawings/fixtures/syntheticDrawing";
 import {
   centre,
-  flick,
   pinch,
   scrollDocument,
   stageBox,
@@ -371,55 +370,57 @@ test("the items list opens the right drawing page and item", async ({
   await expect(sheet(page).getByRole("heading")).toHaveText("Observation A");
 });
 
-test("a finger flick keeps rolling, straight down the document", async ({
+test("at fit width the document only scrolls up and down", async ({ page }) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openDrawing(page, "S-101 Level 3");
+  const viewer = page.getByTestId("drawing-viewer");
+  const start = await stageBox(page);
+
+  // Nothing to scroll sideways, and a sideways drag doesn't move it.
+  expect(
+    await viewer.evaluate((el) => el.scrollWidth - el.clientWidth),
+  ).toBeLessThanOrEqual(0);
+  const box = (await viewer.boundingBox())!;
+  await page.mouse.move(box.x + 6, box.y + 100);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 300, box.y + 100, { steps: 6 });
+  await page.mouse.up();
+  expect((await stageBox(page)).x).toBeCloseTo(start.x, 0);
+
+  // The browser's own scrolling moves the document.
+  await viewer.evaluate((el) => el.scrollBy(0, 400));
+  await expect
+    .poll(async () => Math.round((await stageBox(page)).y))
+    .toBe(Math.round(start.y - 400));
+
+  // Zoomed in, it can scroll sideways too.
+  await pinch(page, await centre(viewer), 100, 250);
+  await expect
+    .poll(() => viewer.evaluate((el) => el.scrollWidth - el.clientWidth))
+    .toBeGreaterThan(0);
+});
+
+test("a touch while the document scrolls doesn't place a pin", async ({
   page,
 }) => {
   await setupInspection(page);
   await uploadDrawings(page, [await typicalPdf()]);
   await openDrawing(page, "S-101 Level 3");
-  const viewer = (await page.getByTestId("drawing-viewer").boundingBox())!;
-  const start = await stageBox(page);
-
-  // Finger moves up 300 px with a little sideways drift, then lifts.
-  await flick(
-    page,
-    { x: viewer.x + 6, y: viewer.y + viewer.height * 0.75 },
-    15,
-    -300,
-  );
-  const released = await stageBox(page);
-  // It keeps going after the finger lifts (however slow the machine's
-  // frames are), and never moves sideways.
-  await expect
-    .poll(async () => (await stageBox(page)).y, { timeout: 10_000 })
-    .toBeLessThan(released.y - 100);
-  expect((await stageBox(page)).x).toBeCloseTo(start.x, 0);
-});
-
-test("a touch stops a roll and doesn't place a pin", async ({ page }) => {
-  await setupInspection(page);
-  await uploadDrawings(page, [await typicalPdf()]);
-  await openDrawing(page, "S-101 Level 3");
-  const viewer = (await page.getByTestId("drawing-viewer").boundingBox())!;
+  const viewer = page.getByTestId("drawing-viewer");
   await page.getByRole("button", { name: "Add pin" }).click();
-  const at = {
-    x: viewer.x + viewer.width / 2,
-    y: viewer.y + viewer.height / 2,
-  };
+  const at = await centre(viewer);
 
-  await flick(
-    page,
-    { x: viewer.x + 6, y: viewer.y + viewer.height * 0.75 },
-    0,
-    -300,
-  );
+  // The tap lands straight after a scroll (as when stopping momentum).
+  await viewer.evaluate(async (el) => {
+    el.scrollBy(0, 200);
+    await new Promise((r) => requestAnimationFrame(() => r(null)));
+  });
   await touchTap(page, at);
-  const stopped = await stageBox(page);
-  await page.waitForTimeout(300);
-  expect((await stageBox(page)).y).toBe(stopped.y);
   await expect(page.getByTestId("viewer-pin")).toHaveCount(0);
 
-  // The next tap places the pin as usual.
+  // Once it's still, a tap places the pin.
+  await page.waitForTimeout(300);
   await touchTap(page, at);
   await expect(page.getByTestId("viewer-pin")).toHaveCount(1);
 });

@@ -10,7 +10,6 @@ import {
 import type { PDFDocumentProxy } from "../pdf/pdfjs";
 import {
   clampNormalised,
-  clampTransform,
   panBy,
   pageToScreen,
   screenToPage,
@@ -19,16 +18,6 @@ import {
   type Size,
   type ViewTransform,
 } from "../viewer/viewTransform";
-import {
-  chooseAxis,
-  isRolling,
-  lockToAxis,
-  releaseVelocity,
-  rollStep,
-  trimSamples,
-  type Axis,
-  type Sample,
-} from "../viewer/momentum";
 import { kindName } from "../../items/letters";
 import { DocPage, type SettledView } from "./DocPage";
 import {
@@ -85,9 +74,18 @@ const TAP_SLOP = 10;
 const TAP_MS = 600;
 const SETTLE_MS = 160;
 const PAD = 16;
+/** A touch this soon after the view scrolled stops the scroll; it isn't a tap. */
+const SCROLL_STOP_MS = 120;
 
 interface Tracked extends Point {
   type: string;
+}
+
+/** The parts of a touch the pinch needs (tests can supply plain objects). */
+interface TouchLike {
+  clientX: number;
+  clientY: number;
+  touchType?: string;
 }
 
 function capture(e: React.PointerEvent) {
@@ -100,11 +98,17 @@ function capture(e: React.PointerEvent) {
 
 /**
  * Every page of every drawing in one continuous, vertically stacked document
- * (GoodNotes style): one finger scrolls and pans, two fingers pinch-zoom,
- * mouse drags and wheel/trackpad scroll or zoom. Drags lock to the axis they
- * start along, and a finger flick keeps rolling (see momentum.ts). Apple Pencil input is
- * ignored (reserved for markup) except while placing a pin. Only pages on
- * or near the screen are rendered; the rest release their memory.
+ * (GoodNotes style). One-finger scrolling is the browser's own (on iPad:
+ * Safari's 120 Hz scrolling with iOS momentum and bounce). Two fingers
+ * pinch-zoom; mouse drags pan, the wheel scrolls and ctrl+wheel zooms. At
+ * fit width the document is exactly as wide as the view, so it can't move
+ * sideways. Apple Pencil never scrolls (reserved for markup); it only acts
+ * while placing a pin. Only pages on or near the screen are rendered.
+ *
+ * The scroll container's content is the document at the current zoom: a
+ * point at document units (x, y) sits at (padX + x * scale, PAD + y * scale)
+ * in the content. `transform` describes the same view as before
+ * (screen = doc * scale + offset), derived from the scroll position.
  */
 export function DocumentViewer(props: Props) {
   const { layout, docs, pins, addPinMode, scrollTarget, fitRequest } = props;
@@ -114,11 +118,15 @@ export function DocumentViewer(props: Props) {
   });
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const sizerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const pinEls = useRef(new Map<string, HTMLElement>());
-  const transform = useRef<ViewTransform>({ scale: 1, x: 0, y: 0 });
+  const transform = useRef<ViewTransform>({ scale: 1, x: PAD, y: PAD });
   const viewSize = useRef<Size>({ width: 0, height: 0 });
   const fitWidthScale = useRef(1);
+  /** What the content is currently sized for. */
+  const applied = useRef({ scale: 0, viewWidth: 0, docHeight: 0 });
+  const lastScroll = useRef(-Infinity);
   const frame = useRef(0);
   const settleTimer = useRef(0);
   const currentKey = useRef<string | null>(null);
@@ -142,6 +150,11 @@ export function DocumentViewer(props: Props) {
 
   // --- layout -------------------------------------------------------------
 
+  /** Left margin of the document in the content (centres it when narrow). */
+  function padX(scale: number) {
+    return Math.max(PAD, (viewSize.current.width - DOC_WIDTH * scale) / 2);
+  }
+
   function visibleDocRange(t: ViewTransform) {
     const top = screenToPage(t, { x: 0, y: 0 });
     const bottom = screenToPage(t, {
@@ -151,19 +164,49 @@ export function DocumentViewer(props: Props) {
     return { top, bottom };
   }
 
-  function layoutFrame() {
-    frame.current = 0;
-    const t = transform.current;
-    if (stageRef.current) {
-      stageRef.current.style.transform = `translate(${t.x}px, ${t.y}px) scale(${t.scale})`;
-    }
+  function positionPins() {
+    const scale = applied.current.scale;
+    const left = padX(scale);
     for (const pin of latest.current.pins) {
       const el = pinEls.current.get(pin.id);
       const page = pagesRef.current.get(pin.pageKey);
       if (!el || !page) continue;
-      const p = pageToScreen(t, pagePointToDoc(page, pin));
-      el.style.transform = `translate(${p.x}px, ${p.y}px)`;
+      const p = pagePointToDoc(page, pin);
+      el.style.transform = `translate(${left + p.x * scale}px, ${PAD + p.y * scale}px)`;
     }
+  }
+
+  /** Sizes the content for a zoom level (only when something changed). */
+  function applyScale(scale: number) {
+    const docHeight = currentLayout().height;
+    const a = applied.current;
+    if (
+      a.scale === scale &&
+      a.viewWidth === viewSize.current.width &&
+      a.docHeight === docHeight
+    )
+      return;
+    applied.current = {
+      scale,
+      viewWidth: viewSize.current.width,
+      docHeight,
+    };
+    const left = padX(scale);
+    const width = DOC_WIDTH * scale + 2 * left;
+    // At (or below) fit width there's nothing to see sideways: lock it.
+    const fits = width <= viewSize.current.width + 0.5;
+    containerRef.current!.style.overflowX = fits ? "hidden" : "auto";
+    Object.assign(sizerRef.current!.style, {
+      width: `${fits ? viewSize.current.width : width}px`,
+      height: `${Math.max(docHeight, 1) * scale + 2 * PAD}px`,
+    });
+    stageRef.current!.style.transform = `translate(${left}px, ${PAD}px) scale(${scale})`;
+    positionPins();
+  }
+
+  function layoutFrame() {
+    frame.current = 0;
+    const t = transform.current;
     // Pages within one screen above/below stay rendered.
     const { top, bottom } = visibleDocRange(t);
     const span = bottom.y - top.y;
@@ -206,62 +249,26 @@ export function DocumentViewer(props: Props) {
     });
   }
 
-  /** Moves the view (clamped to the document) without stopping a roll. */
-  function applyTransform(next: ViewTransform) {
-    const docSize = {
-      width: DOC_WIDTH,
-      height: Math.max(currentLayout().height, 1),
+  /** Reads the view from the scroll position (the browser keeps it in range). */
+  function readScroll() {
+    const c = containerRef.current!;
+    const scale = applied.current.scale;
+    transform.current = {
+      scale,
+      x: padX(scale) - c.scrollLeft,
+      y: PAD - c.scrollTop,
     };
-    transform.current = clampTransform(next, docSize, viewSize.current, 80);
     requestLayout();
     window.clearTimeout(settleTimer.current);
     settleTimer.current = window.setTimeout(settle, SETTLE_MS);
   }
 
-  /** Moves the view; anything that moves it stops a roll first. */
   function setTransform(next: ViewTransform) {
-    stopRoll();
-    applyTransform(next);
-  }
-
-  // --- roll (momentum after a flick) --------------------------------------
-
-  const roll = useRef<{ v: Point; last: number; frame: number } | null>(null);
-
-  /** Stops a roll; true if one was running. */
-  function stopRoll() {
-    if (!roll.current) return false;
-    cancelAnimationFrame(roll.current.frame);
-    roll.current = null;
-    return true;
-  }
-
-  function startRoll(v: Point) {
-    stopRoll();
-    if (!isRolling(v)) return;
-    const step = (now: number) => {
-      const r = roll.current;
-      if (!r) return;
-      const { move, v: nextV } = rollStep(r.v, Math.min(now - r.last, 50));
-      const before = transform.current;
-      applyTransform(panBy(before, move.x, move.y));
-      const after = transform.current;
-      // Stop on an axis that reached the end of the document.
-      const blocked = (moved: number, wanted: number) =>
-        Math.abs(moved) < Math.abs(wanted) - 0.5;
-      r.v = {
-        x: blocked(after.x - before.x, move.x) ? 0 : nextV.x,
-        y: blocked(after.y - before.y, move.y) ? 0 : nextV.y,
-      };
-      r.last = now;
-      if (isRolling(r.v)) r.frame = requestAnimationFrame(step);
-      else roll.current = null;
-    };
-    roll.current = {
-      v,
-      last: performance.now(),
-      frame: requestAnimationFrame(step),
-    };
+    applyScale(next.scale);
+    const c = containerRef.current!;
+    c.scrollLeft = padX(next.scale) - next.x;
+    c.scrollTop = PAD - next.y;
+    readScroll();
   }
 
   function zoomLimits() {
@@ -271,7 +278,9 @@ export function DocumentViewer(props: Props) {
     };
   }
 
-  function computeFitWidth() {
+  function measure() {
+    const c = containerRef.current!;
+    viewSize.current = { width: c.clientWidth, height: c.clientHeight };
     fitWidthScale.current = Math.max(
       0.01,
       (viewSize.current.width - 2 * PAD) / DOC_WIDTH,
@@ -324,9 +333,7 @@ export function DocumentViewer(props: Props) {
   // First layout, and whenever the set of pages changes.
   const initialised = useRef(false);
   useLayoutEffect(() => {
-    const box = containerRef.current!.getBoundingClientRect();
-    viewSize.current = { width: box.width, height: box.height };
-    computeFitWidth();
+    measure();
     if (!initialised.current && layout.pages.length) {
       initialised.current = true;
       transform.current = { scale: fitWidthScale.current, x: PAD, y: PAD };
@@ -364,7 +371,7 @@ export function DocumentViewer(props: Props) {
   }, [fitRequest]);
 
   useLayoutEffect(() => {
-    layoutFrame();
+    positionPins();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pins]);
 
@@ -385,20 +392,21 @@ export function DocumentViewer(props: Props) {
   // Follow container size changes.
   useEffect(() => {
     const container = containerRef.current!;
-    const observer = new ResizeObserver(([entry]) => {
-      const { width, height } = entry.contentRect;
+    const observer = new ResizeObserver(() => {
       const old = viewSize.current;
+      const { clientWidth: width, clientHeight: height } = container;
       if (width === old.width && height === old.height) return;
       const wasFitWidth =
         Math.abs(transform.current.scale - fitWidthScale.current) < 1e-6;
       const widthChanged = Math.abs(width - old.width) > 1;
-      viewSize.current = { width, height };
-      computeFitWidth();
+      const centreDocY = screenToPage(transform.current, {
+        x: 0,
+        y: old.height / 2,
+      }).y;
+      measure();
       // Rotation / split view: keep fit-width if it was. Height-only changes
       // (an item sheet opening below) keep the view where it is.
       if (wasFitWidth && widthChanged) {
-        const t = transform.current;
-        const centreDocY = screenToPage(t, { x: 0, y: old.height / 2 }).y;
         const scale = fitWidthScale.current;
         setTransform({ scale, x: PAD, y: height / 2 - centreDocY * scale });
         return;
@@ -414,7 +422,6 @@ export function DocumentViewer(props: Props) {
     () => () => {
       window.clearTimeout(settleTimer.current);
       cancelAnimationFrame(frame.current);
-      stopRoll();
     },
     [],
   );
@@ -423,13 +430,9 @@ export function DocumentViewer(props: Props) {
 
   const pointers = useRef(new Map<number, Tracked>());
   const tap = useRef<{ id: number; start: Point; time: number } | null>(null);
-  const pinch = useRef<{ dist: number; mid: Point } | null>(null);
-  /** Axis of the current one-pointer drag (null until it starts moving). */
-  const axis = useRef<Axis | null>(null);
-  /** Recent positions of a one-pointer drag, for the release speed. */
-  const samples = useRef<Sample[]>([]);
-  /** A touch that stopped a roll: it never counts as a tap. */
+  /** A touch that stopped a scroll: it never counts as a tap. */
   const stopTouch = useRef<number | null>(null);
+  const pinch = useRef<{ dist: number; mid: Point } | null>(null);
   const dragging = useRef<{
     id: string;
     pointerId: number;
@@ -443,29 +446,16 @@ export function DocumentViewer(props: Props) {
     return { x: e.clientX - box.left, y: e.clientY - box.top };
   }
 
-  function touchPair(): [Tracked, Tracked] | null {
-    const list = [...pointers.current.values()].filter((p) => p.type !== "pen");
-    return list.length >= 2 ? [list[0], list[1]] : null;
+  function penDown() {
+    return [...pointers.current.values()].some((p) => p.type === "pen");
   }
 
-  function startPinch() {
-    const pair = touchPair();
-    pinch.current = pair
-      ? {
-          dist: Math.hypot(pair[0].x - pair[1].x, pair[0].y - pair[1].y),
-          mid: {
-            x: (pair[0].x + pair[1].x) / 2,
-            y: (pair[0].y + pair[1].y) / 2,
-          },
-        }
-      : null;
-  }
-
-  // Runs before pins and the notes box see the touch. A touch that stops a
-  // roll only stops it: on a pin or the box it is swallowed; on the drawing
-  // it can still drag, but never places a pin.
+  // Runs before pins and the notes box see the touch. A touch that lands
+  // while the document is scrolling only stops it: on a pin or the box it
+  // is swallowed; on the drawing it never places a pin.
   function onPointerDownCapture(e: React.PointerEvent) {
-    if (!stopRoll()) return;
+    if (performance.now() - lastScroll.current > SCROLL_STOP_MS) return;
+    if (e.pointerType === "mouse") return;
     stopTouch.current = e.pointerId;
     if ((e.target as Element).closest(".viewer-pin, .observation-box"))
       e.stopPropagation();
@@ -473,22 +463,22 @@ export function DocumentViewer(props: Props) {
 
   function onPointerDown(e: React.PointerEvent) {
     // Pencil is reserved for markup; it only acts while placing a pin.
-    if (e.pointerType === "pen" && !latest.current.addPinMode) return;
+    if (e.pointerType === "pen" && !latest.current.addPinMode) {
+      pointers.current.set(e.pointerId, { ...local(e), type: "pen" });
+      return;
+    }
     if (e.pointerType === "mouse" && e.button !== 0) return;
     // Stop a mouse drag from selecting text around the viewer.
-    if (e.pointerType === "mouse") e.preventDefault();
-    capture(e);
+    if (e.pointerType === "mouse") {
+      e.preventDefault();
+      capture(e);
+    }
     const p = local(e);
     pointers.current.set(e.pointerId, { ...p, type: e.pointerType });
-    if (pointers.current.size === 1) {
-      tap.current = { id: e.pointerId, start: p, time: e.timeStamp };
-      samples.current = [{ ...p, t: performance.now() }];
-    } else {
-      tap.current = null;
-      axis.current = null;
-      samples.current = [];
-      startPinch();
-    }
+    tap.current =
+      pointers.current.size === 1
+        ? { id: e.pointerId, start: p, time: e.timeStamp }
+        : null;
   }
 
   function onPointerMove(e: React.PointerEvent) {
@@ -496,75 +486,38 @@ export function DocumentViewer(props: Props) {
     if (!prev) return;
     const p = local(e);
     pointers.current.set(e.pointerId, { ...p, type: prev.type });
-
-    const pair = touchPair();
-    if (pair && pinch.current) {
-      const dist = Math.hypot(pair[0].x - pair[1].x, pair[0].y - pair[1].y);
-      const mid = {
-        x: (pair[0].x + pair[1].x) / 2,
-        y: (pair[0].y + pair[1].y) / 2,
-      };
-      let next = zoomAt(
-        transform.current,
-        dist / pinch.current.dist,
-        mid,
-        zoomLimits(),
-      );
-      next = panBy(
-        next,
-        mid.x - pinch.current.mid.x,
-        mid.y - pinch.current.mid.y,
-      );
-      pinch.current = { dist, mid };
-      setTransform(next);
-      return;
-    }
-    if (prev.type === "pen" || pointers.current.size !== 1) return;
-
-    const now = performance.now();
-    samples.current = trimSamples([...samples.current, { ...p, t: now }], now);
     const pending = tap.current;
-    if (pending && pending.id === e.pointerId) {
-      // Don't move until it's clearly a drag, then pick its axis and catch up.
-      const dx = p.x - pending.start.x;
-      const dy = p.y - pending.start.y;
-      if (Math.hypot(dx, dy) < TAP_SLOP) return;
+    if (pending?.id === e.pointerId) {
+      if (Math.hypot(p.x - pending.start.x, p.y - pending.start.y) < TAP_SLOP)
+        return;
       tap.current = null;
-      axis.current = chooseAxis(dx, dy);
-      const d = lockToAxis(axis.current, { x: dx, y: dy });
-      setTransform(panBy(transform.current, d.x, d.y));
+      // Touch scrolling is the browser's; only a mouse drag pans here.
+      if (prev.type === "mouse") {
+        setTransform(
+          panBy(
+            transform.current,
+            p.x - pending.start.x,
+            p.y - pending.start.y,
+          ),
+        );
+      }
       return;
     }
-    // After a pinch the remaining finger pans freely.
-    const d = lockToAxis(axis.current ?? "free", {
-      x: p.x - prev.x,
-      y: p.y - prev.y,
-    });
-    setTransform(panBy(transform.current, d.x, d.y));
+    if (prev.type === "mouse" && !tap.current) {
+      setTransform(panBy(transform.current, p.x - prev.x, p.y - prev.y));
+    }
   }
 
   function onPointerUp(e: React.PointerEvent) {
-    const released = pointers.current.get(e.pointerId);
-    if (!released) return;
-    const soleDrag =
-      pointers.current.size === 1 && !pinch.current && axis.current !== null;
+    if (!pointers.current.has(e.pointerId)) return;
     pointers.current.delete(e.pointerId);
     const pending = tap.current;
     tap.current = null;
-    const stoppedRoll = stopTouch.current === e.pointerId;
-    if (stoppedRoll) stopTouch.current = null;
-    // A finger flick keeps rolling along the drag's axis.
-    if (e.type === "pointerup" && soleDrag && released.type === "touch") {
-      const v = releaseVelocity(samples.current, performance.now());
-      startRoll(lockToAxis(axis.current!, v));
-    }
-    if (pointers.current.size === 0) {
-      axis.current = null;
-      samples.current = [];
-    }
+    const stoppedScroll = stopTouch.current === e.pointerId;
+    if (stoppedScroll) stopTouch.current = null;
     if (
       e.type === "pointerup" &&
-      !stoppedRoll &&
+      !stoppedScroll &&
       pending?.id === e.pointerId &&
       e.timeStamp - pending.time < TAP_MS &&
       latest.current.addPinMode
@@ -575,39 +528,96 @@ export function DocumentViewer(props: Props) {
       );
       if (hit) latest.current.onPlacePin(hit.page, hit.at);
     }
-    if (touchPair()) startPinch();
-    else pinch.current = null;
   }
 
-  // Wheel: trackpad pinch / ctrl+wheel zooms, plain wheel scrolls.
+  // Native scrolling, touch pinch, Pencil and wheel zoom.
   useEffect(() => {
     const container = containerRef.current!;
-    const onWheel = (e: WheelEvent) => {
+    const onScroll = () => {
+      lastScroll.current = performance.now();
+      readScroll();
+    };
+
+    const fingers = (list: ArrayLike<TouchLike>) =>
+      Array.from(list).filter((t) => t.touchType !== "stylus");
+    const hasStylus = (list: ArrayLike<TouchLike>) =>
+      Array.from(list).some((t) => t.touchType === "stylus");
+    const pinchOf = (pair: TouchLike[]) => {
+      const [a, b] = pair.map((t) => local(t));
+      return {
+        dist: Math.hypot(a.x - b.x, a.y - b.y),
+        mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+      };
+    };
+    const onTouchStart = (e: TouchEvent) => {
+      const list = fingers(e.touches);
+      if (list.length < 2) return;
+      // Two fingers: our pinch, not the browser's scroll or zoom.
       e.preventDefault();
-      if (e.ctrlKey || e.metaKey) {
-        setTransform(
-          zoomAt(
-            transform.current,
-            Math.exp(-e.deltaY * 0.01),
-            local(e),
-            zoomLimits(),
-          ),
-        );
-      } else {
-        setTransform(panBy(transform.current, -e.deltaX, -e.deltaY));
+      tap.current = null;
+      pinch.current = pinchOf(list);
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      // Pencil never scrolls (iPad marks it "stylus"; elsewhere a pen
+      // pointer is down).
+      if (hasStylus(e.touches) || penDown()) {
+        if (e.cancelable) e.preventDefault();
+        return;
       }
+      const list = fingers(e.touches);
+      if (list.length < 2 || !pinch.current) return;
+      if (e.cancelable) e.preventDefault();
+      const now = pinchOf(list);
+      const before = pinch.current;
+      let next = zoomAt(
+        transform.current,
+        now.dist / before.dist,
+        now.mid,
+        zoomLimits(),
+      );
+      next = panBy(next, now.mid.x - before.mid.x, now.mid.y - before.mid.y);
+      pinch.current = now;
+      setTransform(next);
+    };
+    const onTouchEnd = (e: TouchEvent) => {
+      const list = fingers(e.touches);
+      pinch.current = list.length >= 2 ? pinchOf(list) : null;
+    };
+
+    // Plain wheel and trackpad scrolling are native; pinch / ctrl+wheel zooms.
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      setTransform(
+        zoomAt(
+          transform.current,
+          Math.exp(-e.deltaY * 0.01),
+          local(e),
+          zoomLimits(),
+        ),
+      );
     };
     const stopGesture = (e: Event) => e.preventDefault();
+    container.addEventListener("scroll", onScroll, { passive: true });
+    container.addEventListener("touchstart", onTouchStart, { passive: false });
+    container.addEventListener("touchmove", onTouchMove, { passive: false });
+    container.addEventListener("touchend", onTouchEnd);
+    container.addEventListener("touchcancel", onTouchEnd);
     container.addEventListener("wheel", onWheel, { passive: false });
     document.addEventListener("gesturestart", stopGesture);
     document.addEventListener("gesturechange", stopGesture);
     return () => {
+      container.removeEventListener("scroll", onScroll);
+      container.removeEventListener("touchstart", onTouchStart);
+      container.removeEventListener("touchmove", onTouchMove);
+      container.removeEventListener("touchend", onTouchEnd);
+      container.removeEventListener("touchcancel", onTouchEnd);
       container.removeEventListener("wheel", onWheel);
       document.removeEventListener("gesturestart", stopGesture);
       document.removeEventListener("gesturechange", stopGesture);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [layout]);
+  }, []);
 
   // --- pins ---------------------------------------------------------------
 
@@ -697,66 +707,68 @@ export function DocumentViewer(props: Props) {
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
     >
-      <div
-        ref={stageRef}
-        className="doc-stage"
-        style={{ width: DOC_WIDTH, height: layout.height }}
-      >
-        {layout.labels.map((label) => (
-          <div
-            key={label.drawingId}
-            className="doc-label"
-            style={{ top: label.top, height: LABEL_HEIGHT }}
-          >
-            {label.name}
-          </div>
-        ))}
-        {layout.pages.map((page) => (
-          <DocPage
-            key={page.key}
-            page={page}
-            doc={docs.get(page.drawingId)}
-            active={activeKeys.has(page.key)}
-            view={settled}
-            overlay={
-              activeKeys.has(page.key) ? props.renderPageOverlay(page) : null
-            }
-            clientToNormalised={coordFns.get(page.key)!}
-            onRendered={onRendered}
-          />
-        ))}
-      </div>
-      <div className="viewer-pins">
-        {pins.map((pin) => (
-          <button
-            key={pin.id}
-            type="button"
-            className={[
-              "viewer-pin",
-              pin.kind === "observation" ? "viewer-pin-observation" : "",
-              pin.selected ? "viewer-pin-selected" : "",
-            ]
-              .filter(Boolean)
-              .join(" ")}
-            data-testid="viewer-pin"
-            data-kind={pin.kind}
-            data-letter={pin.letter}
-            data-page={pin.pageKey}
-            data-x={pin.x.toFixed(4)}
-            data-y={pin.y.toFixed(4)}
-            aria-label={`${kindName(pin.kind)} pin ${pin.letter}`}
-            ref={(el) => {
-              if (el) pinEls.current.set(pin.id, el);
-              else pinEls.current.delete(pin.id);
-            }}
-            onPointerDown={(e) => onPinPointerDown(e, pin.id)}
-            onPointerMove={(e) => onPinPointerMove(e, pin)}
-            onPointerUp={onPinPointerUp}
-            onPointerCancel={onPinPointerUp}
-          >
-            {pin.letter}
-          </button>
-        ))}
+      <div ref={sizerRef} className="doc-sizer">
+        <div
+          ref={stageRef}
+          className="doc-stage"
+          style={{ width: DOC_WIDTH, height: layout.height }}
+        >
+          {layout.labels.map((label) => (
+            <div
+              key={label.drawingId}
+              className="doc-label"
+              style={{ top: label.top, height: LABEL_HEIGHT }}
+            >
+              {label.name}
+            </div>
+          ))}
+          {layout.pages.map((page) => (
+            <DocPage
+              key={page.key}
+              page={page}
+              doc={docs.get(page.drawingId)}
+              active={activeKeys.has(page.key)}
+              view={settled}
+              overlay={
+                activeKeys.has(page.key) ? props.renderPageOverlay(page) : null
+              }
+              clientToNormalised={coordFns.get(page.key)!}
+              onRendered={onRendered}
+            />
+          ))}
+        </div>
+        <div className="viewer-pins">
+          {pins.map((pin) => (
+            <button
+              key={pin.id}
+              type="button"
+              className={[
+                "viewer-pin",
+                pin.kind === "observation" ? "viewer-pin-observation" : "",
+                pin.selected ? "viewer-pin-selected" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              data-testid="viewer-pin"
+              data-kind={pin.kind}
+              data-letter={pin.letter}
+              data-page={pin.pageKey}
+              data-x={pin.x.toFixed(4)}
+              data-y={pin.y.toFixed(4)}
+              aria-label={`${kindName(pin.kind)} pin ${pin.letter}`}
+              ref={(el) => {
+                if (el) pinEls.current.set(pin.id, el);
+                else pinEls.current.delete(pin.id);
+              }}
+              onPointerDown={(e) => onPinPointerDown(e, pin.id)}
+              onPointerMove={(e) => onPinPointerMove(e, pin)}
+              onPointerUp={onPinPointerUp}
+              onPointerCancel={onPinPointerUp}
+            >
+              {pin.letter}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );

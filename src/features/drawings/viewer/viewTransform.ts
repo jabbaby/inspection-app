@@ -73,34 +73,6 @@ export function panBy(t: ViewTransform, dx: number, dy: number): ViewTransform {
   return { ...t, x: t.x + dx, y: t.y + dy };
 }
 
-/**
- * Keeps at least `keep` px of the page on screen (or the whole page centred
- * on an axis where it is smaller than the view), so it can't be lost.
- */
-export function clampTransform(
-  t: ViewTransform,
-  page: Size,
-  view: Size,
-  keep = 80,
-): ViewTransform {
-  const clampAxis = (offset: number, pageLen: number, viewLen: number) => {
-    const len = pageLen * t.scale;
-    if (len <= viewLen) {
-      // Allow free movement while the page is fully visible on this axis.
-      return Math.min(
-        viewLen - Math.min(keep, len),
-        Math.max(Math.min(keep, len) - len, offset),
-      );
-    }
-    return Math.min(viewLen - keep, Math.max(keep - len, offset));
-  };
-  return {
-    scale: t.scale,
-    x: clampAxis(t.x, page.width, view.width),
-    y: clampAxis(t.y, page.height, view.height),
-  };
-}
-
 export function screenToPage(t: ViewTransform, p: Point): Point {
   return { x: (p.x - t.x) / t.scale, y: (p.y - t.y) / t.scale };
 }

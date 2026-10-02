@@ -1,6 +1,5 @@
 import { describe, expect, test } from "vitest";
 import {
-  clampTransform,
   fitTransform,
   normalisedToScreen,
   pageToScreen,
@@ -87,20 +86,6 @@ describe("normalised coordinates", () => {
   test("is null off the page", () => {
     const t = fitTransform(A1, IPAD, 50);
     expect(screenToNormalised(t, { x: 2, y: 2 }, A1)).toBeNull();
-  });
-});
-
-describe("clampTransform", () => {
-  test("keeps part of a zoomed page on screen", () => {
-    const flungAway = { scale: 3, x: 50_000, y: -50_000 };
-    const t = clampTransform(flungAway, A1, IPAD, 80);
-    expect(t.x).toBe(IPAD.width - 80);
-    expect(t.y).toBe(80 - A1.height * 3);
-  });
-
-  test("leaves a sensible transform unchanged", () => {
-    const fit = fitTransform(A1, IPAD);
-    expect(clampTransform(fit, A1, IPAD)).toEqual(fit);
   });
 });
 

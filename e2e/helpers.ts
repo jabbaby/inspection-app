@@ -36,8 +36,10 @@ export async function centre(locator: Locator) {
 }
 
 /**
- * Two-finger pinch from synthetic touch pointer events (Playwright cannot
- * drive multi-touch). Fingers start `from` px apart and end `to` px apart.
+ * Two-finger pinch from synthetic touch events. Playwright's WebKit can't
+ * construct Touch objects, so the events carry plain { clientX, clientY }
+ * lists, which is all the viewer reads. Fingers start `from` px apart and
+ * end `to` px apart.
  */
 export async function pinch(
   page: Page,
@@ -48,67 +50,24 @@ export async function pinch(
   await page.evaluate(
     ({ at, from, to }) => {
       const el = document.querySelector('[data-testid="drawing-viewer"]')!;
-      const fire = (type: string, id: number, x: number) =>
-        el.dispatchEvent(
-          new PointerEvent(type, {
-            pointerId: id,
-            pointerType: "touch",
-            clientX: x,
-            clientY: at.y,
-            bubbles: true,
-            cancelable: true,
-            isPrimary: id === 1,
-          }),
-        );
-      fire("pointerdown", 1, at.x - from / 2);
-      fire("pointerdown", 2, at.x + from / 2);
-      for (let i = 1; i <= 10; i++) {
-        const d = from + ((to - from) * i) / 10;
-        fire("pointermove", 1, at.x - d / 2);
-        fire("pointermove", 2, at.x + d / 2);
-      }
-      fire("pointerup", 1, at.x - to / 2);
-      fire("pointerup", 2, at.x + to / 2);
+      const fire = (type: string, d: number | null) => {
+        const touches =
+          d === null
+            ? []
+            : [
+                { clientX: at.x - d / 2, clientY: at.y },
+                { clientX: at.x + d / 2, clientY: at.y },
+              ];
+        const event = new Event(type, { bubbles: true, cancelable: true });
+        Object.defineProperty(event, "touches", { value: touches });
+        el.dispatchEvent(event);
+      };
+      fire("touchstart", from);
+      for (let i = 1; i <= 10; i++)
+        fire("touchmove", from + ((to - from) * i) / 10);
+      fire("touchend", null);
     },
     { at, from, to },
-  );
-}
-
-/**
- * One-finger flick from synthetic touch pointer events, with real time
- * between moves so the viewer sees a release speed. The finger moves by
- * (dx, dy) over about 160 ms and lifts without pausing.
- */
-export async function flick(
-  page: Page,
-  at: { x: number; y: number },
-  dx: number,
-  dy: number,
-) {
-  await page.evaluate(
-    async ({ at, dx, dy }) => {
-      const el = document.querySelector('[data-testid="drawing-viewer"]')!;
-      const fire = (type: string, x: number, y: number) =>
-        el.dispatchEvent(
-          new PointerEvent(type, {
-            pointerId: 7,
-            pointerType: "touch",
-            clientX: x,
-            clientY: y,
-            bubbles: true,
-            cancelable: true,
-            isPrimary: true,
-          }),
-        );
-      fire("pointerdown", at.x, at.y);
-      const steps = 10;
-      for (let i = 1; i <= steps; i++) {
-        await new Promise((r) => setTimeout(r, 16));
-        fire("pointermove", at.x + (dx * i) / steps, at.y + (dy * i) / steps);
-      }
-      fire("pointerup", at.x + dx, at.y + dy);
-    },
-    { at, dx, dy },
   );
 }
 
