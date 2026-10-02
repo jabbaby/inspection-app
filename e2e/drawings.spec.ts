@@ -11,6 +11,7 @@ import {
   touchTap,
   waitForServiceWorker,
 } from "./helpers";
+import { syntheticJpeg } from "./photoFixtures";
 
 const field = (page: Page, label: string) =>
   page.getByLabel(label, { exact: true });
@@ -933,3 +934,96 @@ test(
     await expect(sheet(page).getByRole("textbox")).toHaveValue("Offline item");
   },
 );
+
+// --- photos (step 6) ---------------------------------------------------------
+
+const photoSection = (page: Page) =>
+  sheet(page).getByRole("group", { name: "Photos" });
+
+async function addPhotos(
+  page: Page,
+  input: "photo-camera-input" | "photo-library-input",
+  files: Buffer[],
+) {
+  await page.getByTestId(input).setInputFiles(
+    files.map((buffer, i) => ({
+      name: `image-${i}.jpg`,
+      mimeType: "image/jpeg",
+      buffer,
+    })),
+  );
+  await expect(page.getByTestId("photos-status")).toHaveCount(0, {
+    timeout: 20_000,
+  });
+}
+
+async function viewerImageSize(page: Page) {
+  const img = page.getByTestId("photo-viewer-image");
+  await expect(img).toBeVisible();
+  return img.evaluate(async (el: HTMLImageElement) => {
+    await el.decode();
+    return { width: el.naturalWidth, height: el.naturalHeight };
+  });
+}
+
+test("a camera photo is shrunk to 1600 px and kept with the item", async ({
+  page,
+}) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openDrawing(page, "S-101 Level 3");
+  await addPinAt(page, 0.3, 0.5);
+
+  await addPhotos(page, "photo-camera-input", [
+    await syntheticJpeg(page, 4000, 3000),
+  ]);
+  await expect(photoSection(page)).toContainText("Photos (1)");
+  await page.getByTestId("photo-thumb").click();
+  expect(await viewerImageSize(page)).toEqual({ width: 1600, height: 1200 });
+});
+
+test("a photo taken on its side comes out upright", async ({ page }) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openDrawing(page, "S-101 Level 3");
+  await addPinAt(page, 0.3, 0.5);
+
+  // Stored landscape with "rotate 90°" in its EXIF, like a portrait shot.
+  await addPhotos(page, "photo-library-input", [
+    await syntheticJpeg(page, 400, 200, 6),
+  ]);
+  await page.getByTestId("photo-thumb").click();
+  expect(await viewerImageSize(page)).toEqual({ width: 200, height: 400 });
+});
+
+test("photos: choose several, caption, delete and undo", async ({ page }) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openDrawing(page, "S-101 Level 3");
+  await addPinAt(page, 0.3, 0.5);
+
+  await addPhotos(page, "photo-library-input", [
+    await syntheticJpeg(page, 800, 600),
+    await syntheticJpeg(page, 600, 800),
+  ]);
+  await expect(page.getByTestId("photo-thumb")).toHaveCount(2);
+
+  // Caption the second photo; it's kept after closing.
+  await page.getByTestId("photo-thumb").nth(1).click();
+  const viewer = page.getByTestId("photo-viewer");
+  await expect(viewer).toContainText("photo 2 of 2");
+  await viewer.getByLabel(/Caption/).fill("Lap at grid C");
+  await viewer.getByRole("button", { name: "Previous photo" }).click();
+  await expect(viewer).toContainText("photo 1 of 2");
+  await viewer.getByRole("button", { name: "Next photo" }).click();
+  await expect(viewer.getByLabel(/Caption/)).toHaveValue("Lap at grid C");
+
+  // Delete it, then Undo brings it back.
+  await viewer.getByRole("button", { name: "Delete photo" }).click();
+  await expect(page.getByTestId("photo-thumb")).toHaveCount(1);
+  await viewer.getByRole("button", { name: "Close" }).click();
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  const pin = await centre(pinByLetter(page, "A"));
+  await page.mouse.click(pin.x, pin.y);
+  await expect(page.getByTestId("photo-thumb")).toHaveCount(2);
+});

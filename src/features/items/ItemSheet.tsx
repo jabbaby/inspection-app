@@ -3,6 +3,7 @@ import { saveStateLabel, useAutosave } from "../../app/useAutosave";
 import { db } from "../../db/db";
 import { updateItem, type ItemPatch } from "../../db/items";
 import type { Item, ItemKind } from "../../db/types";
+import { ItemPhotos } from "../photos/ItemPhotos";
 import { deleteItemWithUndo } from "./itemActions";
 import { itemLabel, kindName } from "./letters";
 
@@ -193,6 +194,8 @@ export function ItemSheet({
           Photo confirmation required before proceeding
         </label>
       )}
+
+      <ItemPhotos item={item} />
 
       {arrows && (
         <ArrowControls

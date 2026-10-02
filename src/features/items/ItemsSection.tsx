@@ -53,6 +53,8 @@ export function ItemsSection({ inspectionId }: { inspectionId: string }) {
                             : ""}{" "}
                           · {data.names.get(item.drawingId) ?? "Drawing"}, page{" "}
                           {item.page}
+                          {item.photoIds.length > 0 &&
+                            ` · ${item.photoIds.length} photo${item.photoIds.length === 1 ? "" : "s"}`}
                         </span>
                       </span>
                     </Link>

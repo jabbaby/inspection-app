@@ -317,6 +317,12 @@ export function ItemsPanel({
                 <strong>{item.letter}.</strong>{" "}
                 {item.text.trim() || <span className="muted">No text yet</span>}
               </span>
+              {item.photoIds.length > 0 && (
+                <span className="muted item-photo-count">
+                  {item.photoIds.length} photo
+                  {item.photoIds.length === 1 ? "" : "s"}
+                </span>
+              )}
             </span>
           </button>
           {canReorder && (
