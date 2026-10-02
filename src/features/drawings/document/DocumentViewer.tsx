@@ -64,6 +64,8 @@ interface Props {
   onMovePin: (id: string, to: Point) => void;
   onMovePinEnd: (id: string, to: Point) => void;
   onSelectPin: (id: string) => void;
+  /** A tap on the drawing away from pins, outside Add pin / Add arrow. */
+  onTapDrawing: () => void;
   /** Arrow tip handles (the selected item's): tap selects, drag moves. */
   onSelectArrow: (itemId: string, arrowId: string) => void;
   onMoveArrow: (itemId: string, arrowId: string, to: Point) => void;
@@ -600,18 +602,22 @@ export function DocumentViewer(props: Props) {
     tap.current = null;
     const stoppedScroll = stopTouch.current === e.pointerId;
     if (stoppedScroll) stopTouch.current = null;
-    if (
+    const tapped =
       e.type === "pointerup" &&
       !stoppedScroll &&
       pending?.id === e.pointerId &&
-      e.timeStamp - pending.time < TAP_MS &&
-      latest.current.addPinMode
-    ) {
+      e.timeStamp - pending.time < TAP_MS;
+    if (!tapped) return;
+    if (latest.current.addPinMode) {
       const hit = hitPage(
         currentLayout(),
         screenToPage(currentTransform(), local(e)),
       );
       if (hit) latest.current.onPlacePin(hit.page, hit.at);
+    } else {
+      // A tap on the drawing itself (pins, arrow tips and the notes box
+      // handle their own taps).
+      latest.current.onTapDrawing();
     }
   }
 

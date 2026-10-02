@@ -524,6 +524,27 @@ test("at fit width the document only scrolls up and down", async ({ page }) => {
     .toBeGreaterThan(0);
 });
 
+test("tapping the drawing closes the item editor and keeps the text", async ({
+  page,
+}) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openDrawing(page, "S-101 Level 3");
+  await addPinAt(page, 0.3, 0.5);
+  await sheet(page).getByRole("textbox").fill("Typed then tapped away");
+
+  const box = await stageBox(page);
+  await page.mouse.click(box.x + box.width * 0.7, box.y + box.height * 0.6);
+  await expect(sheet(page)).toHaveCount(0);
+  await expect(page.getByTestId("viewer-pin")).toHaveCount(1);
+
+  const c = await centre(pinByLetter(page, "A"));
+  await page.mouse.click(c.x, c.y);
+  await expect(sheet(page).getByRole("textbox")).toHaveValue(
+    "Typed then tapped away",
+  );
+});
+
 test("a lost finger-up doesn't stop Add pin working", async ({ page }) => {
   await setupInspection(page);
   await uploadDrawings(page, [await typicalPdf()]);

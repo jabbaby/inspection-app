@@ -414,6 +414,12 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
               );
             }}
             onSelectPin={(itemId) => select(itemId)}
+            onTapDrawing={() => {
+              // Tapping away from the pin closes its editor (text is saved).
+              if (!selectedId) return;
+              setJustPlaced(null);
+              select(null);
+            }}
             onSelectArrow={(itemId, arrowId) => {
               select(itemId);
               setSelectedArrow(arrowId);
