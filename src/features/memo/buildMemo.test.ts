@@ -1,0 +1,182 @@
+import { describe, expect, test } from "vitest";
+import starterSnippets from "../../content/snippets.json";
+import { emptyClient } from "../../db/inspections";
+import { blankMemo } from "../../db/memos";
+import type { Inspection, Item, Memo, Snippet } from "../../db/types";
+import {
+  buildMemoPdfInput,
+  defaultSalutation,
+  defaultSiteVisitRequestedBy,
+  letterRange,
+  memoConditions,
+  memoFields,
+} from "./buildMemo";
+
+const conditionSnippets = (starterSnippets as Snippet[]).filter(
+  (s) => s.kind === "condition",
+);
+
+const item = (letter: string, text: string, extra: Partial<Item> = {}): Item =>
+  ({
+    id: `item-${letter}-${extra.kind ?? "instruction"}`,
+    letter,
+    kind: "instruction",
+    text,
+    requiresPhotoConfirmation: false,
+    ...extra,
+  }) as Item;
+
+const inspection: Inspection = {
+  id: "insp",
+  jobNumber: "SY000001",
+  jobName: "Example Apartments",
+  itemInspected: "Level 3 slab reinforcement",
+  client: {
+    ...emptyClient(),
+    name: "Alex Example",
+    company: "Example Builders Pty Ltd",
+  },
+  date: "2026-10-01",
+  inspector: "Test Engineer",
+  status: "draft",
+  photoIds: [],
+  createdAt: 0,
+  updatedAt: 0,
+};
+
+function memo(extra: Partial<Memo> = {}): Memo {
+  return {
+    ...blankMemo(
+      inspection,
+      "SIM-001",
+      {
+        inspectorName: "Test Engineer",
+        inspectorTitle: "Structural Engineer",
+        defaultSentVia: "Email",
+      },
+      { id: "body", text: "At the time of the inspection…" },
+      0,
+    ),
+    ...extra,
+  };
+}
+
+describe("conditions", () => {
+  test("standard conditions first, then instructions in letter order", () => {
+    const items = [
+      item("B", "Prop spacing per shop drawing"),
+      item("A", "Add N12 bar at grid C/4", { requiresPhotoConfirmation: true }),
+      item("A", "Crack noted", { kind: "observation" }),
+    ];
+    expect(
+      memoConditions(memo(), items, conditionSnippets).map((c) => c.text),
+    ).toEqual([
+      "Complete items A–B listed below.",
+      "Confirm completion of items via photos prior to proceeding.",
+      "A. Add N12 bar at grid C/4",
+      "B. Prop spacing per shop drawing",
+    ]);
+  });
+
+  test("the photo condition is off unless an instruction needs it", () => {
+    const texts = memoConditions(
+      memo(),
+      [item("A", "Add bar")],
+      conditionSnippets,
+    ).map((c) => c.text);
+    expect(texts).toEqual(["Complete items A listed below.", "A. Add bar"]);
+  });
+
+  test("the engineer's ticks win over the defaults", () => {
+    const texts = memoConditions(
+      memo({
+        conditionChoices: {
+          "condition-complete-listed-items": false,
+          "condition-photo-confirmation": true,
+        },
+      }),
+      [item("A", "Add bar")],
+      conditionSnippets,
+    ).map((c) => c.text);
+    expect(texts).toEqual([
+      "Confirm completion of items via photos prior to proceeding.",
+      "A. Add bar",
+    ]);
+  });
+
+  test("an instruction can be reworded for the memo only", () => {
+    const a = item("A", "Add bar");
+    const [line] = memoConditions(
+      memo({
+        conditionChoices: { "condition-complete-listed-items": false },
+        itemOverrides: { [a.id]: "Add N16 bar instead" },
+      }),
+      [a],
+      conditionSnippets,
+    );
+    expect(line).toMatchObject({
+      text: "A. Add N16 bar instead",
+      reworded: true,
+    });
+  });
+
+  test("no instructions: no conditions, so the memo says Ok to proceed.", () => {
+    expect(
+      memoConditions(
+        memo(),
+        [item("A", "x", { kind: "observation" })],
+        conditionSnippets,
+      ),
+    ).toEqual([]);
+  });
+});
+
+describe("letter ranges", () => {
+  test("first to last", () => {
+    expect(letterRange(["C", "A", "B"])).toBe("A–C");
+    expect(letterRange(["A"])).toBe("A");
+    expect(letterRange([])).toBe("");
+    expect(letterRange(["Z", "AA", "AB"])).toBe("Z–AB");
+  });
+});
+
+describe("defaults", () => {
+  test("salutation from the first To recipient's first name", () => {
+    expect(
+      defaultSalutation([
+        { company: "Cert Co", attn: "Sam Sample", to: false, copy: true },
+        { company: "Builder", attn: "Alex Example", to: true, copy: false },
+      ]),
+    ).toBe("Dear Alex,");
+    expect(defaultSalutation([])).toBe("");
+  });
+
+  test("site visit requested by the client", () => {
+    expect(defaultSiteVisitRequestedBy(inspection.client)).toBe(
+      "Alex Example, Example Builders Pty Ltd",
+    );
+  });
+
+  test("job details come from the inspection; reason for visit follows item inspected", () => {
+    const fields = memoFields(memo(), inspection);
+    expect(fields).toMatchObject({
+      jobNumber: "SY000001",
+      reasonForVisit: "Level 3 slab reinforcement",
+      salutation: "Dear Alex,",
+      siteVisitRequestedBy: "Alex Example, Example Builders Pty Ltd",
+    });
+    expect(
+      memoFields(memo({ reasonForVisit: "Re-check" }), inspection)
+        .reasonForVisit,
+    ).toBe("Re-check");
+  });
+
+  test("the PDF gets the confirmation paragraph, then the body message", () => {
+    const input = buildMemoPdfInput(memo(), inspection, [], conditionSnippets);
+    expect(input.bodyParagraphs).toEqual([
+      "We confirm having inspected the Level 3 slab reinforcement as highlighted on the drawing attached.",
+      "At the time of the inspection…",
+    ]);
+    expect(input.conditions).toEqual([]);
+  });
+});
