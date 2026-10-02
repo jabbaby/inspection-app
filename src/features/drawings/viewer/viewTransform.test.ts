@@ -7,6 +7,7 @@ import {
   screenToNormalised,
   screenToPage,
   visiblePageRect,
+  previewTransform,
   zoomAt,
   zoomLimits,
   type ViewTransform,
@@ -110,5 +111,31 @@ describe("visiblePageRect", () => {
 
   test("is null when the page is off screen", () => {
     expect(visiblePageRect({ scale: 1, x: 5000, y: 0 }, A1, IPAD)).toBeNull();
+  });
+});
+
+describe("previewTransform", () => {
+  test("shows content laid out for one view exactly as another view", () => {
+    const from = { scale: 0.95, x: 16 - 40, y: 16 - 900 };
+    const to = { scale: 2.3, x: -310, y: -2500 };
+    const scroll = { x: 40, y: 900 };
+    const t = previewTransform(from, to, scroll);
+    for (const doc of [
+      { x: 0, y: 0 },
+      { x: 500, y: 1200 },
+      { x: 1000, y: 3000 },
+    ]) {
+      // Where `from` lays the point out in the content, then the transform.
+      const q = {
+        x: doc.x * from.scale + from.x + scroll.x,
+        y: doc.y * from.scale + from.y + scroll.y,
+      };
+      const shown = {
+        x: t.k * q.x + t.x - scroll.x,
+        y: t.k * q.y + t.y - scroll.y,
+      };
+      expect(shown.x).toBeCloseTo(doc.x * to.scale + to.x, 6);
+      expect(shown.y).toBeCloseTo(doc.y * to.scale + to.y, 6);
+    }
   });
 });

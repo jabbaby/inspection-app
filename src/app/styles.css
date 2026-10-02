@@ -675,6 +675,8 @@ button.danger-outline {
 .doc-sizer {
   position: relative;
   overflow: hidden;
+  /* The pinch preview scales from the content's top-left. */
+  transform-origin: 0 0;
 }
 
 .doc-stage {

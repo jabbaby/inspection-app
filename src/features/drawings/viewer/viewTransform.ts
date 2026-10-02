@@ -53,6 +53,27 @@ export function zoomLimits(fitScale: number): ZoomLimits {
   return { min: fitScale * 0.5, max: Math.max(fitScale * 24, 4) };
 }
 
+/**
+ * A CSS transform (scale `k`, then translate (x, y), origin at the content's
+ * top-left) that makes content laid out for view `from` and scrolled by
+ * `scroll` look like view `to`. Previews a pinch without re-laying out or
+ * scrolling: content point q is on screen at q - scroll under `from`; with
+ * the transform it is at k * q + (x, y) - scroll, which equals where `to`
+ * would put it.
+ */
+export function previewTransform(
+  from: ViewTransform,
+  to: ViewTransform,
+  scroll: Point,
+): { k: number; x: number; y: number } {
+  const k = to.scale / from.scale;
+  return {
+    k,
+    x: scroll.x * (1 - k) - k * from.x + to.x,
+    y: scroll.y * (1 - k) - k * from.y + to.y,
+  };
+}
+
 /** Zooms by `factor` keeping the page point under `at` fixed on screen. */
 export function zoomAt(
   t: ViewTransform,

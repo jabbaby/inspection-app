@@ -12,6 +12,7 @@ import {
   clampNormalised,
   panBy,
   pageToScreen,
+  previewTransform,
   screenToPage,
   zoomAt,
   type Point,
@@ -133,6 +134,7 @@ export function DocumentViewer(props: Props) {
   const settleTimer = useRef(0);
   const currentKey = useRef<string | null>(null);
   const visiblePinsKey = useRef<string | null>(null);
+  const visiblePinsTimer = useRef(0);
   const [activeKeys, setActiveKeys] = useState<Set<string>>(() => new Set());
   const [settled, setSettled] = useState<SettledView | null>(null);
   const [renderedKeys, setRenderedKeys] = useState<Set<string>>(
@@ -226,7 +228,15 @@ export function DocumentViewer(props: Props) {
       setCurrentPageKey(centre.key);
       latest.current.onCurrentPage(centre);
     }
-    // Pins on screen right now (the Items list highlights them).
+    // Which pins are on screen, once movement pauses (it re-renders the
+    // Items list, which mustn't happen every frame of a scroll).
+    window.clearTimeout(visiblePinsTimer.current);
+    visiblePinsTimer.current = window.setTimeout(reportVisiblePins, 120);
+  }
+
+  /** Tells the parent which pins are on screen (the Items list highlights them). */
+  function reportVisiblePins() {
+    const t = transform.current;
     const { width, height } = viewSize.current;
     const onScreen = latest.current.pins
       .filter((pin) => {
@@ -453,6 +463,7 @@ export function DocumentViewer(props: Props) {
     () => () => {
       window.clearTimeout(settleTimer.current);
       cancelAnimationFrame(frame.current);
+      window.clearTimeout(visiblePinsTimer.current);
     },
     [],
   );
@@ -463,7 +474,15 @@ export function DocumentViewer(props: Props) {
   const tap = useRef<{ id: number; start: Point; time: number } | null>(null);
   /** A touch that stopped a scroll: it never counts as a tap. */
   const stopTouch = useRef<number | null>(null);
-  const pinch = useRef<{ dist: number; mid: Point } | null>(null);
+  const pinch = useRef<{
+    startDist: number;
+    startMid: Point;
+    /** The view when the pinch started (what the content is laid out for). */
+    base: ViewTransform;
+    scroll: Point;
+    /** The view the fingers are asking for; laid out when they lift. */
+    target: ViewTransform;
+  } | null>(null);
   const dragging = useRef<{
     id: string;
     pointerId: number;
@@ -580,13 +599,39 @@ export function DocumentViewer(props: Props) {
         mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
       };
     };
+    // Pinch (as pdf.js does it): while the fingers are down the content is
+    // only scaled as a picture with a CSS transform, so nothing is laid out
+    // or scrolled mid-gesture (Safari's async scrolling would fight it).
+    // When the fingers lift, the new zoom is laid out once.
+    const startPinch = (list: TouchLike[]) => {
+      const start = pinchOf(list);
+      const base = currentTransform();
+      pinch.current = {
+        startDist: start.dist,
+        startMid: start.mid,
+        base,
+        scroll: { x: container.scrollLeft, y: container.scrollTop },
+        target: base,
+      };
+      sizerRef.current!.style.willChange = "transform";
+    };
+    const endPinch = () => {
+      const p = pinch.current;
+      if (!p) return;
+      pinch.current = null;
+      Object.assign(sizerRef.current!.style, {
+        transform: "",
+        willChange: "",
+      });
+      setTransform(p.target);
+    };
     const onTouchStart = (e: TouchEvent) => {
       const list = fingers(e.touches);
       if (list.length < 2) return;
       // Two fingers: our pinch, not the browser's scroll or zoom.
       e.preventDefault();
       tap.current = null;
-      pinch.current = pinchOf(list);
+      if (!pinch.current) startPinch(list);
     };
     const onTouchMove = (e: TouchEvent) => {
       // Pencil never scrolls (iPad marks it "stylus"; elsewhere a pen
@@ -596,23 +641,25 @@ export function DocumentViewer(props: Props) {
         return;
       }
       const list = fingers(e.touches);
-      if (list.length < 2 || !pinch.current) return;
+      const p = pinch.current;
+      if (list.length < 2 || !p) return;
       if (e.cancelable) e.preventDefault();
       const now = pinchOf(list);
-      const before = pinch.current;
-      let next = zoomAt(
-        currentTransform(),
-        now.dist / before.dist,
-        now.mid,
-        zoomLimits(),
+      // Always from the start of the gesture, so nothing accumulates.
+      p.target = panBy(
+        zoomAt(p.base, now.dist / p.startDist, p.startMid, zoomLimits()),
+        now.mid.x - p.startMid.x,
+        now.mid.y - p.startMid.y,
       );
-      next = panBy(next, now.mid.x - before.mid.x, now.mid.y - before.mid.y);
-      pinch.current = now;
-      setTransform(next);
+      const t = previewTransform(p.base, p.target, p.scroll);
+      sizerRef.current!.style.transform = `translate(${t.x}px, ${t.y}px) scale(${t.k})`;
     };
     const onTouchEnd = (e: TouchEvent) => {
       const list = fingers(e.touches);
-      pinch.current = list.length >= 2 ? pinchOf(list) : null;
+      if (!pinch.current) return;
+      endPinch();
+      // Still two fingers down (a third lifted): carry on from here.
+      if (list.length >= 2) startPinch(list);
     };
 
     // Plain wheel and trackpad scrolling are native; pinch / ctrl+wheel zooms.

@@ -322,6 +322,66 @@ test("dragged pins and boxes keep their new positions", async ({ page }) => {
   expect(Number(await obsBox.getAttribute("data-y"))).toBeGreaterThan(0.7);
 });
 
+test("a pinch previews as a picture and lays out once, around the fingers", async ({
+  page,
+}) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openDrawing(page, "S-101 Level 3");
+  await addPinAt(page, 0.4, 0.4);
+  await sheet(page).getByRole("button", { name: "Done" }).first().click();
+  const pin = pinByLetter(page, "A");
+  const at = await centre(pin);
+
+  // Fingers down and apart, but not lifted yet.
+  const mid = await page.evaluate((at) => {
+    const el = document.querySelector<HTMLElement>(
+      '[data-testid="drawing-viewer"]',
+    )!;
+    const fire = (type: string, d: number) => {
+      const event = new Event(type, { bubbles: true, cancelable: true });
+      Object.defineProperty(event, "touches", {
+        value: [
+          { clientX: at.x - d / 2, clientY: at.y },
+          { clientX: at.x + d / 2, clientY: at.y },
+        ],
+      });
+      el.dispatchEvent(event);
+    };
+    const stage = el.querySelector<HTMLElement>(".doc-stage")!;
+    const before = { scrollTop: el.scrollTop, stage: stage.style.transform };
+    fire("touchstart", 100);
+    for (let d = 110; d <= 200; d += 10) fire("touchmove", d);
+    const sizer = el.querySelector<HTMLElement>(".doc-sizer")!;
+    return {
+      unchanged:
+        el.scrollTop === before.scrollTop &&
+        stage.style.transform === before.stage,
+      previewing: sizer.style.transform.includes("scale(2)"),
+    };
+  }, at);
+  expect(mid).toEqual({ unchanged: true, previewing: true });
+  // The point between the fingers stays put while previewing...
+  let now = await centre(pin);
+  expect(Math.abs(now.x - at.x)).toBeLessThan(3);
+  expect(Math.abs(now.y - at.y)).toBeLessThan(3);
+
+  // ...and after the fingers lift and the zoom is laid out.
+  await page.evaluate(() => {
+    const el = document.querySelector('[data-testid="drawing-viewer"]')!;
+    const event = new Event("touchend", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "touches", { value: [] });
+    el.dispatchEvent(event);
+  });
+  await expect(page.locator(".doc-sizer")).not.toHaveAttribute(
+    "style",
+    /scale/,
+  );
+  now = await centre(pin);
+  expect(Math.abs(now.x - at.x)).toBeLessThan(3);
+  expect(Math.abs(now.y - at.y)).toBeLessThan(3);
+});
+
 test("pins stay on their spot through a pinch zoom", async ({ page }) => {
   await setupInspection(page);
   await uploadDrawings(page, [await typicalPdf()]);
