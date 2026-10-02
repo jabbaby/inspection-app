@@ -4,7 +4,8 @@ import { Link, useParams, useSearchParams } from "react-router";
 import { redoLast, undoLast, useUndo } from "../../app/undo";
 import { db } from "../../db/db";
 import { listDrawings, setPageSizes } from "../../db/drawings";
-import { createItem, moveObservationBox, updateItem } from "../../db/items";
+import { moveObservationBox, updateItem } from "../../db/items";
+import { createItemWithUndo } from "../items/itemActions";
 import type { Drawing } from "../../db/types";
 import { ItemSheet } from "../items/ItemSheet";
 import { ItemsPanel } from "../items/ItemsPanel";
@@ -117,6 +118,7 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
   const [dragging, setDragging] = useState<Record<string, Point>>({});
   const [current, setCurrent] = useState<PageLayout | null>(null);
   const [needed, setNeeded] = useState<string[]>([]);
+  const [pinsInView, setPinsInView] = useState<Set<string>>(() => new Set());
   const [scrollTarget, setScrollTarget] = useState<ScrollTarget | null>(null);
   const [backfillError, setBackfillError] = useState<string | null>(null);
 
@@ -202,8 +204,7 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
 
   async function placePin(page: PageLayout, at: Point) {
     setAddPinMode(false);
-    const item = await createItem(
-      db,
+    const item = await createItemWithUndo(
       { inspectionId, drawingId: page.drawingId, page: page.page, ...at },
       defaultBoxPosition(page.size),
     );
@@ -352,6 +353,7 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
             onSelectPin={(itemId) => select(itemId)}
             onCurrentPage={setCurrent}
             onActiveDrawings={setNeeded}
+            onVisiblePins={(ids) => setPinsInView(new Set(ids))}
             renderPageOverlay={renderPageOverlay}
             scrollTarget={scrollTarget}
             fitRequest={fitRequest}
@@ -374,6 +376,7 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
             <ItemsPanel
               items={items ?? []}
               drawings={drawings}
+              inView={pinsInView}
               onClose={() => setItemsOpen(false)}
               onSelect={(item) => {
                 select(item.id);

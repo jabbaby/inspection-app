@@ -1,9 +1,35 @@
 /** Item actions that can be undone and redone (they record an undo entry). */
 import { pushUndo } from "../../app/undo";
 import { db } from "../../db/db";
-import { deleteItem, reorderItems, restoreItem } from "../../db/items";
+import {
+  createItem,
+  deleteItem,
+  reorderItems,
+  restoreItem,
+  type DeletedItem,
+  type NewItem,
+} from "../../db/items";
 import type { Item } from "../../db/types";
 import { kindName } from "./letters";
+
+/** Places a new pin; Undo removes it (with anything typed since), Redo puts it back. */
+export async function createItemWithUndo(
+  item: NewItem,
+  boxPosition: { x: number; y: number },
+): Promise<Item> {
+  const created = await createItem(db, item, boxPosition);
+  let removed: DeletedItem | null = null;
+  pushUndo(item.inspectionId, {
+    label: `Add ${kindName(created.kind).toLowerCase()} ${created.letter}`,
+    undo: async () => {
+      removed = await deleteItem(db, created.id);
+    },
+    redo: async () => {
+      if (removed) await restoreItem(db, removed);
+    },
+  });
+  return created;
+}
 
 /** Deletes an item straight away (no confirm); Undo puts it back. */
 export async function deleteItemWithUndo(item: Item): Promise<void> {
