@@ -64,3 +64,4 @@ Format: `YYYY-MM-DD | decision | why | changed in SPEC section`
 2026-10-02 | Camera originals kept for saving at native resolution; library picks keep only the working copy; Free up space removes originals already saved | engineer wants to save all photos at the end at full resolution | 6, 8
 2026-10-02 | Saving to the iPad via the Share sheet (Save Images / Save to Files), from the item and the whole inspection, batches of 20 prepared before the tap; no silent save | iPadOS only allows web apps to save photos through the Share sheet after a tap | 6
 2026-10-02 | Photo viewer: swipe between photos (buttons removed), cream background, safe-area padding, Save button at the top that saves the caption and closes | engineer feedback after the step 6 iPad test | 6
+2026-10-02 | Photo swipe rebuilt as a preloaded strip moved directly per frame, gliding on release; quick flick or quarter-width drag changes photo | engineer: swipe wasn't smooth | 6
