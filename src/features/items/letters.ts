@@ -1,9 +1,10 @@
 /**
- * Item letters, per inspection: A, B ... Z, AA, AB ... ZZ, AAA ...
- * (bijective base 26, like spreadsheet columns). Letters are never reused
- * within an inspection unless the user re-letters (SPEC section 5), so the
- * caller keeps a running index rather than filling gaps.
+ * Item letters: A, B ... Z, AA, AB ... ZZ, AAA ... (bijective base 26, like
+ * spreadsheet columns). Instructions and observations are lettered
+ * separately, each A, B, C ... across the inspection in pin creation order
+ * (SPEC section 5), so an instruction A and an observation A can both exist.
  */
+import type { ItemKind } from "../../db/types";
 
 /** 0 -> "A", 25 -> "Z", 26 -> "AA", 701 -> "ZZ", 702 -> "AAA". */
 export function letterForIndex(index: number): string {
@@ -28,4 +29,26 @@ export function indexForLetter(letter: string): number {
   let n = 0;
   for (const char of letter) n = n * 26 + (char.charCodeAt(0) - 64);
   return n - 1;
+}
+
+/** "Instruction" or "Observation". */
+export function kindName(kind: ItemKind): string {
+  return kind === "instruction" ? "Instruction" : "Observation";
+}
+
+/** "Instruction A" / "Observation A": letters alone are ambiguous. */
+export function itemLabel(item: { kind: ItemKind; letter: string }): string {
+  return `${kindName(item.kind)} ${item.letter}`;
+}
+
+/**
+ * List order everywhere items are listed: observations A, B ... then
+ * instructions A, B ... (the notes box order).
+ */
+export function compareItems(
+  a: { kind: ItemKind; letter: string },
+  b: { kind: ItemKind; letter: string },
+): number {
+  if (a.kind !== b.kind) return a.kind === "observation" ? -1 : 1;
+  return indexForLetter(a.letter) - indexForLetter(b.letter);
 }

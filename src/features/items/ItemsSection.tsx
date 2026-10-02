@@ -1,16 +1,16 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { Link } from "react-router";
 import { db } from "../../db/db";
-import { indexForLetter } from "./letters";
+import { compareItems, kindName } from "./letters";
 
-/** All items in letter order; each opens its drawing at the pin. */
+/** All items (observations, then instructions); each opens its drawing at the pin. */
 export function ItemsSection({ inspectionId }: { inspectionId: string }) {
   const data = useLiveQuery(async () => {
     const [items, drawings] = await Promise.all([
       db.items.where("inspectionId").equals(inspectionId).toArray(),
       db.drawings.where("inspectionId").equals(inspectionId).toArray(),
     ]);
-    items.sort((a, b) => indexForLetter(a.letter) - indexForLetter(b.letter));
+    items.sort(compareItems);
     return { items, names: new Map(drawings.map((d) => [d.id, d.name])) };
   }, [inspectionId]);
 
@@ -42,9 +42,7 @@ export function ItemsSection({ inspectionId }: { inspectionId: string }) {
                     )}
                   </span>
                   <span className="muted">
-                    {item.kind === "instruction"
-                      ? "Instruction"
-                      : "Observation"}
+                    {kindName(item.kind)}
                     {item.kind === "instruction" &&
                     item.requiresPhotoConfirmation
                       ? " · photo confirmation"

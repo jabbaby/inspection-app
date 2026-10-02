@@ -27,7 +27,7 @@ describe("InspectionDb", () => {
       "settings",
       "snippets",
     ]);
-    expect(SCHEMA_VERSION).toBe(3);
+    expect(SCHEMA_VERSION).toBe(4);
   });
 
   test("finds an item by inspection and letter", async () => {
@@ -56,7 +56,7 @@ describe("InspectionDb", () => {
 });
 
 describe("upgrade from v1", () => {
-  test("adds itemInspected and continues letters after the highest one", async () => {
+  test("adds itemInspected", async () => {
     const name = `test-${crypto.randomUUID()}`;
     const v1 = new Dexie(name);
     v1.version(1).stores({
@@ -78,9 +78,8 @@ describe("upgrade from v1", () => {
     const withItems = await db.inspections.get("with-items");
     const empty = await db.inspections.get("empty");
     expect(withItems?.itemInspected).toBe("");
-    expect(withItems?.nextLetterIndex).toBe(28); // after "AB" (27)
-    expect(empty?.nextLetterIndex).toBe(0);
     expect(withItems?.jobName).toBe("Tower");
+    expect(empty?.itemInspected).toBe("");
   });
 });
 
@@ -98,4 +97,57 @@ test("v3 upgrade gives existing drawings a createdAt", async () => {
   const drawings = await db.drawings.toArray();
   expect(drawings.every((d) => typeof d.createdAt === "number")).toBe(true);
   expect(new Set(drawings.map((d) => d.createdAt)).size).toBe(2);
+});
+
+test("v4 upgrade letters instructions and observations separately", async () => {
+  const name = `test-${crypto.randomUUID()}`;
+  const v3 = new Dexie(name);
+  v3.version(3).stores({
+    inspections: "id, jobNumber, updatedAt",
+    items: "id, inspectionId, [inspectionId+letter], drawingId",
+  });
+  await v3
+    .table("inspections")
+    .add({ id: "insp", jobNumber: "SY1", nextLetterIndex: 5 });
+  // Old letters ran across both kinds, with a gap after a deletion.
+  await v3.table("items").bulkAdd([
+    {
+      id: "a",
+      inspectionId: "insp",
+      kind: "instruction",
+      letter: "A",
+      createdAt: 1,
+    },
+    {
+      id: "b",
+      inspectionId: "insp",
+      kind: "observation",
+      letter: "B",
+      createdAt: 2,
+    },
+    {
+      id: "d",
+      inspectionId: "insp",
+      kind: "instruction",
+      letter: "D",
+      createdAt: 4,
+    },
+    {
+      id: "e",
+      inspectionId: "insp",
+      kind: "observation",
+      letter: "E",
+      createdAt: 5,
+    },
+  ]);
+  v3.close();
+
+  db = new InspectionDb(name);
+  const letters = Object.fromEntries(
+    (await db.items.toArray()).map((item) => [item.id, item.letter]),
+  );
+  expect(letters).toEqual({ a: "A", d: "B", b: "A", e: "B" });
+  expect(await db.inspections.get("insp")).not.toHaveProperty(
+    "nextLetterIndex",
+  );
 });

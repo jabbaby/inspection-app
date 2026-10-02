@@ -24,7 +24,7 @@ Longer term the app also holds engineering calculators (AS 3600) and a standard 
 ### Slice 1 (the POC core, build first)
 1. Create an inspection (job details).
 2. Upload one or more drawing PDFs and view them with smooth pan/zoom.
-3. Use **Add pin** to drop **lettered pins** (A, B, C...) on a drawing. Each pin is either an **instruction** or an **observation**, with text, optional photos, and (for instructions) a flag for "photo confirmation required before proceeding".
+3. Use **Add pin** to drop **lettered pins** (A, B, C... for instructions and, separately, for observations) on a drawing. Each pin is either an **instruction** or an **observation**, with text, optional photos, and (for instructions) a flag for "photo confirmation required before proceeding".
 4. Generate the **Site Instruction Memo**, editable in app.
 5. Export one PDF pack: memo + marked-up drawing page(s) + photo appendix.
 6. Export/import an **inspection file** so work moves between iPad and desktop.
@@ -86,14 +86,14 @@ Northrop branding is **hard-coded** for the POC. Brand assets come from the samp
 
 ## 5. Lettered items and pins
 
-- Each pin has a letter in order of creation: A, B, C ... Z, then AA, AB ... Deleting an item (or a drawing) re-letters the remaining items in creation order so there are no gaps: delete C and D becomes C. Memos are checked before sending; build step 8 warns before deleting once a memo has been exported.
-- Letters are **per inspection**, not per drawing, so item "C" in the memo points to exactly one pin on one drawing.
+- **Instructions and observations are lettered separately**, each in order of creation: instructions A, B, C ... Z, then AA, AB ..., and observations A, B, C ... the same way. An instruction A and an observation A can both exist; they are told apart by pin colour, and the app always names the kind ("Instruction A", "Observation A"). Deleting an item (or a drawing) re-letters the remaining items of that kind in creation order so there are no gaps: delete instruction C and instruction D becomes C. Switching an item's kind moves it to the other sequence (at its creation-order position) and re-letters both. Memos are checked before sending; build step 8 warns before deleting once a memo has been exported.
+- Letters are **per inspection**, not per drawing, so instruction "C" in the memo points to exactly one pin on one drawing.
 - The memo's conditions list is generated from the items, e.g. "A. [instruction]". The engineer can edit the text in the memo without changing the underlying item.
 - Each item has a **kind**: `instruction` (something the builder must fix or complete) or `observation` (neutral note, no action required). Both get a letter and a pin.
 - In the memo, instructions feed the "Ok to proceed subject to the following:" list.
 - Observations **do not appear in the memo**, so they are never read as conditions. Instead each drawing page that has pins gets an **observations box** (the "notes box" in the app), burned into that page in the export. It also lists that page's instructions, so the builder sees both on the drawing:
   - A header line on every page with pins: `NORTHROP INSPECTION | {item inspected} | {first initial}. {surname} | {DD/MM/YYYY}` (inspector and date from the inspection; empty parts are left out).
-  - Then, only when the page has observations: a heading from a `heading` snippet (default "Noted for information:"; longer alternative in the starter set), followed by that page's observations by letter, e.g. "D. Existing crack noted at grid 4".
+  - Then, only when the page has observations: a heading from a `heading` snippet (default "Noted for information:"; longer alternative in the starter set), followed by that page's observations by letter, e.g. "A. Existing crack noted at grid 4".
   - Then, only when the page has instructions: the fixed heading "Instructions:" followed by that page's instructions by letter, e.g. "A. Add N12 bar at grid C/4".
   - The engineer **drags the box into place** in the drawing viewer so it doesn't cover drawing detail. Its position is stored in normalised page coordinates (0..1), like pins. Default spot: top right of the page.
   - Text size and box width are relative to page size, like the markers, so it stays legible on A1/A3 sheets. In the viewer the box is drawn on the page so it looks as it will in the export.
@@ -101,14 +101,15 @@ Northrop branding is **hard-coded** for the POC. Brand assets come from the samp
   - Style: header line in black; border and observations in markup blue `#0165FC`; the instructions heading and lines in red `#DA1A32` to match the instruction pins. All in capitals, Arial on screen. The PDF export uses Helvetica (Arial's metric twin, built into every PDF viewer) so no font file is bundled. Colour and fonts live in `src/brand/northrop.ts` (`markup`).
 - **Item sheet:** placing a pin creates an item and opens its sheet. New items start as **instruction** with the cursor in the text box; an Instruction | Observation switch changes the kind at any time. Instructions have the "photo confirmation required before proceeding" option. Text saves as you type. Tapping a pin reopens its sheet.
 - **Pin style:** instructions are filled red circles with a white letter; observations are filled markup-blue (`#0165FC`) circles with a white letter.
-- The inspection keeps a letter counter (the next letter), reset to the item count whenever items are re-lettered.
+- Letters are always derived from the items (no stored counter); a new pin gets the next instruction letter.
+- Wherever items are listed (inspection home, the viewer's Items panel), observations come first (A, B ...), then instructions (A, B ...), matching the notes box.
 - **Gesture model (GoodNotes style, decided in Spike B):** one finger drags to pan, two fingers pinch to zoom. A drag locks to the axis it starts along (straight up/down or across; a clearly diagonal drag moves freely). A finger flick keeps the document rolling and slowing down (iOS deceleration) until it stops, reaches the end of the document, or is touched; the touch that stops a roll never places a pin or opens one. Mouse drags lock to an axis but don't roll; pinches never roll. Pins are placed only through an **Add pin** button: tap it, then tap the drawing (finger, Apple Pencil or mouse); the mode ends after one pin. Taps never place pins otherwise, so the Apple Pencil stays free for freehand markup (slice 2). Pins can be dragged to move them.
 - Fields per item: letter, kind, drawing + page, position, text, photos (0..n), `requiresPhotoConfirmation` (bool, only meaningful for instructions). No open/closed status in the POC (re-inspections are out of scope).
 
 ## 6. Photos
 
 - Add from the camera or photo library.
-- Photos attach to an item and also appear in the **photo appendix** at the end of the PDF pack, grouped by item letter with captions.
+- Photos attach to an item and also appear in the **photo appendix** at the end of the PDF pack, grouped by item (e.g. Instruction A) with captions.
 - Compress on import (target long edge about 1600 px, JPEG ~0.8) to keep local storage and PDF size sensible. Keep EXIF orientation correct.
 - Storage is the main offline risk on iPad (see section 10).
 
@@ -117,7 +118,7 @@ Northrop branding is **hard-coded** for the POC. Brand assets come from the samp
 One PDF, in this order:
 1. Memo page(s) (branded, A4).
 2. Marked-up drawing page(s): the original PDF pages that have pins, with lettered markers and (where there are observations) the observations text box burned in. **Each page keeps its native size** (the PDF will mix an A4 memo with larger drawing sheets). Marker size is defined relative to page size so letters stay legible on A1/A3 sheets. Watch file size and test with real large drawings.
-3. Photo appendix: photos by item letter with captions.
+3. Photo appendix: photos by item (e.g. Instruction A) with captions.
 
 Export must work offline.
 
@@ -134,7 +135,6 @@ Stored locally in IndexedDB. File bytes (PDFs, photos) are stored in a `blobs` t
 ```ts
 Project        { id, name?, createdAt }                    // optional grouping; may be dropped for POC
 Inspection     { id, jobNumber, jobName, itemInspected, client{...}, date, inspector, status,
-                 nextLetterIndex,   // next item letter; equals the item count after re-lettering
                  createdAt, updatedAt }
 Drawing        { id, inspectionId, name, pdfBlobId, pageCount, fileSize, pageSizes, createdAt }
                // name defaults to the file name; pageSizes [w, h] per page lay out the document;
@@ -195,7 +195,7 @@ Brand tokens from the sample: red `#DA1A32`, cream `#FFF2DF`, dark maroon `#580B
 
 1. **Inspections list** (new, open, import, back up)
 2. **Inspection home** (job details, drawings, items summary, memo, export). Job details save automatically as you type (no Save button). Nothing is required to save; a missing job number or job name is flagged, and both are required before a memo is created (step 7). New inspections are dated today and take the inspector name from Settings. Deleting an inspection (after confirmation) removes its drawings, items, photos, memos and observation boxes; memo counters are kept so SIM references are never reused.
-3. **Drawing viewer** (pan/zoom, drop pin, item sheet with instruction + photos). All of an inspection's drawings appear as **one continuous scrolling document** (GoodNotes style): every page of every drawing stacked vertically, in the order the drawings were added, each page shown at the same width, with the drawing's name above its first page. A label shows the current drawing and page; **Fit page** fits the current page. Only pages on or near the screen are rendered, and drawing PDFs are opened only while needed. Opened from the inspection home's Drawings list (scrolls to that drawing) or Items list (scrolls to that pin). An **Items** button opens a panel listing every item in letter order; tapping one scrolls to its pin and opens its sheet. The item sheet is a side panel in landscape and below the drawing in portrait; opening it keeps the current zoom and pans only if the selected pin would be hidden.
+3. **Drawing viewer** (pan/zoom, drop pin, item sheet with instruction + photos). All of an inspection's drawings appear as **one continuous scrolling document** (GoodNotes style): every page of every drawing stacked vertically, in the order the drawings were added, each page shown at the same width, with the drawing's name above its first page. A label shows the current drawing and page; **Fit page** fits the current page. Only pages on or near the screen are rendered, and drawing PDFs are opened only while needed. Opened from the inspection home's Drawings list (scrolls to that drawing) or Items list (scrolls to that pin). An **Items** button opens a panel listing every item (observations, then instructions, each in letter order); tapping one scrolls to its pin and opens its sheet. The item sheet is a side panel in landscape and below the drawing in portrait; opening it keeps the current zoom and pans only if the selected pin would be hidden.
 4. **Memo editor** (live preview of the branded page, field editing, snippet picker)
 5. **Export** (preview, generate PDF, share sheet)
 6. **Settings** (inspector details, snippets, template, storage)

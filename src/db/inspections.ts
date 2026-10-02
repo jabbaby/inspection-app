@@ -37,7 +37,6 @@ export async function createInspection(
     date: todayIso(now),
     inspector: settings?.inspectorName ?? "",
     status: "draft",
-    nextLetterIndex: 0,
     createdAt: now.getTime(),
     updatedAt: now.getTime(),
   };

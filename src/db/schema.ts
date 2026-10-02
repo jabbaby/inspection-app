@@ -1,5 +1,6 @@
 import { Dexie, type EntityTable } from "dexie";
 import { indexForLetter } from "../features/items/letters";
+import { letterChanges } from "./items";
 import type {
   Drawing,
   Inspection,
@@ -18,7 +19,7 @@ import type {
  * Version of the inspection data format. The inspection file (SPEC section 9)
  * writes this as `schemaVersion`; bump it when stored records change shape.
  */
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export const DB_NAME = "inspection-app";
 
@@ -69,7 +70,7 @@ export class InspectionDb extends Dexie {
       await tx
         .table<Inspection>("inspections")
         .toCollection()
-        .modify((inspection) => {
+        .modify((inspection: Inspection & { nextLetterIndex?: number }) => {
           inspection.itemInspected ??= "";
           inspection.nextLetterIndex ??= (highest.get(inspection.id) ?? -1) + 1;
         });
@@ -85,6 +86,27 @@ export class InspectionDb extends Dexie {
         .modify((drawing) => {
           drawing.createdAt ??= base + order++;
         });
+    });
+    // v4: instructions and observations are lettered separately (A, B, C...
+    // each), so letters are always derived from the items and the
+    // inspection's letter counter goes.
+    this.version(4).upgrade(async (tx) => {
+      await tx
+        .table<Inspection & { nextLetterIndex?: number }>("inspections")
+        .toCollection()
+        .modify((inspection) => {
+          delete inspection.nextLetterIndex;
+        });
+      const items = await tx.table<Item>("items").toArray();
+      const byInspection = new Map<string, Item[]>();
+      for (const item of items)
+        byInspection.set(item.inspectionId, [
+          ...(byInspection.get(item.inspectionId) ?? []),
+          item,
+        ]);
+      for (const group of byInspection.values())
+        for (const { id, letter } of letterChanges(group))
+          await tx.table<Item>("items").update(id, { letter });
     });
   }
 }

@@ -4,6 +4,7 @@ import { saveStateLabel, useAutosave } from "../../app/useAutosave";
 import { db } from "../../db/db";
 import { deleteItem, updateItem, type ItemPatch } from "../../db/items";
 import type { Item, ItemKind } from "../../db/types";
+import { itemLabel, kindName } from "./letters";
 
 interface Props {
   item: Item;
@@ -43,7 +44,7 @@ export function ItemSheet({
   return (
     <aside
       className="item-sheet"
-      aria-label={`Item ${item.letter}`}
+      aria-label={itemLabel(item)}
       data-testid="item-sheet"
     >
       <div className="item-sheet-head">
@@ -53,7 +54,7 @@ export function ItemSheet({
         >
           {item.letter}
         </span>
-        <h2>Item {item.letter}</h2>
+        <h2>{itemLabel(item)}</h2>
         <span
           className="save-state"
           role="status"
@@ -133,12 +134,12 @@ export function ItemSheet({
         className="danger-outline"
         onClick={() => setConfirmDelete(true)}
       >
-        Delete item {item.letter}
+        Delete {kindName(item.kind).toLowerCase()} {item.letter}
       </button>
 
       <ConfirmDialog
         open={confirmDelete}
-        title={`Delete item ${item.letter}?`}
+        title={`Delete ${kindName(item.kind).toLowerCase()} ${item.letter}?`}
         confirmLabel="Delete"
         danger
         onCancel={() => setConfirmDelete(false)}

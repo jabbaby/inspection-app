@@ -58,7 +58,8 @@ describe("items", () => {
       text: "",
       requiresPhotoConfirmation: false,
     });
-    expect((await db.inspections.get(inspection.id))?.nextLetterIndex).toBe(3);
+    expect(c.createdAt).toBeGreaterThan(b.createdAt);
+    expect(b.createdAt).toBeGreaterThan(a.createdAt);
   });
 
   test("re-letters the rest in creation order when one is deleted", async () => {
@@ -77,7 +78,6 @@ describe("items", () => {
       await letters(c.id),
       await letters(dItem.id),
     ]).toEqual(["A", "B", "C"]);
-    expect((await db.inspections.get(inspection.id))?.nextLetterIndex).toBe(3);
     expect((await pin(d1.id)).letter).toBe("D");
   });
 
@@ -89,6 +89,50 @@ describe("items", () => {
     await deleteItem(db, items[0].id);
     expect((await db.items.get(items[27].id))?.letter).toBe("AA");
     expect((await db.items.get(items[1].id))?.letter).toBe("A");
+  });
+
+  test("instructions and observations are lettered separately", async () => {
+    const d = await drawing();
+    const a = await pin(d.id);
+    const b = await pin(d.id);
+    const c = await pin(d.id);
+    const letter = async (id: string) => {
+      const item = (await db.items.get(id))!;
+      return `${item.kind} ${item.letter}`;
+    };
+
+    // Switching B moves it to the observations; C closes the gap.
+    await updateItem(db, b.id, { kind: "observation" });
+    expect([
+      await letter(a.id),
+      await letter(b.id),
+      await letter(c.id),
+    ]).toEqual(["instruction A", "observation A", "instruction B"]);
+
+    // A new pin is the next instruction.
+    const dItem = await pin(d.id);
+    expect(dItem.letter).toBe("C");
+
+    // Switching A too: observations follow creation order (A before B).
+    await updateItem(db, a.id, { kind: "observation" });
+    expect([
+      await letter(a.id),
+      await letter(b.id),
+      await letter(c.id),
+      await letter(dItem.id),
+    ]).toEqual([
+      "observation A",
+      "observation B",
+      "instruction A",
+      "instruction B",
+    ]);
+
+    // Deleting an observation re-letters only the observations.
+    await deleteItem(db, a.id);
+    expect([await letter(b.id), await letter(c.id)]).toEqual([
+      "observation A",
+      "instruction A",
+    ]);
   });
 
   test("updates kind, text, flag and position", async () => {

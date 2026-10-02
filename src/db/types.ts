@@ -22,8 +22,6 @@ export interface Inspection {
   inspector: string;
   /** Workflow status. Values are settled in build step 4 (inspection CRUD). */
   status: string;
-  /** Letter counter: index of the next item letter. Only ever increases. */
-  nextLetterIndex: number;
   createdAt: number;
   updatedAt: number;
 }
@@ -51,7 +49,10 @@ export type ItemKind = "instruction" | "observation";
 export interface Item {
   id: string;
   inspectionId: string;
-  /** Per inspection: A, B ... Z, AA ... Never reused unless re-lettered. */
+  /**
+   * A, B ... Z, AA ... per kind across the inspection, in pin creation
+   * order with no gaps (instruction A and observation A can both exist).
+   */
   letter: string;
   kind: ItemKind;
   drawingId: string;

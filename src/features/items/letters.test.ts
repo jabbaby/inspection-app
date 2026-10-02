@@ -1,5 +1,10 @@
 import { describe, expect, test } from "vitest";
-import { indexForLetter, letterForIndex } from "./letters";
+import {
+  compareItems,
+  indexForLetter,
+  itemLabel,
+  letterForIndex,
+} from "./letters";
 
 describe("item letters", () => {
   test.each([
@@ -28,5 +33,31 @@ describe("item letters", () => {
     expect(() => letterForIndex(1.5)).toThrow(RangeError);
     expect(() => indexForLetter("a")).toThrow(RangeError);
     expect(() => indexForLetter("")).toThrow(RangeError);
+  });
+});
+
+describe("item order and labels", () => {
+  test("labels name the kind", () => {
+    expect(itemLabel({ kind: "instruction", letter: "A" })).toBe(
+      "Instruction A",
+    );
+    expect(itemLabel({ kind: "observation", letter: "AB" })).toBe(
+      "Observation AB",
+    );
+  });
+
+  test("observations come first, each kind in letter order", () => {
+    const items = [
+      { kind: "instruction", letter: "B" },
+      { kind: "observation", letter: "AA" },
+      { kind: "instruction", letter: "A" },
+      { kind: "observation", letter: "B" },
+    ] as const;
+    expect([...items].sort(compareItems).map(itemLabel)).toEqual([
+      "Observation B",
+      "Observation AA",
+      "Instruction A",
+      "Instruction B",
+    ]);
   });
 });

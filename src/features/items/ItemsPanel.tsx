@@ -1,5 +1,5 @@
 import type { Drawing, Item } from "../../db/types";
-import { indexForLetter } from "./letters";
+import { compareItems, kindName } from "./letters";
 
 interface Props {
   items: Item[];
@@ -8,12 +8,10 @@ interface Props {
   onClose: () => void;
 }
 
-/** Every item in the inspection, in letter order, inside the drawings view. */
+/** Every item in the inspection (observations, then instructions), inside the drawings view. */
 export function ItemsPanel({ items, drawings, onSelect, onClose }: Props) {
   const names = new Map(drawings.map((d) => [d.id, d.name]));
-  const sorted = [...items].sort(
-    (a, b) => indexForLetter(a.letter) - indexForLetter(b.letter),
-  );
+  const sorted = [...items].sort(compareItems);
 
   return (
     <aside className="item-sheet" aria-label="Items" data-testid="items-panel">
@@ -48,10 +46,8 @@ export function ItemsPanel({ items, drawings, onSelect, onClose }: Props) {
                     )}
                   </span>
                   <span className="muted">
-                    {item.kind === "instruction"
-                      ? "Instruction"
-                      : "Observation"}{" "}
-                    · {names.get(item.drawingId) ?? "Drawing"}, page {item.page}
+                    {kindName(item.kind)} ·{" "}
+                    {names.get(item.drawingId) ?? "Drawing"}, page {item.page}
                   </span>
                 </span>
               </button>

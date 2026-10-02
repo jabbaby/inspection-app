@@ -29,6 +29,7 @@ import {
   type Axis,
   type Sample,
 } from "../viewer/momentum";
+import { kindName } from "../../items/letters";
 import { DocPage, type SettledView } from "./DocPage";
 import {
   DOC_WIDTH,
@@ -743,7 +744,7 @@ export function DocumentViewer(props: Props) {
             data-page={pin.pageKey}
             data-x={pin.x.toFixed(4)}
             data-y={pin.y.toFixed(4)}
-            aria-label={`Pin ${pin.letter}`}
+            aria-label={`${kindName(pin.kind)} pin ${pin.letter}`}
             ref={(el) => {
               if (el) pinEls.current.set(pin.id, el);
               else pinEls.current.delete(pin.id);
