@@ -1,5 +1,6 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useState } from "react";
+import { AutoGrowTextarea } from "../../app/AutoGrowTextarea";
 import { ConfirmDialog } from "../../app/ConfirmDialog";
 import { saveStateLabel, useAutosave } from "../../app/useAutosave";
 import { db } from "../../db/db";
@@ -116,7 +117,7 @@ function SnippetRow({
       </label>
       <label className="field">
         <span>Text</span>
-        <textarea
+        <AutoGrowTextarea
           rows={snippet.kind === "heading" ? 1 : 3}
           value={text}
           aria-label={`Text of ${snippet.label}`}

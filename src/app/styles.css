@@ -347,7 +347,8 @@ button.danger-outline {
 }
 
 .field input,
-.field select {
+.field select,
+.field textarea {
   font: inherit;
   font-weight: 400;
   font-size: 1rem;
@@ -359,8 +360,14 @@ button.danger-outline {
   background: #fff;
 }
 
+.field textarea {
+  line-height: 1.4;
+  resize: vertical;
+}
+
 .field input:focus,
-.field select:focus {
+.field select:focus,
+.field textarea:focus {
   outline: 2px solid var(--brand-red);
   outline-offset: 1px;
 }
@@ -582,6 +589,21 @@ button.danger-outline {
 .item-groups {
   display: grid;
   gap: 1rem;
+}
+
+/* Inspection home: observations and instructions side by side in landscape.
+   With only one kind, its list keeps the full width. */
+@media (min-width: 900px) and (orientation: landscape) {
+  .item-groups-columns {
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    align-items: start;
+    max-width: 1400px;
+  }
+
+  .item-groups-columns .item-list {
+    max-width: none;
+  }
 }
 
 .item-group-heading {

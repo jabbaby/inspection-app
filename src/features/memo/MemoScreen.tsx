@@ -1,6 +1,7 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
+import { AutoGrowTextarea } from "../../app/AutoGrowTextarea";
 import { saveStateLabel, useAutosave } from "../../app/useAutosave";
 import { db } from "../../db/db";
 import { updateInspection, type InspectionPatch } from "../../db/inspections";
@@ -326,7 +327,7 @@ function MemoEditorFor({ inspectionId }: { inspectionId: string }) {
           </label>
           <label className="field">
             <span>Message text (for this memo)</span>
-            <textarea
+            <AutoGrowTextarea
               rows={4}
               value={memo.bodyText}
               autoCapitalize="sentences"
@@ -378,7 +379,7 @@ function MemoEditorFor({ inspectionId }: { inspectionId: string }) {
                           </span>
                         )}
                       </span>
-                      <textarea
+                      <AutoGrowTextarea
                         rows={2}
                         aria-label={`Instruction ${item.letter} in the memo`}
                         value={override ?? item.text}

@@ -218,3 +218,42 @@ test("prefilled messages are edited in Settings and offered in the memo", async 
     .click();
   await expect(bodies.getByTestId("snippet-row")).toHaveCount(4);
 });
+
+test("the inspection home lists observations and instructions side by side in landscape", async ({
+  page,
+}) => {
+  const home = await newInspection(page);
+  await addItems(page);
+  await page.goto(home);
+  const observations = page.getByRole("region", { name: "Observations" });
+  const instructions = page.getByRole("region", { name: "Instructions" });
+
+  await page.setViewportSize({ width: 1194, height: 834 });
+  const o = await observations.boundingBox();
+  const i = await instructions.boundingBox();
+  expect(o && i && Math.abs(o.y - i.y)).toBeLessThan(1);
+  expect(o && i && i.x - (o.x + o.width)).toBeGreaterThan(0);
+
+  // Portrait: one list under the other.
+  await page.setViewportSize({ width: 834, height: 1194 });
+  const o2 = await observations.boundingBox();
+  const i2 = await instructions.boundingBox();
+  expect(o2 && i2 && i2.y - (o2.y + o2.height)).toBeGreaterThan(0);
+});
+
+test("prefilled message boxes use body-size text and grow to fit", async ({
+  page,
+}) => {
+  await page.goto("./#/settings");
+  const text = page.getByLabel(/^Text of/).first();
+  await expect(text).toHaveCSS("font-size", "16px");
+  const before = (await text.boundingBox())!.height;
+  await text.fill("A long message. ".repeat(40));
+  await expect
+    .poll(async () => (await text.boundingBox())!.height)
+    .toBeGreaterThan(before);
+  // All of the text shows without scrolling inside the box.
+  expect(
+    await text.evaluate((el) => el.scrollHeight - el.clientHeight),
+  ).toBeLessThanOrEqual(1);
+});

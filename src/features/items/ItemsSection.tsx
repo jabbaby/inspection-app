@@ -3,7 +3,10 @@ import { Link } from "react-router";
 import { db } from "../../db/db";
 import { compareItems, groupItems, kindName } from "./letters";
 
-/** All items (observations, then instructions); each opens its drawing at the pin. */
+/**
+ * All items: observations, then instructions (side by side in landscape);
+ * each opens its drawing at the pin.
+ */
 export function ItemsSection({ inspectionId }: { inspectionId: string }) {
   const data = useLiveQuery(async () => {
     const [items, drawings] = await Promise.all([
@@ -21,7 +24,7 @@ export function ItemsSection({ inspectionId }: { inspectionId: string }) {
         <p className="muted">No items yet. Open a drawing and use Add pin.</p>
       )}
       {data && data.items.length > 0 && (
-        <div className="item-groups">
+        <div className="item-groups item-groups-columns">
           {groupItems(data.items).map((group) => (
             <section key={group.kind} aria-label={group.heading}>
               <h3 className="item-group-heading">{group.heading}</h3>
