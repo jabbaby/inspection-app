@@ -19,8 +19,9 @@ describe("box size", () => {
     expect(boxMetrics(A4).fontSize).toBeCloseTo(7.1, 1);
   });
 
-  test("defaults to the top right, inside the page", () => {
+  test("defaults to the top right, 15 mm in on every sheet size", () => {
     for (const page of [A1, A4]) {
+      expect(boxMetrics(page).margin).toBeCloseTo((15 / 25.4) * 72, 2);
       const p = defaultBoxPosition(page);
       const m = boxMetrics(page);
       expect(p.x * page.width + m.width).toBeCloseTo(page.width - m.margin);

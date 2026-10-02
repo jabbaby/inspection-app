@@ -19,6 +19,16 @@ export interface BoxMetrics {
   borderWidth: number;
 }
 
+/** PDF points per millimetre on the printed sheet. */
+const POINTS_PER_MM = 72 / 25.4;
+
+/**
+ * Default inset from the sheet's top and right edges: 15 mm on every sheet
+ * size, just inside a standard 10 mm drawing frame, so the box roughly lines
+ * up with the title block's right edge without sitting on the border line.
+ */
+export const BOX_INSET_MM = 15;
+
 /**
  * Text is 1.2% of the sheet's short side: about 20 pt on A1, 10 pt on A3 and
  * 7 pt on A4. The box is 50 text-heights wide, so a typical header (in
@@ -32,7 +42,7 @@ export function boxMetrics(page: Size): BoxMetrics {
     lineHeight: fontSize * 1.3,
     padding: fontSize * 0.6,
     width: Math.min(fontSize * 50, page.width * 0.9),
-    margin: short * 0.02,
+    margin: BOX_INSET_MM * POINTS_PER_MM,
     borderWidth: Math.max(0.5, fontSize * 0.06),
   };
 }
@@ -42,7 +52,7 @@ export function boxWidthFraction(page: Size): number {
   return boxMetrics(page).width / page.width;
 }
 
-/** Default spot: top right, inset by the margin. */
+/** Default spot: top right, inset by the margin (BOX_INSET_MM). */
 export function defaultBoxPosition(page: Size): Point {
   const m = boxMetrics(page);
   return {
