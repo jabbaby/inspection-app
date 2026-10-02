@@ -1,35 +1,154 @@
 import { expect, test, type Page } from "@playwright/test";
-import { waitForServiceWorker } from "./helpers";
+import {
+  TYPICAL_DRAWING,
+  buildSyntheticDrawing,
+} from "../src/features/drawings/fixtures/syntheticDrawing";
+import { stageBox, waitForServiceWorker } from "./helpers";
 
-async function generateSampleMemo(page: Page) {
-  await page.getByRole("button", { name: "Generate sample memo" }).click();
-  const link = page.getByTestId("sample-memo-link");
-  // Generous: the PDF code chunk is large and loads slowly under parallel test load.
-  await expect(link).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByTestId("sample-memo-status")).toContainText(
-    "SY000001_SIM-001_Level-3-slab-reinforcement.pdf",
-  );
+const field = (page: Page, label: string) =>
+  page.getByLabel(label, { exact: true });
 
-  const href = await link.getAttribute("href");
-  const pdf = await page.evaluate(async (url) => {
-    const bytes = new Uint8Array(await (await fetch(url!)).arrayBuffer());
-    return {
-      header: String.fromCharCode(...bytes.slice(0, 5)),
-      size: bytes.length,
-    };
-  }, href);
-  expect(pdf.header).toBe("%PDF-");
-  expect(pdf.size).toBeGreaterThan(20_000);
+async function newInspection(page: Page) {
+  await page.goto("./");
+  await page.getByRole("button", { name: "New inspection" }).click();
+  await field(page, "Job number").fill("SY000001");
+  await field(page, "Job name").fill("Example Apartments");
+  await field(page, "Item inspected").fill("Level 3 slab reinforcement");
+  await field(page, "Client name").fill("Alex Example");
+  await field(page, "Client company").fill("Example Builders Pty Ltd");
+  await field(page, "Inspector").fill("Test Engineer");
+  await field(page, "Date").fill("2026-10-01");
+  await expect(page.getByTestId("save-state")).toHaveText("Saved");
+  return page.url();
 }
 
-test("generates the sample memo PDF", async ({ page }) => {
-  await page.goto("./#/settings");
-  await generateSampleMemo(page);
+/** Two instructions (A needs photo confirmation) and one observation. */
+async function addItems(page: Page) {
+  await page.getByTestId("drawing-file-input").setInputFiles({
+    name: "S-101 Level 3.pdf",
+    mimeType: "application/pdf",
+    buffer: Buffer.from(await buildSyntheticDrawing(TYPICAL_DRAWING)),
+  });
+  await expect(page.getByTestId("drawings-status")).toHaveCount(0, {
+    timeout: 20_000,
+  });
+  await page.getByRole("link", { name: /^S-101 Level 3/ }).click();
+  await expect(
+    page.locator('[data-testid="drawing-viewer"][data-ready="true"]'),
+  ).toBeVisible({ timeout: 20_000 });
+  const sheet = page.getByTestId("item-sheet");
+  for (const [fx, text, kind] of [
+    [0.2, "Add N12 bar at grid C/4", "instruction"],
+    [0.4, "Prop spacing per shop drawing", "instruction"],
+    [0.6, "Existing crack noted at grid 4", "observation"],
+  ] as const) {
+    const box = await stageBox(page);
+    await page.getByRole("button", { name: "Add pin" }).click();
+    await page.mouse.click(box.x + box.width * fx, box.y + box.height * 0.5);
+    await expect(sheet.getByRole("textbox")).toBeFocused();
+    if (kind === "observation")
+      await sheet
+        .getByRole("button", { name: "Observation", exact: true })
+        .click();
+    await sheet.getByRole("textbox").fill(text);
+    if (fx === 0.2)
+      await sheet
+        .getByLabel("Photo confirmation required before proceeding")
+        .check();
+    await expect(page.getByTestId("item-save-state")).toHaveText("Saved");
+    await sheet.getByRole("button", { name: "Done" }).first().click();
+  }
+}
+
+test("create a memo from the instructions, with a live preview", async ({
+  page,
+}) => {
+  const home = await newInspection(page);
+  await addItems(page);
+  await page.goto(home);
+
+  await page.getByRole("button", { name: "Create memo" }).click();
+  await expect(page).toHaveURL(/\/memo$/);
+  await expect(field(page, "Reference")).toHaveValue("SIM-001");
+  await expect(
+    page.locator('[data-testid="memo-preview"][data-ready="true"]'),
+  ).toBeVisible({ timeout: 20_000 });
+
+  // Defaults from the client and recipients.
+  await expect(field(page, "Salutation")).toHaveValue("Dear Alex,");
+  await expect(field(page, "Site visit requested by")).toHaveValue(
+    "Alex Example, Example Builders Pty Ltd",
+  );
+  await expect(page.getByTestId("memo-paragraph-1")).toHaveText(
+    "We confirm having inspected the Level 3 slab reinforcement as highlighted on the drawing attached.",
+  );
+
+  // Conditions: standard first, photo condition on because A needs it.
+  await expect(page.getByTestId("memo-lead-in")).toHaveText(
+    "Ok to proceed subject to the following:",
+  );
+  await expect(
+    page.getByLabel("Complete items A–B listed below."),
+  ).toBeChecked();
+  await expect(
+    page.getByLabel(
+      "Confirm completion of items via photos prior to proceeding.",
+    ),
+  ).toBeChecked();
+  const instructions = page.getByRole("list", { name: "Instructions" });
+  await expect(instructions.getByRole("listitem")).toHaveCount(2);
+
+  // Reword A for the memo only, then go back to the item's text.
+  const a = page.getByLabel("Instruction A in the memo");
+  await expect(a).toHaveValue("Add N12 bar at grid C/4");
+  await a.fill("Add N16 bar at grid C/4");
+  await expect(instructions).toContainText("reworded for this memo");
+  await page.getByRole("button", { name: "Use item text" }).click();
+  await expect(a).toHaveValue("Add N12 bar at grid C/4");
+
+  // Job details are shared with the inspection.
+  await field(page, "Item inspected").fill("Level 3 slab");
+  await expect(page.getByTestId("memo-paragraph-1")).toContainText(
+    "the Level 3 slab as",
+  );
+  await expect(page.getByTestId("memo-save-state")).toHaveText("Saved");
+  await page.goto(home);
+  await expect(field(page, "Item inspected")).toHaveValue("Level 3 slab");
+  await expect(page.getByTestId("memo-reference")).toHaveText(
+    "SIM-001 · Site Instruction Memo",
+  );
+
+  // Edits are kept.
+  await page.getByRole("link", { name: "Open memo" }).click();
+  await field(page, "Salutation").fill("Hi Alex,");
+  await expect(page.getByTestId("memo-save-state")).toHaveText("Saved");
+  await page.reload();
+  await expect(field(page, "Salutation")).toHaveValue("Hi Alex,");
+});
+
+test("a memo needs a job number and name; references count per job", async ({
+  page,
+}) => {
+  await page.goto("./");
+  await page.getByRole("button", { name: "New inspection" }).click();
+  await expect(
+    page.getByRole("button", { name: "Create memo" }),
+  ).toBeDisabled();
+
+  await newInspection(page);
+  await page.getByRole("button", { name: "Create memo" }).click();
+  await expect(field(page, "Reference")).toHaveValue("SIM-001");
+  // No instructions: the memo says Ok to proceed.
+  await expect(page.getByTestId("memo-lead-in")).toHaveText("Ok to proceed.");
+
+  await newInspection(page);
+  await page.getByRole("button", { name: "Create memo" }).click();
+  await expect(field(page, "Reference")).toHaveValue("SIM-002");
 });
 
 // Tagged @offline: runs in the Chromium project only (see playwright.config.ts).
 test(
-  "generates the sample memo PDF offline",
+  "the memo and its preview work offline",
   { tag: "@offline" },
   async ({ page, context }) => {
     await page.goto("./");
@@ -37,7 +156,15 @@ test(
     await context.setOffline(true);
     await page.reload();
 
-    await page.getByRole("link", { name: "Settings" }).click();
-    await generateSampleMemo(page);
+    await newInspection(page);
+    await page.getByRole("button", { name: "Create memo" }).click();
+    // Fonts and images come from the precache.
+    await expect(
+      page.locator('[data-testid="memo-preview"][data-ready="true"]'),
+    ).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId("memo-preview")).toHaveAttribute(
+      "data-pages",
+      "1",
+    );
   },
 );

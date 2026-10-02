@@ -4,6 +4,7 @@ import { InspectionHome } from "../features/inspections/InspectionHome";
 import { InspectionsPage } from "../features/inspections/InspectionsPage";
 import { SettingsPage } from "../features/settings/SettingsPage";
 import { DocumentScreen } from "../features/drawings/DocumentScreen";
+import { MemoScreen } from "../features/memo/MemoScreen";
 import { Shell } from "./Shell";
 
 // Hash routing: GitHub Pages has no SPA fallback, and every route is served
@@ -16,6 +17,7 @@ const router = createHashRouter([
       { path: "inspections/:id", element: <InspectionHome /> },
       { path: "settings", element: <SettingsPage /> },
       { path: "inspections/:id/document", element: <DocumentScreen /> },
+      { path: "inspections/:id/memo", element: <MemoScreen /> },
     ],
   },
 ]);

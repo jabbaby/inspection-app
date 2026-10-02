@@ -11,50 +11,14 @@ import {
 import type { Inspection } from "../../db/types";
 import { DrawingsSection } from "../drawings/DrawingsSection";
 import { ItemsSection } from "../items/ItemsSection";
+import { MemoSection } from "../memo/MemoSection";
 import { PhotosSection } from "../photos/PhotosSection";
 import { DeleteInspectionDialog } from "./DeleteInspectionDialog";
 import { inspectionTitle } from "./inspectionTitle";
 import { JobDetailsForm, type JobDetailsValues } from "./JobDetailsForm";
-
-function toValues(i: Inspection): JobDetailsValues {
-  return {
-    jobNumber: i.jobNumber,
-    jobName: i.jobName,
-    itemInspected: i.itemInspected,
-    clientName: i.client.name,
-    clientCompany: i.client.company,
-    address1: i.client.address1,
-    address2: i.client.address2,
-    date: i.date,
-    inspector: i.inspector,
-  };
-}
-
-function toPatch(key: keyof JobDetailsValues, value: string): InspectionPatch {
-  switch (key) {
-    case "clientName":
-      return { client: { name: value } };
-    case "clientCompany":
-      return { client: { company: value } };
-    case "address1":
-      return { client: { address1: value } };
-    case "address2":
-      return { client: { address2: value } };
-    default:
-      return { [key]: value };
-  }
-}
-
-function mergePatches(a: InspectionPatch, b: InspectionPatch): InspectionPatch {
-  return { ...a, ...b, client: { ...a.client, ...b.client } };
-}
+import { mergePatches, toPatch, toValues } from "./jobDetails";
 
 const LATER_SECTIONS = [
-  {
-    title: "Memo",
-    step: 7,
-    text: "Site Instruction Memo, editable before export.",
-  },
   {
     title: "Export",
     step: 8,
@@ -153,6 +117,8 @@ function InspectionHomeFor({ id }: { id: string }) {
       <DrawingsSection inspectionId={id} />
       <ItemsSection inspectionId={id} />
       <PhotosSection inspectionId={id} jobNumber={values.jobNumber} />
+
+      <MemoSection inspectionId={id} canCreate={missing.length === 0} />
 
       {LATER_SECTIONS.map((section) => (
         <div key={section.title} className="later-section">
