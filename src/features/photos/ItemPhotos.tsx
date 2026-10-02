@@ -6,6 +6,7 @@ import { itemLabel } from "../items/letters";
 import { addPhotosWithUndo, deletePhotoWithUndo } from "./photoActions";
 import { PhotoViewer } from "./PhotoViewer";
 import { processPhoto } from "./processPhoto";
+import { SavePhotosDialog } from "./SavePhotosDialog";
 import { useBlobUrl } from "./useBlobUrl";
 
 function plural(n: number, word: string) {
@@ -23,6 +24,12 @@ export function ItemPhotos({ item }: { item: Item }) {
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [viewing, setViewing] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false);
+  const jobNumber =
+    useLiveQuery(
+      async () => (await db.inspections.get(item.inspectionId))?.jobNumber,
+      [item.inspectionId],
+    ) ?? "";
   const photos =
     useLiveQuery(
       async () =>
@@ -87,6 +94,11 @@ export function ItemPhotos({ item }: { item: Item }) {
         >
           Choose photos
         </button>
+        {photos.length > 0 && (
+          <button type="button" onClick={() => setSaving(true)}>
+            Save to iPad
+          </button>
+        )}
       </div>
       <input
         ref={camera}
@@ -128,6 +140,13 @@ export function ItemPhotos({ item }: { item: Item }) {
             </li>
           ))}
         </ul>
+      )}
+      {saving && (
+        <SavePhotosDialog
+          entries={photos.map((photo, i) => ({ item, photo, number: i + 1 }))}
+          jobNumber={jobNumber}
+          onClose={() => setSaving(false)}
+        />
       )}
       {viewing !== null && photos[viewing] && (
         <PhotoViewer

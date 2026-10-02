@@ -11,6 +11,7 @@ import {
 import type { Inspection } from "../../db/types";
 import { DrawingsSection } from "../drawings/DrawingsSection";
 import { ItemsSection } from "../items/ItemsSection";
+import { PhotosSection } from "../photos/PhotosSection";
 import { DeleteInspectionDialog } from "./DeleteInspectionDialog";
 import { inspectionTitle } from "./inspectionTitle";
 import { JobDetailsForm, type JobDetailsValues } from "./JobDetailsForm";
@@ -151,6 +152,7 @@ function InspectionHomeFor({ id }: { id: string }) {
 
       <DrawingsSection inspectionId={id} />
       <ItemsSection inspectionId={id} />
+      <PhotosSection inspectionId={id} jobNumber={values.jobNumber} />
 
       {LATER_SECTIONS.map((section) => (
         <div key={section.title} className="later-section">

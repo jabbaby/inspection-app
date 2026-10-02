@@ -41,7 +41,9 @@ export async function addPhotos(
         const photo: Photo = {
           id: crypto.randomUUID(),
           blobId: working.id,
-          ...(original ? { originalBlobId: original.id } : {}),
+          ...(original
+            ? { originalBlobId: original.id, originalSize: original.size }
+            : {}),
           source: p.source,
           takenAt: p.takenAt,
           width: p.width,
@@ -156,9 +158,12 @@ export async function removeOriginals(
     let freed = 0;
     for (const photo of await db.photos.bulkGet(photoIds)) {
       if (!photo?.originalBlobId) continue;
-      freed += (await db.blobs.get(photo.originalBlobId))?.size ?? 0;
+      freed += photo.originalSize ?? 0;
       await db.blobs.delete(photo.originalBlobId);
-      await db.photos.update(photo.id, { originalBlobId: undefined });
+      await db.photos.update(photo.id, {
+        originalBlobId: undefined,
+        originalSize: undefined,
+      });
     }
     return freed;
   });

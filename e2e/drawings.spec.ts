@@ -1027,3 +1027,111 @@ test("photos: choose several, caption, delete and undo", async ({ page }) => {
   await page.mouse.click(pin.x, pin.y);
   await expect(page.getByTestId("photo-thumb")).toHaveCount(2);
 });
+
+/** Replaces the Share sheet with a stand-in that records what was shared. */
+async function stubShareSheet(page: Page) {
+  await page.addInitScript(() => {
+    const shared: { name: string; size: number }[][] = [];
+    Object.assign(window, { sharedBatches: shared });
+    Object.defineProperty(navigator, "canShare", {
+      value: (data: { files?: File[] }) => !!data.files?.length,
+    });
+    Object.defineProperty(navigator, "share", {
+      value: async (data: { files: File[] }) => {
+        shared.push(data.files.map((f) => ({ name: f.name, size: f.size })));
+      },
+    });
+  });
+}
+
+const sharedBatches = (page: Page) =>
+  page.evaluate(
+    () =>
+      (
+        window as unknown as {
+          sharedBatches: { name: string; size: number }[][];
+        }
+      ).sharedBatches,
+  );
+
+test("saving photos shares camera shots at full size, named by job and item", async ({
+  page,
+}) => {
+  await stubShareSheet(page);
+  await setupInspection(page);
+  const home = page.url();
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openDrawing(page, "S-101 Level 3");
+  await addPinAt(page, 0.3, 0.5);
+  const original = await syntheticJpeg(page, 4000, 3000);
+  await addPhotos(page, "photo-camera-input", [original]);
+  await addPhotos(page, "photo-library-input", [
+    await syntheticJpeg(page, 800, 600),
+  ]);
+
+  // From the item.
+  await photoSection(page)
+    .getByRole("button", { name: "Save to iPad" })
+    .click();
+  const dialog = page.getByTestId("save-photos-dialog");
+  await dialog.getByRole("button", { name: "Save 2 photos" }).click();
+  await expect(dialog).toContainText("All 2 photos have been saved.");
+  let shared = await sharedBatches(page);
+  expect(shared[0].map((f) => f.name)).toEqual([
+    "SY000001 Instruction A 1.jpg",
+    "SY000001 Instruction A 2.jpg",
+  ]);
+  // The camera shot is the untouched original.
+  expect(shared[0][0].size).toBe(original.length);
+  await dialog.getByRole("button", { name: "Done" }).click();
+
+  // From the inspection home, then free the full-size copy.
+  await page.goto(home);
+  const section = page.locator('[aria-labelledby="photos-heading"]');
+  await expect(page.getByTestId("photos-summary")).toContainText(
+    "2 photos · 1 full-size camera copy kept",
+  );
+  await section.getByRole("button", { name: "Save photos to iPad" }).click();
+  await dialog.getByRole("button", { name: "Save 2 photos" }).click();
+  await expect(dialog).toContainText("All 2 photos have been saved.");
+  await dialog.getByRole("button", { name: "Done" }).click();
+  await section.getByRole("button", { name: "Free up space" }).click();
+  await page
+    .getByRole("dialog", { name: "Free up space?" })
+    .getByRole("button", { name: "Free up space" })
+    .click();
+  await expect(page.getByTestId("photos-summary")).toHaveText("2 photos");
+  await expect(section).toContainText("Freed");
+
+  // Saving again now shares the 1600 px copy.
+  await section.getByRole("button", { name: "Save photos to iPad" }).click();
+  await dialog.getByRole("button", { name: "Save 2 photos" }).click();
+  shared = await sharedBatches(page);
+  expect(shared[2][0].size).toBeLessThan(original.length);
+});
+
+test("more than 20 photos save in batches", async ({ page }) => {
+  await stubShareSheet(page);
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openDrawing(page, "S-101 Level 3");
+  await addPinAt(page, 0.3, 0.5);
+  const small = await syntheticJpeg(page, 120, 90);
+  await addPhotos(
+    page,
+    "photo-library-input",
+    Array.from({ length: 21 }, () => small),
+  );
+  await expect(photoSection(page)).toContainText("Photos (21)");
+
+  await photoSection(page)
+    .getByRole("button", { name: "Save to iPad" })
+    .click();
+  const dialog = page.getByTestId("save-photos-dialog");
+  await expect(dialog).toContainText("Batch 1 of 2: photos 1–20 of 21.");
+  await dialog.getByRole("button", { name: "Save 20 photos" }).click();
+  await expect(dialog).toContainText("Batch 2 of 2: photos 21–21 of 21.");
+  await dialog.getByRole("button", { name: "Save 1 photo" }).click();
+  await expect(dialog).toContainText("All 21 photos have been saved.");
+  expect((await sharedBatches(page)).map((b) => b.length)).toEqual([20, 1]);
+});

@@ -92,6 +92,8 @@ export interface Photo {
    * Photos); "Free up space" removes it once saved.
    */
   originalBlobId?: string;
+  /** Bytes of the kept original (shown as storage used, without loading it). */
+  originalSize?: number;
   source: "camera" | "library";
   caption?: string;
   takenAt: number;
