@@ -3,7 +3,7 @@ import {
   ChevronDown,
   Files,
   List,
-  MapPin,
+  MapPinPlus,
   Maximize,
   Redo2,
   Undo2,
@@ -401,30 +401,28 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
                 <ChevronDown aria-hidden="true" />
               </button>
             </div>
+            {/* Tools: a vertical pill on the left; Add pin first. */}
             <div
-              className="viewer-float viewer-float-bottom"
+              className="viewer-tools"
               role="toolbar"
               aria-label="Drawing tools"
+              aria-orientation="vertical"
             >
               <button
                 type="button"
-                className={`icon-button${itemsOpen ? " toggle-on" : " quiet"}`}
-                aria-label="Items"
-                aria-pressed={itemsOpen}
-                title="Items"
+                aria-label="Add pin"
+                aria-pressed={addPinMode}
+                title={addPinMode ? "Tap the drawing…" : "Add pin"}
+                className={`tool-add${addPinMode ? " toggle-on" : ""}`}
                 onClick={() => {
-                  setItemsOpen((open) => !open);
-                  setDrawingsOpen(false);
-                  select(null);
+                  setPlacingArrow(null);
+                  setAddPinMode((on) => !on);
                 }}
+                disabled={layout.pages.length === 0}
               >
-                <List aria-hidden="true" />
-                {(items?.length ?? 0) > 0 && (
-                  <span className="count-badge" aria-hidden="true">
-                    {items?.length}
-                  </span>
-                )}
+                <MapPinPlus aria-hidden="true" />
               </button>
+              <QuickPhotoButton inspectionId={inspectionId} />
               <button
                 type="button"
                 className="icon-button quiet"
@@ -469,20 +467,32 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
               >
                 <Maximize aria-hidden="true" />
               </button>
-              <QuickPhotoButton inspectionId={inspectionId} />
-              <span className="toolbar-divider" aria-hidden="true" />
+            </div>
+            {addPinMode && (
+              <p className="viewer-hint" role="status">
+                Tap the drawing to place the pin
+              </p>
+            )}
+            <div className="viewer-float viewer-float-bottom">
               <button
                 type="button"
-                aria-pressed={addPinMode}
-                className={`add-pin ${addPinMode ? "toggle-on" : "primary"}`}
+                className={`viewer-chip${itemsOpen ? " toggle-on" : " quiet"}`}
+                aria-label="Items"
+                aria-pressed={itemsOpen}
+                title="Items"
                 onClick={() => {
-                  setPlacingArrow(null);
-                  setAddPinMode((on) => !on);
+                  setItemsOpen((open) => !open);
+                  setDrawingsOpen(false);
+                  select(null);
                 }}
-                disabled={layout.pages.length === 0}
               >
-                <MapPin aria-hidden="true" />
-                {addPinMode ? "Tap the drawing…" : "Add pin"}
+                <List aria-hidden="true" />
+                <span>Items</span>
+                {(items?.length ?? 0) > 0 && (
+                  <span className="count-badge" aria-hidden="true">
+                    {items?.length}
+                  </span>
+                )}
               </button>
             </div>
           </div>

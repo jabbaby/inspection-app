@@ -3093,3 +3093,135 @@ a.list-row {
 .recent-project .small {
   font-size: var(--text-xs);
 }
+/*
+ * Drawing workspace, bento style: the drawing in a large rounded tile, the
+ * tools as a vertical charcoal pill on its left, the drawing and page chip
+ * top right, Items bottom right; a selected item or a panel opens as a
+ * tile beside it (below in portrait).
+ */
+.drawing-body {
+  gap: var(--space-3);
+  padding: 0 calc(env(safe-area-inset-right) + var(--space-3))
+    calc(env(safe-area-inset-bottom) + var(--space-3)) var(--space-3);
+}
+
+.viewer-wrap {
+  border-radius: 22px;
+  overflow: hidden;
+}
+
+.viewer-float-top {
+  left: auto;
+  right: 12px;
+  border-radius: var(--radius-pill);
+}
+
+.viewer-float-bottom {
+  left: auto;
+  right: 12px;
+  transform: none;
+  border-radius: var(--radius-pill);
+}
+
+.viewer-chip {
+  border-radius: var(--radius-pill);
+}
+
+.viewer-chip .count-badge {
+  position: static;
+}
+
+.viewer-tools {
+  position: absolute;
+  z-index: 4;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border-radius: var(--radius-pill);
+  background: #1c1817;
+  box-shadow: var(--shadow-float);
+}
+
+.viewer-tools button {
+  width: 48px;
+  min-width: 48px;
+  min-height: 48px;
+  padding: 0;
+  border-radius: 50%;
+  color: #e8e1dd;
+}
+
+.viewer-tools button.quiet {
+  background: #2e2726;
+}
+
+@media (hover: hover) {
+  .viewer-tools button.quiet:hover:not(:disabled) {
+    background: #3a312f;
+  }
+}
+
+.viewer-tools .tool-add {
+  background: var(--brand-red);
+  color: #fff;
+}
+
+.viewer-tools .tool-add.toggle-on {
+  background: #fff;
+  color: var(--brand-red);
+  box-shadow: 0 0 0 3px var(--brand-red);
+}
+
+.viewer-tools .lucide {
+  width: 22px;
+  height: 22px;
+}
+
+.viewer-tools .toolbar-toast {
+  left: calc(100% + 12px);
+  bottom: auto;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.viewer-hint {
+  position: absolute;
+  z-index: 4;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-pill);
+  background: var(--brand-red);
+  color: #fff;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: var(--shadow-float);
+}
+
+/* The side panel as a tile. */
+.item-sheet {
+  border-radius: 22px;
+  border: 0;
+  box-shadow: var(--shadow-float);
+}
+
+@media (min-width: 900px) and (orientation: landscape) {
+  .item-sheet {
+    border: 0;
+    box-shadow: none;
+  }
+}
+
+.item-sheet .sheet-section {
+  border-top-color: var(--line-soft);
+}
+
+.item-list {
+  border-radius: var(--radius-lg);
+}

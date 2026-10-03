@@ -586,7 +586,8 @@ test("a lost finger-up doesn't stop Add pin working", async ({ page }) => {
   await uploadDrawings(page, [await typicalPdf()]);
   await openDrawing(page, "S-101 Level 3");
   const viewer = page.getByTestId("drawing-viewer");
-  const at = await centre(viewer);
+  // The middle of the first page (the view's centre can fall between pages).
+  const at = await centre(page.getByTestId("doc-page").first());
 
   // A finger goes down, but its "up" never reaches the viewer (as when the
   // element under it is removed or redrawn mid-touch), nor does touchend.

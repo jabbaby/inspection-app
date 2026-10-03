@@ -219,7 +219,7 @@ export function ItemSheet({
 
       <button
         type="button"
-        className="primary"
+        className="emphasis"
         onClick={() => void autosave.flush().then(onClose)}
       >
         Done
