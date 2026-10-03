@@ -226,7 +226,9 @@ textarea::placeholder {
  * no fill (toolbars, icon buttons). .danger-outline: a quiet red action
  * (delete); .danger: the red confirm in a delete dialog.
  */
-button {
+/* :where() keeps these at zero specificity, so any component's own button
+   styles (pins, arrow handles, thumbnails) always win. */
+:where(button) {
   font: inherit;
   font-weight: 600;
   min-height: var(--control);
@@ -240,17 +242,28 @@ button {
   justify-content: center;
   gap: 0.45rem;
   cursor: pointer;
-  transition:
-    background-color 120ms ease,
-    transform 80ms ease;
+  /* Colour only: pins and handles are buttons positioned by transform. */
+  transition: background-color 120ms ease;
 }
 
-button:hover:not(:disabled) {
-  background: var(--sunken-hover);
-}
+/* Hover only where there is a pointer that hovers (not iPad touch, where
+   hover sticks after a tap). */
+@media (hover: hover) {
+  :where(button:hover:not(:disabled)) {
+    background: var(--sunken-hover);
+  }
 
-button:active:not(:disabled) {
-  transform: scale(0.98);
+  button.primary:hover:not(:disabled) {
+    background: var(--accent-hover);
+  }
+
+  button.quiet:hover:not(:disabled) {
+    background: var(--sunken);
+  }
+
+  button.danger-outline:hover:not(:disabled) {
+    background: var(--danger-bg);
+  }
 }
 
 button:disabled {
@@ -265,27 +278,14 @@ button.primary,
   color: var(--on-accent);
 }
 
-button.primary:hover:not(:disabled) {
-  background: var(--accent-hover);
-}
-
 button.emphasis,
 .button-link.emphasis {
   background: var(--selected);
   color: var(--on-selected);
 }
 
-button.emphasis:hover:not(:disabled) {
-  background: var(--selected);
-  opacity: 0.9;
-}
-
 button.quiet {
   background: transparent;
-}
-
-button.quiet:hover:not(:disabled) {
-  background: var(--sunken);
 }
 
 button.danger {
@@ -299,17 +299,9 @@ button.danger-outline {
   color: var(--danger);
 }
 
-button.danger-outline:hover:not(:disabled) {
-  background: var(--danger-bg);
-}
-
 button.toggle-on {
   background: var(--selected);
   color: var(--on-selected);
-}
-
-button.toggle-on:hover:not(:disabled) {
-  background: var(--selected);
 }
 
 .icon-button {
