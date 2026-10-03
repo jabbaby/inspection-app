@@ -1,4 +1,4 @@
-import { ChevronLeft, CloudCheck, CloudOff } from "lucide-react";
+import { ChevronLeft, CloudOff } from "lucide-react";
 import { useContext, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router";
@@ -6,9 +6,10 @@ import { AppBarSlot } from "./appBarSlot";
 import { useOnlineStatus } from "./useOnlineStatus";
 
 /**
- * The top bar: context on the left (wordmark, or back and a title), the
- * screen's sections in the centre, status on the right. Rendered into the
- * shell's bar so it stays put while the screen scrolls.
+ * The screen header beside the rail: context on the left (back and a
+ * title), the screen's sections in the centre, status on the right.
+ * Rendered into the shell's header so it stays put while the screen
+ * scrolls; screens without one leave it empty (and hidden).
  */
 export function AppBar({
   left,
@@ -25,10 +26,7 @@ export function AppBar({
     <>
       <div className="app-bar-left">{left}</div>
       <div className="app-bar-centre">{centre}</div>
-      <div className="app-bar-right">
-        {right}
-        <NetStatus />
-      </div>
+      <div className="app-bar-right">{right}</div>
     </>,
     slot,
   );
@@ -59,8 +57,8 @@ export function BarTitle({
   );
 }
 
-/** Online is a quiet icon; offline is spelled out. */
-function NetStatus() {
+/** In the rail: online is a quiet dot; offline is spelled out. */
+export function NetStatus() {
   const online = useOnlineStatus();
   return (
     <span
@@ -70,11 +68,11 @@ function NetStatus() {
       title={online ? "Online" : "Offline: everything still saves on this iPad"}
     >
       {online ? (
-        <CloudCheck aria-hidden="true" />
+        <span className="net-dot" aria-hidden="true" />
       ) : (
         <CloudOff aria-hidden="true" />
       )}
-      <span className={online ? "sr-only" : undefined}>
+      <span className={online ? "sr-only" : "net-label"}>
         {online ? "Online" : "Offline"}
       </span>
     </span>

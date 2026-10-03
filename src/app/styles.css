@@ -66,9 +66,9 @@
   --space-8: 2rem;
 
   /* Corner radii */
-  --radius-sm: 6px;
-  --radius: 10px;
-  --radius-lg: 14px;
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 18px;
   --radius-pill: 999px;
 
   /* Type scale */
@@ -232,8 +232,8 @@ textarea::placeholder {
   font: inherit;
   font-weight: 600;
   min-height: var(--control);
-  padding: 0.5rem 1rem;
-  border-radius: var(--radius);
+  padding: 0.5rem 1.1rem;
+  border-radius: var(--radius-pill);
   border: 1px solid transparent;
   background: var(--sunken);
   color: var(--ink);
@@ -314,8 +314,8 @@ button.toggle-on {
   align-items: center;
   gap: 0.45rem;
   min-height: var(--control);
-  padding: 0.5rem 1rem;
-  border-radius: var(--radius);
+  padding: 0.5rem 1.1rem;
+  border-radius: var(--radius-pill);
   background: var(--sunken);
   color: var(--ink);
   font-weight: 600;
@@ -384,12 +384,104 @@ dl.facts dd {
 .shell {
   height: 100dvh;
   display: flex;
+}
+
+/* The rail: roundel, main areas (icon over a small label), online status. */
+.rail {
+  flex: none;
+  width: calc(env(safe-area-inset-left) + 72px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: calc(env(safe-area-inset-top) + 14px) 0
+    calc(env(safe-area-inset-bottom) + 14px) env(safe-area-inset-left);
+  background: var(--chrome);
+  color: var(--chrome-ink);
+}
+
+.rail-logo {
+  width: 40px;
+  height: 40px;
+  margin-bottom: var(--space-4);
+}
+
+.rail-nav {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.rail-nav a {
+  width: 58px;
+  min-height: 58px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border-radius: var(--radius);
+  color: var(--chrome-muted);
+  text-decoration: none;
+}
+
+.rail-nav a .lucide {
+  width: 22px;
+  height: 22px;
+}
+
+.rail-nav a:hover {
+  color: var(--chrome-ink);
+}
+
+.rail-nav a[aria-current="page"] {
+  background: var(--chrome-seg-on);
+  color: var(--chrome-seg-on-ink);
+}
+
+.rail-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.net-status {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  color: var(--chrome-muted);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.net-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #5dbb63;
+  box-shadow: 0 0 0 3px rgb(93 187 99 / 0.2);
+}
+
+.net-status.offline {
+  padding: 6px 4px;
+  border-radius: var(--radius);
+  background: var(--todo-bg);
+  color: var(--todo);
+}
+
+.shell-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
   flex-direction: column;
 }
 
 /*
- * Top bar: left (wordmark, or back and a title), centred sections, right
- * (status). The centre column sizes to its content and stays centred.
+ * The screen header: back and title on the left, the screen's sections in
+ * the centre, status on the right. Hidden when a screen has none.
  */
 .app-bar {
   flex: none;
@@ -397,11 +489,14 @@ dl.facts dd {
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: var(--space-3);
-  min-height: calc(env(safe-area-inset-top) + 56px);
-  padding: env(safe-area-inset-top) calc(env(safe-area-inset-right) + 12px) 0
-    calc(env(safe-area-inset-left) + 12px);
-  background: var(--chrome);
-  color: var(--chrome-ink);
+  min-height: calc(env(safe-area-inset-top) + 64px);
+  padding: env(safe-area-inset-top) calc(env(safe-area-inset-right) + 16px) 0
+    12px;
+  background: var(--page);
+}
+
+.app-bar:empty {
+  display: none;
 }
 
 .app-bar-left,
@@ -418,20 +513,6 @@ dl.facts dd {
 
 .app-bar-right .save-state {
   min-width: 0;
-  color: var(--chrome-muted);
-}
-
-.app-bar-wordmark {
-  display: inline-flex;
-  align-items: center;
-  min-height: var(--control);
-  padding: 0 var(--space-1);
-}
-
-.app-bar-wordmark img {
-  height: 18px;
-  width: auto;
-  display: block;
 }
 
 .app-bar-back {
@@ -441,18 +522,15 @@ dl.facts dd {
   justify-content: center;
   width: var(--control);
   height: var(--control);
-  margin-left: -6px;
-  border-radius: var(--radius);
-  color: var(--chrome-ink);
-}
-
-.app-bar-back:hover {
-  background: var(--chrome-seg);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.06);
 }
 
 .app-bar-back .lucide {
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
 }
 
 .app-bar-title {
@@ -471,74 +549,54 @@ dl.facts dd {
 
 .app-bar-kicker {
   font-size: var(--text-xs);
-  color: var(--chrome-muted);
+  color: var(--ink-muted);
 }
 
 .app-bar-heading {
-  font-size: var(--text-md);
+  font-size: var(--text-lg);
   font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
-/* Sections as a segmented control: main areas, or an inspection's steps. */
+/* An inspection's steps: a pill switcher. */
 .bar-segments {
   display: inline-flex;
   gap: 2px;
   padding: 3px;
-  border-radius: calc(var(--radius) + 2px);
-  background: var(--chrome-seg);
+  border-radius: var(--radius-pill);
+  background: var(--sunken-hover);
 }
 
 .bar-segments a {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.35rem;
   min-height: 38px;
-  padding: 0 0.9rem;
-  border-radius: var(--radius);
-  color: var(--chrome-muted);
+  padding: 0 1rem;
+  border-radius: var(--radius-pill);
+  color: var(--ink-muted);
   font-weight: 600;
   text-decoration: none;
   white-space: nowrap;
 }
 
 .bar-segments a:hover {
-  color: var(--chrome-ink);
+  color: var(--ink);
 }
 
 .bar-segments a[aria-current="page"] {
-  background: var(--chrome-seg-on);
-  color: var(--chrome-seg-on-ink);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
 }
 
 .bar-segments .step-done {
-  color: #5dbb63;
+  color: var(--ok);
 }
 
-.net-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  flex: none;
-  color: var(--chrome-muted);
-  font-size: var(--text-sm);
-  font-weight: 600;
-}
-
-.net-status.offline {
-  padding: 0.25rem 0.65rem;
-  border-radius: var(--radius-pill);
-  background: var(--todo-bg);
-  color: var(--todo);
-}
-
-/* Portrait or narrow: the bar keeps one row; the save state shrinks. */
 @media (max-width: 899px) {
   .bar-segments a {
     padding: 0 0.7rem;
-  }
-
-  .bar-segments a .lucide {
-    display: none;
   }
 }
 
@@ -805,13 +863,13 @@ dl.facts dd {
   gap: 2px;
   padding: 3px;
   background: var(--sunken);
-  border-radius: var(--radius);
+  border-radius: var(--radius-pill);
 }
 
 .segmented button {
   flex: 1;
   min-height: 38px;
-  border-radius: calc(var(--radius) - 3px);
+  border-radius: var(--radius-pill);
   background: transparent;
   color: var(--ink-muted);
 }
@@ -2823,4 +2881,11 @@ a.list-row {
 
 .settings-card .list-panel {
   margin-top: var(--space-2);
+}
+
+.home-wordmark {
+  display: block;
+  height: 16px;
+  width: auto;
+  margin-bottom: var(--space-3);
 }

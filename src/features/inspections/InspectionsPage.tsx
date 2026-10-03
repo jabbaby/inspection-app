@@ -17,6 +17,7 @@ import {
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
 import { rememberBack } from "../../app/backTarget";
+import { northrop } from "../../brand/northrop";
 import { appCommit, appVersion } from "../../app/version";
 import { db } from "../../db/db";
 import { createInspection } from "../../db/inspections";
@@ -158,6 +159,11 @@ export function InspectionsPage() {
     <section className="home">
       <header className="home-head">
         <div className="home-hello">
+          <img
+            className="home-wordmark"
+            src={northrop.assets.wordmarkRed}
+            alt={northrop.name}
+          />
           <p className="muted">{longToday()}</p>
           <h1>{greeting(data.name)}</h1>
         </div>
