@@ -347,7 +347,7 @@ export function ItemsPanel({
     <aside className="item-sheet" aria-label="Items" data-testid="items-panel">
       <div className="item-sheet-head">
         <h2>Items</h2>
-        <button type="button" onClick={onClose}>
+        <button type="button" className="quiet" onClick={onClose}>
           Close
         </button>
       </div>

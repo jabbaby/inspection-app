@@ -35,7 +35,7 @@ export function QuickPhotoButton({ inspectionId }: { inspectionId: string }) {
     <>
       <button
         type="button"
-        className="icon-button"
+        className="icon-button quiet"
         aria-label="Take a general photo"
         title="Take a general photo"
         onClick={() => input.current?.click()}

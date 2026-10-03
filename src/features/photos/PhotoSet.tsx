@@ -1,4 +1,5 @@
 import { useLiveQuery } from "dexie-react-hooks";
+import { Camera, Images, Share } from "lucide-react";
 import { useRef, useState } from "react";
 import { db } from "../../db/db";
 import { loadJobInspection } from "../../db/projects";
@@ -120,18 +121,22 @@ export function PhotoSet({
           disabled={status !== null}
           onClick={() => camera.current?.click()}
         >
-          Take photo
+          <Camera aria-hidden="true" /> Take photo
         </button>
         <button
           type="button"
           disabled={status !== null}
           onClick={() => library.current?.click()}
         >
-          Choose photos
+          <Images aria-hidden="true" /> Choose photos
         </button>
         {photos.length > 0 && (
-          <button type="button" onClick={() => setSaving(true)}>
-            Save to iPad
+          <button
+            type="button"
+            className="quiet"
+            onClick={() => setSaving(true)}
+          >
+            <Share aria-hidden="true" /> Save to iPad
           </button>
         )}
       </div>

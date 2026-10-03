@@ -1,6 +1,6 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useRef, useState } from "react";
-import { FilePlus, Files, Pencil, Trash2 } from "lucide-react";
+import { FilePlus, FlaskConical, Files, Pencil, Trash2 } from "lucide-react";
 import { ConfirmDialog } from "../../app/ConfirmDialog";
 import { db } from "../../db/db";
 import {
@@ -115,23 +115,14 @@ export function DrawingsSection({
         <h2 id="drawings-heading" className="section-title">
           <Files aria-hidden="true" /> Drawings
         </h2>
-        <span className="button-row">
-          <button
-            type="button"
-            className="primary"
-            disabled={busy}
-            onClick={() => fileInput.current?.click()}
-          >
-            <FilePlus aria-hidden="true" /> Add drawings
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void addSynthetic()}
-          >
-            Add synthetic test drawing
-          </button>
-        </span>
+        <button
+          type="button"
+          className="primary"
+          disabled={busy}
+          onClick={() => fileInput.current?.click()}
+        >
+          <FilePlus aria-hidden="true" /> Add drawings
+        </button>
       </div>
       <input
         ref={fileInput}
@@ -158,24 +149,24 @@ export function DrawingsSection({
       ))}
 
       {drawings && drawings.length === 0 && !busy && (
-        <p className="muted">
-          No drawings yet. Add the drawing PDFs for this inspection; they stay
-          on this device.
+        <p className="muted drawings-hint">
+          No drawings yet. Add the drawing PDFs for this inspection from Files;
+          they stay on this iPad, and all their pages scroll as one document.
         </p>
       )}
       {drawings && drawings.length > 0 && (
-        <ul className="inspection-list" aria-label="Drawings">
+        <ul className="list-panel" aria-label="Drawings">
           {drawings.map((drawing) => {
             const count = counts?.get(drawing.id) ?? 0;
             return (
-              <li key={drawing.id} className="inspection-card">
+              <li key={drawing.id} className="list-row">
                 <button
                   type="button"
-                  className="inspection-card-link link-like"
+                  className="list-row-main link-like"
                   onClick={() => onOpen?.(drawing.id)}
                 >
-                  <span className="inspection-card-title">{drawing.name}</span>
-                  <span>
+                  <span className="list-row-title">{drawing.name}</span>
+                  <span className="list-row-meta">
                     {drawing.pageCount}{" "}
                     {drawing.pageCount === 1 ? "page" : "pages"} · {count}{" "}
                     {count === 1 ? "item" : "items"}
@@ -186,7 +177,7 @@ export function DrawingsSection({
                 </button>
                 <button
                   type="button"
-                  className="icon-button"
+                  className="icon-button quiet"
                   aria-label={`Rename ${drawing.name}`}
                   title="Rename"
                   onClick={() => {
@@ -210,6 +201,16 @@ export function DrawingsSection({
           })}
         </ul>
       )}
+
+      {/* For trying the app without real drawings. */}
+      <button
+        type="button"
+        className="quiet small test-drawing"
+        disabled={busy}
+        onClick={() => void addSynthetic()}
+      >
+        <FlaskConical aria-hidden="true" /> Add synthetic test drawing
+      </button>
 
       <ConfirmDialog
         open={renaming !== null}

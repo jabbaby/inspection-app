@@ -16,6 +16,8 @@ export function Shell() {
   const { pathname } = useLocation();
   const [slot, setSlot] = useState<HTMLElement | null>(null);
   const inner = /^\/(inspections|projects)\//.test(pathname);
+  // The drawings fill the window edge to edge.
+  const flush = /^\/inspections\/[^/]+\/(inspection|document)$/.test(pathname);
 
   return (
     <AppBarSlot.Provider value={slot}>
@@ -23,7 +25,7 @@ export function Shell() {
         <header className="app-bar" ref={setSlot} />
         {!inner && <MainBar inInspections={pathname === "/"} />}
         <UpdatePrompt />
-        <main className="shell-main">
+        <main className={flush ? "shell-main flush" : "shell-main"}>
           <Outlet />
         </main>
       </div>

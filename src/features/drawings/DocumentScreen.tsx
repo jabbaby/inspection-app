@@ -1,5 +1,13 @@
 import { useLiveQuery } from "dexie-react-hooks";
-import { Files, List, MapPin, Maximize } from "lucide-react";
+import {
+  ChevronDown,
+  Files,
+  List,
+  MapPin,
+  Maximize,
+  Redo2,
+  Undo2,
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { NotFound } from "../../app/NotFound";
@@ -45,28 +53,6 @@ async function backfillPageSizes(drawing: Drawing) {
   } finally {
     await pdf.loadingTask.destroy();
   }
-}
-
-/** Curved arrow: back (undo) or, mirrored, forward (redo). */
-function UndoIcon({ redo = false }: { redo?: boolean }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width="22"
-      height="22"
-      aria-hidden="true"
-      style={redo ? { transform: "scaleX(-1)" } : undefined}
-    >
-      <path
-        d="M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
 }
 
 export function DocumentScreen() {
@@ -314,108 +300,8 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
   return (
     <section className="drawing-screen">
       <InspectionHeader inspectionId={inspectionId} current="inspection" />
-      {!showList && (
-        <div className="viewer-toolbar" role="toolbar" aria-label="Drawings">
-          <span className="viewer-panels">
-            <button
-              type="button"
-              aria-pressed={drawingsOpen}
-              className={drawingsOpen ? "toggle-on" : undefined}
-              onClick={() => {
-                setDrawingsOpen((open) => !open);
-                setItemsOpen(false);
-                select(null);
-              }}
-            >
-              <Files aria-hidden="true" />{" "}
-              <span className="button-text">Drawings</span>
-            </button>
-            <button
-              type="button"
-              aria-pressed={itemsOpen}
-              className={itemsOpen ? "toggle-on" : undefined}
-              onClick={() => {
-                setItemsOpen((open) => !open);
-                setDrawingsOpen(false);
-                select(null);
-              }}
-            >
-              <List aria-hidden="true" />{" "}
-              <span className="button-text">Items</span>
-            </button>
-          </span>
-          <strong className="drawing-name" data-testid="page-indicator">
-            {currentDrawing && current
-              ? `${currentDrawing.name} · page ${current.page} of ${current.pageCount}`
-              : ""}
-          </strong>
-          <span className="viewer-actions">
-            <span className="undo-group" role="group" aria-label="History">
-              <button
-                type="button"
-                className="icon-button"
-                aria-label="Undo"
-                disabled={!history.undo}
-                title={
-                  history.undo
-                    ? `Undo: ${history.undo.label}`
-                    : "Nothing to undo"
-                }
-                onClick={() => {
-                  // An undone change could leave the open sheet pointing at nothing.
-                  select(null);
-                  void undoLast(inspectionId);
-                }}
-              >
-                <UndoIcon />
-              </button>
-              <button
-                type="button"
-                className="icon-button"
-                aria-label="Redo"
-                disabled={!history.redo}
-                title={
-                  history.redo
-                    ? `Redo: ${history.redo.label}`
-                    : "Nothing to redo"
-                }
-                onClick={() => {
-                  select(null);
-                  void redoLast(inspectionId);
-                }}
-              >
-                <UndoIcon redo />
-              </button>
-            </span>
-            <button
-              type="button"
-              className="icon-button"
-              aria-label="Fit page"
-              title="Fit page"
-              onClick={() => setFitRequest((n) => n + 1)}
-            >
-              <Maximize aria-hidden="true" />
-            </button>
-            <QuickPhotoButton inspectionId={inspectionId} />
-            <button
-              type="button"
-              aria-pressed={addPinMode}
-              className={addPinMode ? "toggle-on" : "primary"}
-              onClick={() => {
-                setPlacingArrow(null);
-                setAddPinMode((on) => !on);
-              }}
-              disabled={layout.pages.length === 0}
-            >
-              <MapPin aria-hidden="true" />
-              {addPinMode ? "Tap the drawing…" : "Add pin"}
-            </button>
-          </span>
-        </div>
-      )}
-
       {loadError && (
-        <p role="alert" className="error">
+        <p role="alert" className="error viewer-alert">
           Could not open a drawing: {loadError}
         </p>
       )}
@@ -438,59 +324,168 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
             />
           </div>
         ) : (
-          <DocumentViewer
-            layout={layout}
-            docs={docs}
-            pins={pins}
-            addPinMode={addPinMode || placingArrow !== null}
-            onPlacePin={(page, at) =>
-              void (placingArrow ? placeArrow(page, at) : placePin(page, at))
-            }
-            onMovePin={(itemId, to) =>
-              setDragging((d) => ({ ...d, [itemId]: to }))
-            }
-            onMovePinEnd={(itemId, to) => {
-              void updateItem(db, itemId, to).then(() =>
-                setDragging((d) => {
-                  const rest = { ...d };
-                  delete rest[itemId];
-                  return rest;
-                }),
-              );
-            }}
-            onSelectPin={(itemId) => select(itemId)}
-            onTapDrawing={() => {
-              // Tapping away from the pin closes its editor (text is saved).
-              if (!selectedId) return;
-              setJustPlaced(null);
-              select(null);
-            }}
-            onSelectArrow={(itemId, arrowId) => {
-              select(itemId);
-              setSelectedArrow(arrowId);
-            }}
-            onMoveArrow={(itemId, arrowId, to) =>
-              setDraggingArrow({ itemId, arrowId, to })
-            }
-            onMoveArrowEnd={(itemId, arrowId, to) => {
-              const item = items?.find((i) => i.id === itemId);
-              if (!item) return;
-              setSelectedArrow(arrowId);
-              void setArrowsWithUndo(
-                item,
-                (item.arrows ?? []).map((a) =>
-                  a.id === arrowId ? { ...a, ...to } : a,
-                ),
-                "Move arrow",
-              ).then(() => setDraggingArrow(null));
-            }}
-            onCurrentPage={setCurrent}
-            onActiveDrawings={setNeeded}
-            onVisiblePins={(ids) => setPinsInView(new Set(ids))}
-            renderPageOverlay={renderPageOverlay}
-            scrollTarget={scrollTarget}
-            fitRequest={fitRequest}
-          />
+          <div className="viewer-wrap">
+            <DocumentViewer
+              layout={layout}
+              docs={docs}
+              pins={pins}
+              addPinMode={addPinMode || placingArrow !== null}
+              onPlacePin={(page, at) =>
+                void (placingArrow ? placeArrow(page, at) : placePin(page, at))
+              }
+              onMovePin={(itemId, to) =>
+                setDragging((d) => ({ ...d, [itemId]: to }))
+              }
+              onMovePinEnd={(itemId, to) => {
+                void updateItem(db, itemId, to).then(() =>
+                  setDragging((d) => {
+                    const rest = { ...d };
+                    delete rest[itemId];
+                    return rest;
+                  }),
+                );
+              }}
+              onSelectPin={(itemId) => select(itemId)}
+              onTapDrawing={() => {
+                // Tapping away from the pin closes its editor (text is saved).
+                if (!selectedId) return;
+                setJustPlaced(null);
+                select(null);
+              }}
+              onSelectArrow={(itemId, arrowId) => {
+                select(itemId);
+                setSelectedArrow(arrowId);
+              }}
+              onMoveArrow={(itemId, arrowId, to) =>
+                setDraggingArrow({ itemId, arrowId, to })
+              }
+              onMoveArrowEnd={(itemId, arrowId, to) => {
+                const item = items?.find((i) => i.id === itemId);
+                if (!item) return;
+                setSelectedArrow(arrowId);
+                void setArrowsWithUndo(
+                  item,
+                  (item.arrows ?? []).map((a) =>
+                    a.id === arrowId ? { ...a, ...to } : a,
+                  ),
+                  "Move arrow",
+                ).then(() => setDraggingArrow(null));
+              }}
+              onCurrentPage={setCurrent}
+              onActiveDrawings={setNeeded}
+              onVisiblePins={(ids) => setPinsInView(new Set(ids))}
+              renderPageOverlay={renderPageOverlay}
+              scrollTarget={scrollTarget}
+              fitRequest={fitRequest}
+            />
+            {/* Floating over the drawing: they never move it. */}
+            <div className="viewer-float viewer-float-top">
+              <button
+                type="button"
+                className={`viewer-chip${drawingsOpen ? " toggle-on" : " quiet"}`}
+                aria-label="Drawings"
+                aria-pressed={drawingsOpen}
+                title="Drawings"
+                onClick={() => {
+                  setDrawingsOpen((open) => !open);
+                  setItemsOpen(false);
+                  select(null);
+                }}
+              >
+                <Files aria-hidden="true" />
+                <span className="drawing-name" data-testid="page-indicator">
+                  {currentDrawing && current
+                    ? `${currentDrawing.name} · page ${current.page} of ${current.pageCount}`
+                    : ""}
+                </span>
+                <ChevronDown aria-hidden="true" />
+              </button>
+            </div>
+            <div
+              className="viewer-float viewer-float-bottom"
+              role="toolbar"
+              aria-label="Drawing tools"
+            >
+              <button
+                type="button"
+                className={`icon-button${itemsOpen ? " toggle-on" : " quiet"}`}
+                aria-label="Items"
+                aria-pressed={itemsOpen}
+                title="Items"
+                onClick={() => {
+                  setItemsOpen((open) => !open);
+                  setDrawingsOpen(false);
+                  select(null);
+                }}
+              >
+                <List aria-hidden="true" />
+                {(items?.length ?? 0) > 0 && (
+                  <span className="count-badge" aria-hidden="true">
+                    {items?.length}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                className="icon-button quiet"
+                aria-label="Undo"
+                disabled={!history.undo}
+                title={
+                  history.undo
+                    ? `Undo: ${history.undo.label}`
+                    : "Nothing to undo"
+                }
+                onClick={() => {
+                  // An undone change could leave the open sheet pointing at nothing.
+                  select(null);
+                  void undoLast(inspectionId);
+                }}
+              >
+                <Undo2 aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                className="icon-button quiet"
+                aria-label="Redo"
+                disabled={!history.redo}
+                title={
+                  history.redo
+                    ? `Redo: ${history.redo.label}`
+                    : "Nothing to redo"
+                }
+                onClick={() => {
+                  select(null);
+                  void redoLast(inspectionId);
+                }}
+              >
+                <Redo2 aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                className="icon-button quiet"
+                aria-label="Fit page"
+                title="Fit page"
+                onClick={() => setFitRequest((n) => n + 1)}
+              >
+                <Maximize aria-hidden="true" />
+              </button>
+              <QuickPhotoButton inspectionId={inspectionId} />
+              <span className="toolbar-divider" aria-hidden="true" />
+              <button
+                type="button"
+                aria-pressed={addPinMode}
+                className={`add-pin ${addPinMode ? "toggle-on" : "primary"}`}
+                onClick={() => {
+                  setPlacingArrow(null);
+                  setAddPinMode((on) => !on);
+                }}
+                disabled={layout.pages.length === 0}
+              >
+                <MapPin aria-hidden="true" />
+                {addPinMode ? "Tap the drawing…" : "Add pin"}
+              </button>
+            </div>
+          </div>
         )}
 
         {selected ? (

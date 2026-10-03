@@ -1,3 +1,4 @@
+import { ArrowUpRight, Trash2, X } from "lucide-react";
 import { useState } from "react";
 import { saveStateLabel, useAutosave } from "../../app/useAutosave";
 import { db } from "../../db/db";
@@ -41,7 +42,7 @@ function ArrowControls({
   // With a single arrow there's nothing to choose.
   const removable = selectedId ?? only;
   return (
-    <div className="item-arrows" role="group" aria-label="Arrows">
+    <div className="item-arrows sheet-section" role="group" aria-label="Arrows">
       <span className="item-arrows-label">
         Arrows{count > 0 ? ` (${count})` : ""}
       </span>
@@ -50,18 +51,19 @@ function ArrowControls({
           <p className="item-arrows-prompt" role="status">
             {message ?? "Tap the drawing where the arrow should point."}
           </p>
-          <button type="button" onClick={onCancel}>
-            Cancel
+          <button type="button" className="quiet" onClick={onCancel}>
+            <X aria-hidden="true" /> Cancel
           </button>
         </>
       ) : (
         <>
           <div className="item-arrows-buttons">
             <button type="button" onClick={onAdd}>
-              Add arrow
+              <ArrowUpRight aria-hidden="true" /> Add arrow
             </button>
             <button
               type="button"
+              className="quiet"
               disabled={!removable}
               onClick={() => removable && onRemove(removable)}
             >
@@ -134,7 +136,7 @@ export function ItemSheet({
         >
           {saveStateLabel(autosave.state)}
         </span>
-        <button type="button" onClick={onClose}>
+        <button type="button" className="quiet" onClick={onClose}>
           {closeLabel}
         </button>
       </div>
@@ -180,7 +182,7 @@ export function ItemSheet({
       </label>
 
       {isInstruction && (
-        <label className="checkbox">
+        <label className="checkbox switch">
           <input
             type="checkbox"
             checked={photoFlag}
@@ -195,7 +197,9 @@ export function ItemSheet({
         </label>
       )}
 
-      <ItemPhotos item={item} />
+      <div className="sheet-section">
+        <ItemPhotos item={item} />
+      </div>
 
       {arrows && (
         <ArrowControls
@@ -210,6 +214,8 @@ export function ItemSheet({
           ? "Instructions go in this page's notes box and the memo's conditions."
           : "Observations go in this page's notes box, not the memo."}
       </p>
+
+      <div className="sheet-spacer" />
 
       <button
         type="button"
@@ -231,7 +237,8 @@ export function ItemSheet({
             .then(onClose);
         }}
       >
-        Delete {kindName(item.kind).toLowerCase()} {item.letter}
+        <Trash2 aria-hidden="true" /> Delete {kindName(item.kind).toLowerCase()}{" "}
+        {item.letter}
       </button>
     </aside>
   );
