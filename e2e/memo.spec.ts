@@ -120,7 +120,9 @@ test("create a memo from the instructions, with a live preview", async ({
   await page.getByRole("button", { name: "Use item text" }).click();
   await expect(a).toHaveValue("Add N12 bar at grid C/4");
 
-  // Job details are shared with the inspection.
+  // Job details are shared with the inspection; they fold to a summary.
+  await expect(field(page, "Item inspected")).toHaveCount(0);
+  await page.getByRole("button", { name: "Edit job details" }).click();
   await field(page, "Item inspected").fill("Level 3 slab");
   await expect(page.getByTestId("memo-paragraph-1")).toContainText(
     "the Level 3 slab as",

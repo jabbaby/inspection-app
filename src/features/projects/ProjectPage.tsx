@@ -221,7 +221,7 @@ function ProjectFor({ initial }: { initial: Project }) {
         </section>
       </div>
 
-      <div className="later-section">
+      <div className="page-actions">
         <button
           type="button"
           className="danger-outline"

@@ -1,3 +1,4 @@
+import { FileText } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
 import { db } from "../../db/db";
@@ -17,11 +18,17 @@ export function CreateMemo({ inspection }: { inspection: JobInspection }) {
   const canCreate = hasProject && missingJobFields(inspection).length === 0;
 
   return (
-    <div aria-labelledby="memo-heading">
+    <div
+      className="card empty-state create-memo"
+      aria-labelledby="memo-heading"
+    >
+      <span className="empty-state-icon">
+        <FileText aria-hidden="true" />
+      </span>
       <h2 id="memo-heading">Site Instruction Memo</h2>
       <p className="muted">
-        The Site Instruction Memo, editable before export. Its instructions come
-        from the pins.
+        It gets the job&rsquo;s next SIM reference, and its instructions come
+        from the pins. You can edit everything before exporting.
       </p>
       <p className="button-row">
         <button

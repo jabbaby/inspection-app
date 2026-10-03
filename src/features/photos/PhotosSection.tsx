@@ -70,7 +70,7 @@ export function PhotosSection({
   );
 
   return (
-    <div className="later-section" aria-labelledby="photos-heading">
+    <div className="card page-section" aria-labelledby="photos-heading">
       <h2 id="photos-heading" className="section-title">
         <Images aria-hidden="true" /> Photos
       </h2>

@@ -1,11 +1,12 @@
 import { useLiveQuery } from "dexie-react-hooks";
-import { FileDown } from "lucide-react";
+import { FileDown, Pencil } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useParams } from "react-router";
 import { NotFound } from "../../app/NotFound";
 import { AutoGrowTextarea } from "../../app/AutoGrowTextarea";
 import { saveStateLabel, useAutosave } from "../../app/useAutosave";
 import { db } from "../../db/db";
+import { formatLongDate } from "../../lib/dates";
 import { getMemo, updateMemo, type MemoPatch } from "../../db/memos";
 import {
   contactKey,
@@ -82,7 +83,7 @@ export function MemoScreen() {
         </section>
       )}
       <PhotosSection inspectionId={id} jobNumber={inspection.jobNumber} />
-      <div className="later-section">
+      <div className="card page-section">
         <h2 className="section-title">
           <FileDown aria-hidden="true" /> Export
         </h2>
@@ -111,6 +112,8 @@ function MemoEditorFor({ inspectionId }: { inspectionId: string }) {
   // Loaded once: the form then owns its values, so typing is never overwritten.
   const [job, setJob] = useState<JobDetailsValues | null>(null);
   const [memo, setMemo] = useState<Memo | null>(null);
+  // Job details fold to a one-line summary; Edit opens the fields.
+  const [editingJob, setEditingJob] = useState(false);
   const jobSave = useAutosave<JobPatch>(
     (patch) => saveJob(db, inspectionId, patch),
     mergePatches,
@@ -227,375 +230,444 @@ function MemoEditorFor({ inspectionId }: { inspectionId: string }) {
         inspectionId={inspectionId}
         title={inspectionTitle(job)}
         current="memo"
+        status={
+          <span
+            className="save-state"
+            role="status"
+            data-testid="memo-save-state"
+          >
+            {saveStateLabel(saveState)}
+          </span>
+        }
       />
-      <div className="page-heading">
-        <h2>Site Instruction Memo · {memo.reference}</h2>
-        <span
-          className="save-state"
-          role="status"
-          data-testid="memo-save-state"
-        >
-          {saveStateLabel(saveState)}
-        </span>
-      </div>
 
       <div className="memo-layout">
         <div className="memo-form">
-          <label className="field">
-            <span>Reference</span>
-            <input
-              value={memo.reference}
-              autoCapitalize="characters"
-              onChange={(e) => patch({ reference: e.target.value })}
-              onBlur={() => void memoSave.flush()}
-            />
-          </label>
+          <section className="card memo-section" aria-labelledby="memo-title">
+            <h2 id="memo-title" className="memo-title">
+              Site Instruction Memo · {memo.reference}
+            </h2>
+            <label className="field">
+              <span>Reference</span>
+              <input
+                value={memo.reference}
+                autoCapitalize="characters"
+                onChange={(e) => patch({ reference: e.target.value })}
+                onBlur={() => void memoSave.flush()}
+              />
+            </label>
 
-          <h2>Job details</h2>
-          <p className="muted">
-            Shared with the inspection and its project: changing them here
-            changes them there too (job number, name, client and address change
-            for every inspection in the project).
-          </p>
-          <JobDetailsForm
-            values={job}
-            onChange={(key, value) => {
-              setJob((v) => (v ? { ...v, [key]: value } : v));
-              jobSave.queue(toPatch(key, value));
-            }}
-            onBlur={() => void jobSave.flush()}
-          />
-
-          <h2>Recipients</h2>
-          <table className="memo-recipients" aria-label="Recipients">
-            <thead>
-              <tr>
-                <th>Company</th>
-                <th>Attn</th>
-                <th>To</th>
-                <th>Copy</th>
-                <th>
-                  <span className="sr-only">Remove</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {memo.recipients.map((r, i) => (
-                <tr
-                  key={i}
-                  onBlur={(e) => {
-                    if (!e.currentTarget.contains(e.relatedTarget as Node))
-                      rememberRecipient(i);
+            <div className="job-summary">
+              <div className="list-row-main">
+                <span className="eyebrow">Job details</span>
+                <span className="job-summary-text">{jobSummary(job)}</span>
+              </div>
+              <button
+                type="button"
+                aria-expanded={editingJob}
+                onClick={() => {
+                  if (editingJob) void jobSave.flush();
+                  setEditingJob((open) => !open);
+                }}
+              >
+                {editingJob ? (
+                  "Done"
+                ) : (
+                  <>
+                    <Pencil aria-hidden="true" /> Edit job details
+                  </>
+                )}
+              </button>
+            </div>
+            {editingJob && (
+              <>
+                <p className="muted">
+                  Shared with the inspection and its project: changing them here
+                  changes them there too (job number, name, client and address
+                  change for every inspection in the project).
+                </p>
+                <JobDetailsForm
+                  values={job}
+                  onChange={(key, value) => {
+                    setJob((v) => (v ? { ...v, [key]: value } : v));
+                    jobSave.queue(toPatch(key, value));
                   }}
-                >
-                  <td>
-                    <input
-                      aria-label={`Recipient ${i + 1} company`}
-                      value={r.company}
-                      autoCapitalize="words"
-                      onChange={(e) =>
-                        setRecipient(i, { company: e.target.value })
-                      }
-                    />
-                  </td>
-                  <td>
-                    <input
-                      aria-label={`Recipient ${i + 1} attention`}
-                      value={r.attn}
-                      autoCapitalize="words"
-                      onChange={(e) =>
-                        setRecipient(i, { attn: e.target.value })
-                      }
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="checkbox"
-                      aria-label={`Recipient ${i + 1} to`}
-                      checked={r.to}
-                      onChange={(e) =>
-                        setRecipient(i, {
-                          to: e.target.checked,
-                          copy: e.target.checked ? false : r.copy,
-                        })
-                      }
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="checkbox"
-                      aria-label={`Recipient ${i + 1} copy`}
-                      checked={r.copy}
-                      onChange={(e) =>
-                        setRecipient(i, {
-                          copy: e.target.checked,
-                          to: e.target.checked ? false : r.to,
-                        })
-                      }
-                    />
-                  </td>
-                  <td>
-                    <button
-                      type="button"
-                      aria-label={`Remove recipient ${i + 1}`}
-                      onClick={() =>
-                        patch({
-                          recipients: memo.recipients.filter((_, j) => j !== i),
-                        })
-                      }
-                    >
-                      ×
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <p className="button-row">
-            <button
-              type="button"
-              disabled={memo.recipients.length >= MAX_RECIPIENTS}
-              onClick={() =>
-                patch({
-                  recipients: [
-                    ...memo.recipients,
-                    { company: "", attn: "", to: false, copy: true },
-                  ],
-                })
-              }
-            >
-              Add recipient
-            </button>
-            {unusedContacts.length > 0 &&
-              memo.recipients.length < MAX_RECIPIENTS && (
-                <select
-                  aria-label="Add from contacts"
-                  value=""
-                  onChange={(e) => {
-                    const contact = unusedContacts.find(
-                      (c) => c.id === e.target.value,
-                    );
-                    if (!contact) return;
-                    const to = !memo.recipients.some((r) => r.to);
-                    patch({
-                      recipients: [
-                        ...memo.recipients,
-                        {
-                          company: contact.company,
-                          attn: contact.attn,
-                          to,
-                          copy: !to,
-                        },
-                      ],
-                    });
-                  }}
-                >
-                  <option value="">Add from contacts…</option>
-                  {unusedContacts.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {[c.attn, c.company].filter(Boolean).join(", ")}
-                    </option>
-                  ))}
-                </select>
-              )}
-          </p>
-          {!memo.recipients.some((r) => r.to) && (
-            <p className="notice" data-testid="no-to-recipient">
-              Mark at least one recipient as To.
-            </p>
-          )}
-
-          <h2>Visit</h2>
-          <DefaultedField
-            label="Site visit requested by"
-            value={memo.siteVisitRequestedBy}
-            fallback={defaultSiteVisitRequestedBy(inspection.client)}
-            onChange={(v) => patch({ siteVisitRequestedBy: v })}
-            onBlur={() => void memoSave.flush()}
-          />
-          <DefaultedField
-            label="Reason for visit"
-            value={memo.reasonForVisit}
-            fallback={inspection.itemInspected}
-            onChange={(v) => patch({ reasonForVisit: v })}
-            onBlur={() => void memoSave.flush()}
-          />
-          <label className="field">
-            <span>Sent via</span>
-            <select
-              value={memo.sentVia}
-              onChange={(e) => patch({ sentVia: e.target.value as SentVia })}
-            >
-              {SENT_VIA.map((v) => (
-                <option key={v}>{v}</option>
-              ))}
-            </select>
-          </label>
-
-          <label className="checkbox">
-            <input
-              type="checkbox"
-              checked={memo.includeSignature}
-              onChange={(e) => patch({ includeSignature: e.target.checked })}
-            />
-            Include signature
-          </label>
-          <SignatureField
-            label="Signature on this memo"
-            blobId={memo.signatureBlobId}
-            onSave={(png) => setSignature(png)}
-            onRemove={() => setSignature(null)}
-            extra={
-              mySignatureId && (
-                <button type="button" onClick={() => void setSignature("mine")}>
-                  Use my saved signature
-                </button>
-              )
-            }
-          />
-
-          <h2>Letter</h2>
-          <DefaultedField
-            label="Salutation"
-            value={memo.salutation}
-            fallback={defaultSalutation(memo.recipients)}
-            onChange={(v) => patch({ salutation: v })}
-            onBlur={() => void memoSave.flush()}
-          />
-          <p className="memo-fixed" data-testid="memo-paragraph-1">
-            {confirmationParagraph(inspection.itemInspected)}
-          </p>
-          <label className="field">
-            <span>Message</span>
-            <select
-              aria-label="Prefilled message"
-              value={memo.bodySnippetId ?? ""}
-              onChange={(e) => {
-                const chosen = bodySnippets.find(
-                  (s) => s.id === e.target.value,
-                );
-                if (chosen)
-                  patch({ bodySnippetId: chosen.id, bodyText: chosen.text });
-              }}
-            >
-              {memo.bodySnippetId === null && <option value="">Choose…</option>}
-              {bodySnippets.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            <span>Message text (for this memo)</span>
-            <AutoGrowTextarea
-              rows={4}
-              value={memo.bodyText}
-              autoCapitalize="sentences"
-              onChange={(e) => patch({ bodyText: e.target.value })}
-              onBlur={() => void memoSave.flush()}
-            />
-          </label>
-
-          <h2>Conditions</h2>
-          <p className="memo-fixed" data-testid="memo-lead-in">
-            {conditionsLeadIn(input.conditions.length)}
-          </p>
-          <fieldset className="memo-conditions">
-            <legend>Standard conditions</legend>
-            {conditionSnippets.map((s) => (
-              <label key={s.id} className="checkbox">
-                <input
-                  type="checkbox"
-                  checked={conditionTicked(memo, s.id, instructions)}
-                  onChange={(e) =>
-                    patch({
-                      conditionChoices: {
-                        ...memo.conditionChoices,
-                        [s.id]: e.target.checked,
-                      },
-                    })
-                  }
+                  onBlur={() => void jobSave.flush()}
                 />
-                {s.text.replace(/\[letters\]/g, letters || "[letters]")}
-              </label>
-            ))}
-          </fieldset>
-          {instructions.length === 0 ? (
-            <p className="muted">
-              No instructions yet, so the memo says &ldquo;Ok to proceed.&rdquo;
-            </p>
-          ) : (
-            <ol className="memo-instructions" aria-label="Instructions">
-              {instructions.map((item) => {
-                const override = memo.itemOverrides[item.id];
-                return (
-                  <li key={item.id}>
-                    <label className="field">
-                      <span>
-                        {item.letter}.{" "}
-                        {override !== undefined && (
-                          <span className="muted">
-                            (reworded for this memo)
-                          </span>
-                        )}
-                      </span>
-                      <AutoGrowTextarea
-                        rows={2}
-                        aria-label={`Instruction ${item.letter} in the memo`}
-                        value={override ?? item.text}
+              </>
+            )}
+          </section>
+
+          <section
+            className="card memo-section"
+            aria-labelledby="recipients-heading"
+          >
+            <h2 id="recipients-heading">Recipients</h2>
+            <table className="memo-recipients" aria-label="Recipients">
+              <thead>
+                <tr>
+                  <th>Company</th>
+                  <th>Attn</th>
+                  <th>Send as</th>
+                  <th>
+                    <span className="sr-only">Remove</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {memo.recipients.map((r, i) => (
+                  <tr
+                    key={i}
+                    onBlur={(e) => {
+                      if (!e.currentTarget.contains(e.relatedTarget as Node))
+                        rememberRecipient(i);
+                    }}
+                  >
+                    <td>
+                      <input
+                        aria-label={`Recipient ${i + 1} company`}
+                        value={r.company}
+                        autoCapitalize="words"
                         onChange={(e) =>
-                          patch({
-                            itemOverrides: {
-                              ...memo.itemOverrides,
-                              [item.id]: e.target.value,
-                            },
-                          })
+                          setRecipient(i, { company: e.target.value })
                         }
-                        onBlur={() => void memoSave.flush()}
                       />
-                    </label>
-                    {override !== undefined && (
+                    </td>
+                    <td>
+                      <input
+                        aria-label={`Recipient ${i + 1} attention`}
+                        value={r.attn}
+                        autoCapitalize="words"
+                        onChange={(e) =>
+                          setRecipient(i, { attn: e.target.value })
+                        }
+                      />
+                    </td>
+                    <td>
+                      {/* To or Copy: two checkboxes drawn as one switch. */}
+                      <span className="pill-pair">
+                        <label className="pill-check">
+                          <input
+                            type="checkbox"
+                            aria-label={`Recipient ${i + 1} to`}
+                            checked={r.to}
+                            onChange={(e) =>
+                              setRecipient(i, {
+                                to: e.target.checked,
+                                copy: e.target.checked ? false : r.copy,
+                              })
+                            }
+                          />
+                          <span aria-hidden="true">To</span>
+                        </label>
+                        <label className="pill-check">
+                          <input
+                            type="checkbox"
+                            aria-label={`Recipient ${i + 1} copy`}
+                            checked={r.copy}
+                            onChange={(e) =>
+                              setRecipient(i, {
+                                copy: e.target.checked,
+                                to: e.target.checked ? false : r.to,
+                              })
+                            }
+                          />
+                          <span aria-hidden="true">Copy</span>
+                        </label>
+                      </span>
+                    </td>
+                    <td>
                       <button
                         type="button"
-                        onClick={() => {
-                          const rest = { ...memo.itemOverrides };
-                          delete rest[item.id];
-                          patch({ itemOverrides: rest });
-                        }}
+                        className="icon-button quiet"
+                        aria-label={`Remove recipient ${i + 1}`}
+                        onClick={() =>
+                          patch({
+                            recipients: memo.recipients.filter(
+                              (_, j) => j !== i,
+                            ),
+                          })
+                        }
                       >
-                        Use item text
+                        ×
                       </button>
-                    )}
-                  </li>
-                );
-              })}
-            </ol>
-          )}
-          <p className="muted">
-            Instructions come from the pins; add or change them on the drawings.
-            Rewording one here changes only the memo.
-          </p>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="button-row">
+              <button
+                type="button"
+                disabled={memo.recipients.length >= MAX_RECIPIENTS}
+                onClick={() =>
+                  patch({
+                    recipients: [
+                      ...memo.recipients,
+                      { company: "", attn: "", to: false, copy: true },
+                    ],
+                  })
+                }
+              >
+                Add recipient
+              </button>
+              {unusedContacts.length > 0 &&
+                memo.recipients.length < MAX_RECIPIENTS && (
+                  <select
+                    aria-label="Add from contacts"
+                    value=""
+                    onChange={(e) => {
+                      const contact = unusedContacts.find(
+                        (c) => c.id === e.target.value,
+                      );
+                      if (!contact) return;
+                      const to = !memo.recipients.some((r) => r.to);
+                      patch({
+                        recipients: [
+                          ...memo.recipients,
+                          {
+                            company: contact.company,
+                            attn: contact.attn,
+                            to,
+                            copy: !to,
+                          },
+                        ],
+                      });
+                    }}
+                  >
+                    <option value="">Add from contacts…</option>
+                    {unusedContacts.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {[c.attn, c.company].filter(Boolean).join(", ")}
+                      </option>
+                    ))}
+                  </select>
+                )}
+            </p>
+            {!memo.recipients.some((r) => r.to) && (
+              <p className="notice" data-testid="no-to-recipient">
+                Mark at least one recipient as To.
+              </p>
+            )}
+          </section>
 
-          <h2>Sign-off</h2>
-          <label className="field">
-            <span>Name</span>
-            <input
-              value={memo.signOffName}
-              autoCapitalize="words"
-              onChange={(e) => patch({ signOffName: e.target.value })}
+          <section
+            className="card memo-section"
+            aria-labelledby="visit-heading"
+          >
+            <h2 id="visit-heading">Visit</h2>
+            <DefaultedField
+              label="Site visit requested by"
+              value={memo.siteVisitRequestedBy}
+              fallback={defaultSiteVisitRequestedBy(inspection.client)}
+              onChange={(v) => patch({ siteVisitRequestedBy: v })}
               onBlur={() => void memoSave.flush()}
             />
-          </label>
-          <label className="field">
-            <span>Title</span>
-            <input
-              value={memo.signOffTitle}
-              autoCapitalize="words"
-              onChange={(e) => patch({ signOffTitle: e.target.value })}
+            <DefaultedField
+              label="Reason for visit"
+              value={memo.reasonForVisit}
+              fallback={inspection.itemInspected}
+              onChange={(v) => patch({ reasonForVisit: v })}
               onBlur={() => void memoSave.flush()}
             />
-          </label>
+            <label className="field">
+              <span>Sent via</span>
+              <select
+                value={memo.sentVia}
+                onChange={(e) => patch({ sentVia: e.target.value as SentVia })}
+              >
+                {SENT_VIA.map((v) => (
+                  <option key={v}>{v}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="checkbox switch">
+              <input
+                type="checkbox"
+                checked={memo.includeSignature}
+                onChange={(e) => patch({ includeSignature: e.target.checked })}
+              />
+              Include signature
+            </label>
+            <SignatureField
+              label="Signature on this memo"
+              blobId={memo.signatureBlobId}
+              onSave={(png) => setSignature(png)}
+              onRemove={() => setSignature(null)}
+              extra={
+                mySignatureId && (
+                  <button
+                    type="button"
+                    onClick={() => void setSignature("mine")}
+                  >
+                    Use my saved signature
+                  </button>
+                )
+              }
+            />
+          </section>
+
+          <section
+            className="card memo-section"
+            aria-labelledby="letter-heading"
+          >
+            <h2 id="letter-heading">Letter</h2>
+            <DefaultedField
+              label="Salutation"
+              value={memo.salutation}
+              fallback={defaultSalutation(memo.recipients)}
+              onChange={(v) => patch({ salutation: v })}
+              onBlur={() => void memoSave.flush()}
+            />
+            <p className="memo-fixed" data-testid="memo-paragraph-1">
+              {confirmationParagraph(inspection.itemInspected)}
+            </p>
+            <label className="field">
+              <span>Message</span>
+              <select
+                aria-label="Prefilled message"
+                value={memo.bodySnippetId ?? ""}
+                onChange={(e) => {
+                  const chosen = bodySnippets.find(
+                    (s) => s.id === e.target.value,
+                  );
+                  if (chosen)
+                    patch({ bodySnippetId: chosen.id, bodyText: chosen.text });
+                }}
+              >
+                {memo.bodySnippetId === null && (
+                  <option value="">Choose…</option>
+                )}
+                {bodySnippets.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>Message text (for this memo)</span>
+              <AutoGrowTextarea
+                rows={4}
+                value={memo.bodyText}
+                autoCapitalize="sentences"
+                onChange={(e) => patch({ bodyText: e.target.value })}
+                onBlur={() => void memoSave.flush()}
+              />
+            </label>
+          </section>
+
+          <section
+            className="card memo-section"
+            aria-labelledby="conditions-heading"
+          >
+            <h2 id="conditions-heading">Conditions</h2>
+            <p className="memo-fixed" data-testid="memo-lead-in">
+              {conditionsLeadIn(input.conditions.length)}
+            </p>
+            <fieldset className="memo-conditions">
+              <legend>Standard conditions</legend>
+              {conditionSnippets.map((s) => (
+                <label key={s.id} className="checkbox">
+                  <input
+                    type="checkbox"
+                    checked={conditionTicked(memo, s.id, instructions)}
+                    onChange={(e) =>
+                      patch({
+                        conditionChoices: {
+                          ...memo.conditionChoices,
+                          [s.id]: e.target.checked,
+                        },
+                      })
+                    }
+                  />
+                  {s.text.replace(/\[letters\]/g, letters || "[letters]")}
+                </label>
+              ))}
+            </fieldset>
+            {instructions.length === 0 ? (
+              <p className="muted">
+                No instructions yet, so the memo says &ldquo;Ok to
+                proceed.&rdquo;
+              </p>
+            ) : (
+              <ol className="memo-instructions" aria-label="Instructions">
+                {instructions.map((item) => {
+                  const override = memo.itemOverrides[item.id];
+                  return (
+                    <li key={item.id}>
+                      <label className="field">
+                        <span>
+                          {item.letter}.{" "}
+                          {override !== undefined && (
+                            <span className="muted">
+                              (reworded for this memo)
+                            </span>
+                          )}
+                        </span>
+                        <AutoGrowTextarea
+                          rows={2}
+                          aria-label={`Instruction ${item.letter} in the memo`}
+                          value={override ?? item.text}
+                          onChange={(e) =>
+                            patch({
+                              itemOverrides: {
+                                ...memo.itemOverrides,
+                                [item.id]: e.target.value,
+                              },
+                            })
+                          }
+                          onBlur={() => void memoSave.flush()}
+                        />
+                      </label>
+                      {override !== undefined && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const rest = { ...memo.itemOverrides };
+                            delete rest[item.id];
+                            patch({ itemOverrides: rest });
+                          }}
+                        >
+                          Use item text
+                        </button>
+                      )}
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
+            <p className="muted">
+              Instructions come from the pins; add or change them on the
+              drawings. Rewording one here changes only the memo.
+            </p>
+          </section>
+
+          <section
+            className="card memo-section"
+            aria-labelledby="signoff-heading"
+          >
+            <h2 id="signoff-heading">Sign-off</h2>
+            <label className="field">
+              <span>Name</span>
+              <input
+                value={memo.signOffName}
+                autoCapitalize="words"
+                onChange={(e) => patch({ signOffName: e.target.value })}
+                onBlur={() => void memoSave.flush()}
+              />
+            </label>
+            <label className="field">
+              <span>Title</span>
+              <input
+                value={memo.signOffTitle}
+                autoCapitalize="words"
+                onChange={(e) => patch({ signOffTitle: e.target.value })}
+                onBlur={() => void memoSave.flush()}
+              />
+            </label>
+          </section>
         </div>
 
         <MemoPreview
@@ -604,6 +676,20 @@ function MemoEditorFor({ inspectionId }: { inspectionId: string }) {
         />
       </div>
     </section>
+  );
+}
+
+/** One line: job, client, date and inspector. */
+function jobSummary(job: JobDetailsValues): string {
+  return (
+    [
+      [job.jobNumber, job.jobName].filter((x) => x.trim()).join(" – "),
+      [job.clientName, job.clientCompany].filter((x) => x.trim()).join(", "),
+      formatLongDate(job.date),
+      job.inspector,
+    ]
+      .filter((x) => x.trim())
+      .join(" · ") || "No job details yet"
   );
 }
 

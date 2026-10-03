@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { ArrowRight, FolderSearch, Trash2 } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router";
 import { rememberBack } from "../../app/backTarget";
 import { NotFound } from "../../app/NotFound";
@@ -14,6 +15,7 @@ import {
   type JobPatch,
 } from "../../db/projects";
 import type { JobInspection } from "../../db/types";
+import { ProjectAvatar } from "../projects/ProjectAvatar";
 import { ProjectPicker } from "../projects/ProjectPicker";
 import { DeleteInspectionDialog } from "./DeleteInspectionDialog";
 import { InspectionHeader } from "./InspectionTabs";
@@ -106,87 +108,131 @@ function PreInspectionFor({ id }: { id: string }) {
         }
       />
 
-      <h2>Project</h2>
-      {hasProject ? (
-        <>
-          <p className="button-row">
-            <Link
-              to={`/projects/${inspection.projectId}`}
-              data-testid="project-link"
-              onClick={() =>
-                rememberBack(
-                  `project:${inspection.projectId}`,
-                  tabPath(id, "details"),
-                )
-              }
-            >
-              {inspectionTitle(values)}
-            </Link>
-            <button type="button" onClick={() => setPicking("change")}>
-              Change project
-            </button>
-          </p>
-          <p className="muted">
-            The project&rsquo;s details are shared by every inspection in it:
-            changing them here changes them there too.
-          </p>
-          {missing.length > 0 && (
-            <p className="notice" data-testid="missing-fields">
-              {missing.length === 2
-                ? "Job number and job name are"
-                : missing[0] === "jobNumber"
-                  ? "Job number is"
-                  : "Job name is"}{" "}
-              needed before a memo can be created.
-            </p>
+      <div className="detail-columns">
+        <section className="card detail-card" aria-labelledby="project-heading">
+          {hasProject ? (
+            <>
+              <div className="detail-card-head">
+                <ProjectAvatar
+                  project={{
+                    id: inspection.projectId!,
+                    jobName: values.jobName,
+                    jobNumber: values.jobNumber,
+                  }}
+                />
+                <div className="list-row-main">
+                  <h2 id="project-heading" className="eyebrow">
+                    Project · shared by its inspections
+                  </h2>
+                  <Link
+                    to={`/projects/${inspection.projectId}`}
+                    className="detail-project-link"
+                    data-testid="project-link"
+                    onClick={() =>
+                      rememberBack(
+                        `project:${inspection.projectId}`,
+                        tabPath(id, "details"),
+                      )
+                    }
+                  >
+                    {inspectionTitle(values)}
+                  </Link>
+                </div>
+                <button type="button" onClick={() => setPicking("change")}>
+                  Change project
+                </button>
+              </div>
+              <p className="muted detail-hint">
+                Changing these changes them for every inspection in the project.
+              </p>
+              {missing.length > 0 && (
+                <p className="notice" data-testid="missing-fields">
+                  {missing.length === 2
+                    ? "Job number and job name are"
+                    : missing[0] === "jobNumber"
+                      ? "Job number is"
+                      : "Job name is"}{" "}
+                  needed before a memo can be created.
+                </p>
+              )}
+              <JobDetailsForm
+                label="Project details"
+                only={PROJECT_FIELDS}
+                values={values}
+                onChange={change}
+                onBlur={() => void autosave.flush()}
+              />
+            </>
+          ) : (
+            <div className="needs-project" data-testid="needs-project">
+              <span className="empty-state-icon">
+                <FolderSearch aria-hidden="true" />
+              </span>
+              <h2 id="project-heading">
+                <span className="flag">Needs a project</span>
+              </h2>
+              <p className="muted">
+                This inspection isn&rsquo;t in a project yet. A memo needs one
+                (for the job number and client).
+              </p>
+              <p className="button-row">
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={() => setPicking("new")}
+                >
+                  Create new project
+                </button>
+                <button type="button" onClick={() => setPicking("assign")}>
+                  Assign to project
+                </button>
+              </p>
+            </div>
           )}
-          <JobDetailsForm
-            label="Project details"
-            only={PROJECT_FIELDS}
-            values={values}
-            onChange={change}
-            onBlur={() => void autosave.flush()}
-          />
-        </>
-      ) : (
-        <div className="notice needs-project" data-testid="needs-project">
-          <p>
-            <span className="flag">Needs a project</span> This inspection
-            isn&rsquo;t in a project yet. A memo needs one (for the job number
-            and client).
-          </p>
-          <p className="button-row">
-            <button
-              type="button"
-              className="primary"
-              onClick={() => setPicking("new")}
-            >
-              Create new project
-            </button>
-            <button type="button" onClick={() => setPicking("assign")}>
-              Assign to project
-            </button>
-          </p>
+        </section>
+
+        <div className="detail-stack">
+          <section
+            className="card detail-card"
+            aria-labelledby="inspection-heading"
+          >
+            <h2 id="inspection-heading" className="eyebrow">
+              This inspection
+            </h2>
+            <JobDetailsForm
+              label="Inspection details"
+              only={INSPECTION_FIELDS}
+              values={values}
+              onChange={change}
+              onBlur={() => void autosave.flush()}
+            />
+          </section>
+
+          {hasProject && (
+            <section className="card next-card" aria-label="Next step">
+              <div className="list-row-main">
+                <span className="list-row-title">Next: the drawings</span>
+                <span className="list-row-meta">
+                  Add the drawing PDFs and drop pins on site.
+                </span>
+              </div>
+              <Link
+                to={tabPath(id, "inspection")}
+                className="button-link primary"
+              >
+                Open drawings <ArrowRight aria-hidden="true" />
+              </Link>
+            </section>
+          )}
+
+          <button
+            type="button"
+            className="danger-outline detail-delete"
+            onClick={() => setConfirmDelete(true)}
+          >
+            <Trash2 aria-hidden="true" /> Delete inspection
+          </button>
         </div>
-      )}
-
-      <h2>Inspection details</h2>
-      <JobDetailsForm
-        label="Inspection details"
-        only={INSPECTION_FIELDS}
-        values={values}
-        onChange={change}
-        onBlur={() => void autosave.flush()}
-      />
-
-      <div className="later-section">
-        <button
-          type="button"
-          className="danger-outline"
-          onClick={() => setConfirmDelete(true)}
-        >
-          Delete inspection
-        </button>
       </div>
 
       <ProjectPicker
