@@ -1,177 +1,437 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import {
-  Building2,
+  Check,
   ChevronRight,
-  Clock,
+  ClipboardPlus,
+  Database,
+  Files,
+  FolderSearch,
+  Images,
+  MapPin,
   Plus,
   Search,
-  Trash2,
+  ShieldAlert,
+  ShieldCheck,
+  TriangleAlert,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
 import { rememberBack } from "../../app/backTarget";
 import { appCommit, appVersion } from "../../app/version";
 import { db } from "../../db/db";
-import { createInspection, deleteInspection } from "../../db/inspections";
+import { createInspection } from "../../db/inspections";
 import { createProject, jobInspection } from "../../db/projects";
-import type { JobInspection, Project } from "../../db/types";
-import { formatDateTime, formatLongDate } from "../../lib/dates";
+import {
+  formatBytes,
+  getStorageStatus,
+  type StorageStatus,
+} from "../../db/storage";
+import { SETTINGS_ID, type JobInspection, type Project } from "../../db/types";
+import { formatLongDate } from "../../lib/dates";
 import { ProjectAvatar } from "../projects/ProjectAvatar";
 import { ProjectPicker } from "../projects/ProjectPicker";
 import { matchesSearch } from "../projects/projectSearch";
-import { DeleteInspectionDialog } from "./DeleteInspectionDialog";
+import {
+  editedAgo,
+  emptyProgress,
+  greeting,
+  groupByWeek,
+  inspectionMatches,
+  longToday,
+  monthStats,
+  needsAttention,
+  nextStep,
+  progressByInspection,
+  stepsDone,
+  type InspectionProgress,
+} from "./homeData";
 import { inspectionTitle } from "./inspectionTitle";
-import { tabPath } from "./tabPath";
+import { tabPath, type InspectionTab } from "./tabPath";
 
 /** How many inspections Recent shows. */
 const RECENT = 10;
 
-/** What's done on an inspection, for its status chip. */
-export interface InspectionProgress {
-  memoReference: string | null;
-  itemCount: number;
-}
-
 /**
- * Inspections home (SPEC section 12): recent inspections and projects side
- * by side (stacked in portrait). New inspection asks for its project first.
+ * Inspections home (SPEC section 12): a greeting, the inspection to carry
+ * on with, what needs attention, recent inspections and projects. New
+ * inspection asks for its project first.
  */
 export function InspectionsPage() {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
+  const [choosing, setChoosing] = useState<"inspection" | "project" | null>(
+    null,
+  );
   const data = useLiveQuery(async () => {
-    const [inspections, projects, memos, items] = await Promise.all([
-      db.inspections.orderBy("updatedAt").reverse().toArray(),
-      db.projects.toArray(),
-      db.memos.toArray(),
-      db.items.toArray(),
-    ]);
+    const [inspections, projects, memos, items, drawings, settings] =
+      await Promise.all([
+        db.inspections.orderBy("updatedAt").reverse().toArray(),
+        db.projects.toArray(),
+        db.memos.toArray(),
+        db.items.toArray(),
+        db.drawings.toArray(),
+        db.settings.get(SETTINGS_ID),
+      ]);
     const byId = new Map(projects.map((p) => [p.id, p]));
-    const progress = new Map<string, InspectionProgress>();
-    for (const i of inspections)
-      progress.set(i.id, { memoReference: null, itemCount: 0 });
-    for (const m of memos) {
-      const p = progress.get(m.inspectionId);
-      if (p) p.memoReference = m.reference;
-    }
-    for (const item of items) {
-      const p = progress.get(item.inspectionId);
-      if (p) p.itemCount++;
-    }
     return {
       inspections: inspections.map((i) =>
         jobInspection(i, i.projectId ? byId.get(i.projectId) : null),
       ),
       projects,
-      progress,
+      progress: progressByInspection(inspections, memos, items, drawings),
+      month: monthStats(inspections, memos, items),
+      name: settings?.inspectorName ?? "",
     };
   }, []);
-  const [toDelete, setToDelete] = useState<JobInspection | null>(null);
-  const [choosing, setChoosing] = useState(false);
 
   async function start(projectId: string | null) {
-    setChoosing(false);
+    setChoosing(null);
     const inspection = await createInspection(db, new Date(), projectId);
     rememberBack(`inspection:${inspection.id}`, "/");
     // A new inspection starts with its job details.
     navigate(tabPath(inspection.id, "details"));
   }
 
-  const recent = data?.inspections.slice(0, RECENT) ?? [];
+  const newInspection = (
+    <button
+      type="button"
+      className="primary"
+      onClick={() => setChoosing("inspection")}
+    >
+      <Plus aria-hidden="true" /> New inspection
+    </button>
+  );
+
+  const pickers = (
+    <ProjectPicker
+      open={choosing !== null}
+      title={choosing === "project" ? "New project" : "New inspection"}
+      mode={choosing === "project" ? "new" : "both"}
+      onPick={(projectId) => void start(projectId)}
+      onCreate={async (details) => {
+        const project = await createProject(db, details);
+        if (choosing === "project") {
+          setChoosing(null);
+          rememberBack(`project:${project.id}`, "/");
+          navigate(`/projects/${project.id}`);
+        } else await start(project.id);
+      }}
+      onSkip={choosing === "inspection" ? () => void start(null) : undefined}
+      onCancel={() => setChoosing(null)}
+    />
+  );
+
+  if (!data) return null;
+
+  if (data.inspections.length === 0 && data.projects.length === 0)
+    return (
+      <section className="home">
+        <div className="empty-state home-first-run">
+          <span className="empty-state-icon">
+            <ClipboardPlus aria-hidden="true" />
+          </span>
+          <h1>Start your first inspection</h1>
+          <p className="muted">
+            Pick or create the project, add the drawing PDFs, then drop pins on
+            site. Everything stays on this iPad.
+          </p>
+          {newInspection}
+        </div>
+        <p className="app-version home-version">
+          Version {appVersion} ({appCommit})
+        </p>
+        {pickers}
+      </section>
+    );
+
+  const searching = search.trim() !== "";
+  const matching = data.inspections.filter((i) => inspectionMatches(i, search));
+  const recent = searching ? matching : matching.slice(0, RECENT);
   // Inspections still needing a project stay in view even when older.
-  const olderUnsorted =
-    data?.inspections.slice(RECENT).filter((i) => !i.projectId) ?? [];
+  const olderUnsorted = searching
+    ? []
+    : data.inspections.slice(RECENT).filter((i) => !i.projectId);
+  const latest = data.inspections[0];
+  const attention = needsAttention(data.inspections, data.progress);
 
   return (
     <section className="home">
-      <div className="page-heading">
-        <h1>Inspections</h1>
-        <button
-          type="button"
-          className="primary"
-          onClick={() => setChoosing(true)}
-        >
-          <Plus aria-hidden="true" /> New inspection
-        </button>
-      </div>
+      <header className="home-head">
+        <div className="home-hello">
+          <p className="muted">{longToday()}</p>
+          <h1>{greeting(data.name)}</h1>
+        </div>
+        <label className="search-box home-search">
+          <Search aria-hidden="true" />
+          <input
+            type="search"
+            aria-label="Search inspections and projects"
+            value={search}
+            placeholder="Search inspections and jobs"
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </label>
+        {newInspection}
+      </header>
 
-      {data && (
-        <div className="home-columns">
-          <section className="home-column" aria-labelledby="recent-heading">
-            <h2 id="recent-heading" className="section-title">
-              <Clock aria-hidden="true" /> Recent inspections
+      <div className="home-columns">
+        <div className="home-main">
+          {!searching && latest && (
+            <ContinueCard
+              inspection={latest}
+              progress={data.progress.get(latest.id) ?? emptyProgress()}
+            />
+          )}
+
+          {!searching && attention.length > 0 && (
+            <section aria-labelledby="attention-heading">
+              <h2 id="attention-heading" className="eyebrow">
+                Needs attention · {attention.length}
+              </h2>
+              <ul className="attention-grid" aria-label="Needs attention">
+                {attention.map((a) => (
+                  <li key={a.inspection.id}>
+                    <InspectionLink
+                      inspection={a.inspection}
+                      tab={a.tab}
+                      className={`attention-card tone-${a.tone}`}
+                    >
+                      <span className="attention-icon">
+                        {a.tone === "danger" ? (
+                          <FolderSearch aria-hidden="true" />
+                        ) : (
+                          <TriangleAlert aria-hidden="true" />
+                        )}
+                      </span>
+                      <span className="list-row-main">
+                        <span className="list-row-title">
+                          {titleOf(a.inspection)}
+                        </span>
+                        <span className="attention-reason">{a.reason}</span>
+                      </span>
+                    </InspectionLink>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          <section aria-labelledby="recent-heading">
+            <h2 id="recent-heading" className="eyebrow">
+              {searching ? "Matching inspections" : "Recent inspections"}
             </h2>
             {recent.length === 0 ? (
-              <p className="empty-state">No inspections yet</p>
+              <p className="list-empty">
+                {searching ? "No inspections match." : "No inspections yet"}
+              </p>
             ) : (
-              <ul className="inspection-list" aria-label="Recent inspections">
-                {recent.map((inspection) => (
-                  <InspectionCard
-                    key={inspection.id}
-                    inspection={inspection}
-                    progress={data.progress.get(inspection.id)}
-                    onDelete={setToDelete}
-                  />
+              <ul className="list-panel" aria-label="Recent inspections">
+                {groupByWeek(recent).map((group) => (
+                  <GroupRows key={group.label} label={group.label}>
+                    {group.inspections.map((inspection) => (
+                      <InspectionCard
+                        key={inspection.id}
+                        inspection={inspection}
+                        progress={data.progress.get(inspection.id)}
+                      />
+                    ))}
+                  </GroupRows>
                 ))}
               </ul>
             )}
             {olderUnsorted.length > 0 && (
               <>
-                <h3 className="section-subtitle">Also needing a project</h3>
-                <ul className="inspection-list" aria-label="Needs a project">
+                <h3 className="eyebrow home-subhead">Also needing a project</h3>
+                <ul className="list-panel" aria-label="Needs a project">
                   {olderUnsorted.map((inspection) => (
                     <InspectionCard
                       key={inspection.id}
                       inspection={inspection}
                       progress={data.progress.get(inspection.id)}
-                      onDelete={setToDelete}
                     />
                   ))}
                 </ul>
               </>
             )}
           </section>
-
-          <section className="home-column" aria-labelledby="projects-heading">
-            <h2 id="projects-heading" className="section-title">
-              <Building2 aria-hidden="true" /> Projects
-            </h2>
-            <ProjectsList
-              projects={data.projects}
-              inspections={data.inspections}
-              search={search}
-              onSearch={setSearch}
-            />
-          </section>
         </div>
-      )}
 
-      <p className="app-version">
+        <aside className="home-side">
+          <ProjectsPanel
+            projects={data.projects}
+            inspections={data.inspections}
+            search={search}
+            onNew={() => setChoosing("project")}
+          />
+          {!searching && <MonthCard month={data.month} />}
+          {!searching && <StorageCard />}
+        </aside>
+      </div>
+
+      <p className="app-version home-version">
         Version {appVersion} ({appCommit})
       </p>
-
-      <ProjectPicker
-        open={choosing}
-        title="New inspection"
-        mode="both"
-        onPick={(projectId) => void start(projectId)}
-        onCreate={async (details) => {
-          const project = await createProject(db, details);
-          await start(project.id);
-        }}
-        onSkip={() => void start(null)}
-        onCancel={() => setChoosing(false)}
-      />
-
-      <DeleteInspectionDialog
-        inspection={toDelete}
-        onCancel={() => setToDelete(null)}
-        onConfirm={(inspection) => {
-          setToDelete(null);
-          void deleteInspection(db, inspection.id);
-        }}
-      />
+      {pickers}
     </section>
+  );
+}
+
+/** "Level 3 slab reinforcement", or a placeholder. */
+function titleOf(inspection: JobInspection) {
+  return inspection.itemInspected.trim() || "Untitled inspection";
+}
+
+/** Opens an inspection's step; its back button returns here. */
+function InspectionLink({
+  inspection,
+  tab,
+  className,
+  children,
+}: {
+  inspection: JobInspection;
+  tab: InspectionTab;
+  className: string;
+  children: ReactNode;
+}) {
+  return (
+    <Link
+      to={tabPath(inspection.id, tab)}
+      className={className}
+      onClick={() => rememberBack(`inspection:${inspection.id}`, "/")}
+    >
+      {children}
+    </Link>
+  );
+}
+
+/** A labelled run of rows inside one list (e.g. This week). */
+function GroupRows({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <>
+      <li className="list-group-label" role="presentation">
+        {label}
+      </li>
+      {children}
+    </>
+  );
+}
+
+/** The inspection edited last: where it's got to and the next step. */
+function ContinueCard({
+  inspection,
+  progress,
+}: {
+  inspection: JobInspection;
+  progress: InspectionProgress;
+}) {
+  const done = stepsDone(inspection, progress);
+  const next = nextStep(inspection, progress);
+  const plural = (n: number, word: string) =>
+    `${n} ${word}${n === 1 ? "" : "s"}`;
+  return (
+    <section className="card continue-card" aria-labelledby="continue-heading">
+      <p className="eyebrow" id="continue-heading">
+        Continue where you left off · edited {editedAgo(inspection.updatedAt)}
+      </p>
+      <div className="continue-title">
+        <InspectionAvatar inspection={inspection} large />
+        <div className="list-row-main">
+          <h2>{titleOf(inspection)}</h2>
+          <span className="list-row-meta">
+            {[
+              inspection.projectId ? inspectionTitle(inspection) : null,
+              inspection.client.company,
+            ]
+              .filter(Boolean)
+              .join(" · ") || "No project yet"}
+          </span>
+        </div>
+      </div>
+      <ol className="progress-steps" aria-label="Progress">
+        {["Pre-inspection", "Inspection", "Site memo"].map((label, i) => (
+          <li key={label} className={done[i] ? "done" : undefined}>
+            <span className="progress-bar" />
+            <span className="progress-label">
+              {done[i] && <Check aria-hidden="true" />}
+              {label}
+              <span className="sr-only">{done[i] ? ", done" : ", to do"}</span>
+            </span>
+          </li>
+        ))}
+      </ol>
+      <ul className="continue-stats" aria-label="Contents">
+        <li>
+          <Files aria-hidden="true" /> {plural(progress.drawings, "drawing")}
+        </li>
+        <li>
+          <MapPin aria-hidden="true" className="tone-instruction" />{" "}
+          {plural(progress.instructions, "instruction")}
+        </li>
+        <li>
+          <MapPin aria-hidden="true" className="tone-observation" />{" "}
+          {plural(progress.observations, "observation")}
+        </li>
+        <li>
+          <Images aria-hidden="true" /> {plural(progress.photos, "photo")}
+        </li>
+      </ul>
+      <div className="button-row">
+        <InspectionLink
+          inspection={inspection}
+          tab={next.tab}
+          className="button-link emphasis"
+        >
+          {next.label}
+        </InspectionLink>
+        {next.tab !== "inspection" && inspection.projectId && (
+          <InspectionLink
+            inspection={inspection}
+            tab="inspection"
+            className="button-link"
+          >
+            Open drawings
+          </InspectionLink>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/** The project's badge, or a plain one for an inspection without a project. */
+function InspectionAvatar({
+  inspection,
+  large = false,
+}: {
+  inspection: JobInspection;
+  large?: boolean;
+}) {
+  if (!inspection.projectId)
+    return (
+      <span
+        className={`project-avatar avatar-none${large ? " avatar-large" : ""}`}
+        aria-hidden="true"
+      >
+        ?
+      </span>
+    );
+  return (
+    <ProjectAvatar
+      project={{
+        id: inspection.projectId,
+        jobName: inspection.jobName,
+        jobNumber: inspection.jobNumber,
+      }}
+      large={large}
+    />
   );
 }
 
@@ -196,71 +456,62 @@ export function StatusChip({
   );
 }
 
-/** One inspection: what was inspected, its job and date, and its status. */
+/**
+ * One inspection as a row: its project badge, what was inspected, the job
+ * and date, and its status. Opens on its Inspection step (Pre-inspection
+ * while it needs a project).
+ */
 export function InspectionCard({
   inspection,
   progress,
-  onDelete,
   from = "/",
 }: {
   inspection: JobInspection;
   progress?: InspectionProgress;
-  onDelete?: (inspection: JobInspection) => void;
   /** The screen it's listed on, where its back button returns. */
   from?: string;
 }) {
-  const what = inspection.itemInspected.trim() || "Untitled inspection";
   return (
-    <li className="inspection-card">
+    <li>
       <Link
         to={
           inspection.projectId
             ? `/inspections/${inspection.id}`
             : tabPath(inspection.id, "details")
         }
-        className="inspection-card-link"
+        className="list-row inspection-row"
         onClick={() => rememberBack(`inspection:${inspection.id}`, from)}
       >
-        <span className="inspection-card-title">{what}</span>
-        <span>
-          {[
-            inspection.projectId ? inspectionTitle(inspection) : null,
-            inspection.client.company,
-            formatLongDate(inspection.date),
-          ]
-            .filter(Boolean)
-            .join(" · ")}
+        <InspectionAvatar inspection={inspection} />
+        <span className="list-row-main">
+          <span className="list-row-title">{titleOf(inspection)}</span>
+          <span className="list-row-meta">
+            {[
+              inspection.projectId ? inspectionTitle(inspection) : null,
+              inspection.client.company,
+              formatLongDate(inspection.date),
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </span>
         </span>
-        <span className="muted small">
-          Edited {formatDateTime(inspection.updatedAt)}
-        </span>
+        {progress && <StatusChip inspection={inspection} progress={progress} />}
+        <ChevronRight aria-hidden="true" className="row-chevron" />
       </Link>
-      <StatusChip inspection={inspection} progress={progress} />
-      {onDelete && (
-        <button
-          type="button"
-          className="icon-button danger-outline"
-          aria-label={`Delete ${inspectionTitle(inspection)}, ${what}`}
-          title="Delete inspection"
-          onClick={() => onDelete(inspection)}
-        >
-          <Trash2 aria-hidden="true" />
-        </button>
-      )}
     </li>
   );
 }
 
-function ProjectsList({
+function ProjectsPanel({
   projects,
   inspections,
   search,
-  onSearch,
+  onNew,
 }: {
   projects: Project[];
   inspections: JobInspection[];
   search: string;
-  onSearch: (q: string) => void;
+  onNew: () => void;
 }) {
   // Most recent activity first: the project's or one of its inspections'.
   const latest = new Map<string, number>();
@@ -273,50 +524,40 @@ function ProjectsList({
     );
     counts.set(i.projectId, (counts.get(i.projectId) ?? 0) + 1);
   }
+  const activity = (p: Project) => Math.max(p.updatedAt, latest.get(p.id) ?? 0);
   const listed = projects
     .filter((p) => matchesSearch(p, search))
-    .sort(
-      (a, b) =>
-        Math.max(b.updatedAt, latest.get(b.id) ?? 0) -
-        Math.max(a.updatedAt, latest.get(a.id) ?? 0),
-    );
+    .sort((a, b) => activity(b) - activity(a));
 
   return (
-    <>
-      <label className="search-box">
-        <Search aria-hidden="true" />
-        <input
-          type="search"
-          aria-label="Find a project"
-          value={search}
-          placeholder="Find a project"
-          autoComplete="off"
-          autoCorrect="off"
-          spellCheck={false}
-          onChange={(e) => onSearch(e.target.value)}
-        />
-      </label>
+    <section className="card side-card" aria-labelledby="projects-heading">
+      <div className="side-card-head">
+        <h2 id="projects-heading" className="eyebrow">
+          Projects
+        </h2>
+        <button type="button" className="quiet small" onClick={onNew}>
+          <Plus aria-hidden="true" /> New project
+        </button>
+      </div>
       {listed.length === 0 ? (
-        <p className="empty-state">
+        <p className="list-empty">
           {projects.length ? "No projects match." : "No projects yet"}
         </p>
       ) : (
-        <ul className="project-list" aria-label="Projects">
+        <ul className="side-list" aria-label="Projects">
           {listed.map((p) => {
             const count = counts.get(p.id) ?? 0;
             return (
               <li key={p.id}>
                 <Link
                   to={`/projects/${p.id}`}
-                  className="project-row"
+                  className="list-row"
                   onClick={() => rememberBack(`project:${p.id}`, "/")}
                 >
                   <ProjectAvatar project={p} />
-                  <span className="project-row-text">
-                    <span className="inspection-card-title">
-                      {inspectionTitle(p)}
-                    </span>
-                    <span className="muted small">
+                  <span className="list-row-main">
+                    <span className="list-row-title">{inspectionTitle(p)}</span>
+                    <span className="list-row-meta">
                       {[
                         p.client.company,
                         `${count} inspection${count === 1 ? "" : "s"}`,
@@ -332,6 +573,73 @@ function ProjectsList({
           })}
         </ul>
       )}
-    </>
+    </section>
+  );
+}
+
+function MonthCard({
+  month,
+}: {
+  month: { inspections: number; memos: number; items: number };
+}) {
+  return (
+    <section className="card side-card" aria-labelledby="month-heading">
+      <h2 id="month-heading" className="eyebrow">
+        This month
+      </h2>
+      <dl className="stat-row">
+        <div>
+          <dt>Inspections</dt>
+          <dd>{month.inspections}</dd>
+        </div>
+        <div>
+          <dt>Memos</dt>
+          <dd>{month.memos}</dd>
+        </div>
+        <div>
+          <dt>Items</dt>
+          <dd>{month.items}</dd>
+        </div>
+      </dl>
+    </section>
+  );
+}
+
+function StorageCard() {
+  const [storage, setStorage] = useState<StorageStatus | null>(null);
+  useEffect(() => {
+    void getStorageStatus().then(setStorage);
+  }, []);
+  if (!storage || storage.usage === undefined || !storage.quota) return null;
+  const used = Math.min(100, (storage.usage / storage.quota) * 100);
+  return (
+    <section className="card side-card" aria-labelledby="storage-heading">
+      <div className="side-card-head">
+        <h2 id="storage-heading" className="eyebrow">
+          <Database aria-hidden="true" /> Storage
+        </h2>
+        {storage.persisted !== undefined && (
+          <span
+            className={storage.persisted ? "storage-kept" : "storage-at-risk"}
+          >
+            {storage.persisted ? (
+              <>
+                <ShieldCheck aria-hidden="true" /> Kept by the iPad
+              </>
+            ) : (
+              <>
+                <ShieldAlert aria-hidden="true" /> May be cleared
+              </>
+            )}
+          </span>
+        )}
+      </div>
+      <div className="meter" aria-hidden="true">
+        <span style={{ width: `${Math.max(used, 1)}%` }} />
+      </div>
+      <p className="muted small">
+        {formatBytes(storage.usage)} used of {formatBytes(storage.quota)}
+      </p>
+    </section>
   );
 }

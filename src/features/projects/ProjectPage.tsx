@@ -196,7 +196,7 @@ function ProjectFor({ initial }: { initial: Project }) {
           {!live ? null : inspections.length === 0 ? (
             <p className="muted">No inspections in this project yet.</p>
           ) : (
-            <ul className="inspection-list" aria-label="Project inspections">
+            <ul className="list-panel" aria-label="Project inspections">
               {inspections.map((i) => (
                 <InspectionCard key={i.id} inspection={i} from={here} />
               ))}

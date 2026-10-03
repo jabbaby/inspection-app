@@ -6,7 +6,9 @@ test("loads the shell with Inspections and Settings only", async ({ page }) => {
 
   const nav = page.getByRole("navigation", { name: "Main" });
   await expect(nav.getByRole("link")).toHaveText(["Inspections", "Settings"]);
-  await expect(page.getByText("No inspections yet")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Start your first inspection" }),
+  ).toBeVisible();
   await expect(page.getByText(/^Version \d+\.\d+\.\d+ \(.+\)$/)).toBeVisible();
   await expect(page.getByTestId("net-status")).toHaveText("Online");
 });
@@ -35,7 +37,9 @@ test(
     await context.setOffline(true);
     await page.reload();
 
-    await expect(page.getByText("No inspections yet")).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Start your first inspection" }),
+    ).toBeVisible();
     await expect(page.getByTestId("net-status")).toHaveText("Offline");
 
     await page.getByRole("link", { name: "Settings" }).click();
@@ -59,7 +63,9 @@ test("makes no requests to other origins", async ({ page, baseURL }) => {
   });
 
   await page.goto("./");
-  await expect(page.getByText("No inspections yet")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Start your first inspection" }),
+  ).toBeVisible();
   await page.getByRole("link", { name: "Settings" }).click();
   await expect(page.getByTestId("snippet-count")).toContainText("8 snippets");
   await page.waitForLoadState("networkidle");

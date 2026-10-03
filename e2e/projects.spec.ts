@@ -182,9 +182,10 @@ test("deleting a project says how many inspections go with it", async ({
   await dialog.getByRole("button", { name: "Cancel" }).click();
   await page.getByRole("button", { name: "Delete project" }).click();
   await dialog.getByRole("button", { name: "Delete" }).click();
-  await expect(page.getByText("No projects yet")).toBeVisible();
-  await page.goto("./");
-  await expect(page.getByText("No inspections yet")).toBeVisible();
+  // Nothing left: Inspections shows its first-run start.
+  await expect(
+    page.getByRole("heading", { name: "Start your first inspection" }),
+  ).toBeVisible();
 });
 
 test("back returns to the screen an inspection or project was opened from", async ({
@@ -210,7 +211,7 @@ test("back returns to the screen an inspection or project was opened from", asyn
   );
   await page.getByRole("link", { name: "Back to inspections" }).click();
   await expect(
-    page.getByRole("heading", { name: "Inspections", exact: true }),
+    page.getByRole("list", { name: "Recent inspections" }),
   ).toBeVisible();
 
   // Inspection → its project: back goes to the inspection.

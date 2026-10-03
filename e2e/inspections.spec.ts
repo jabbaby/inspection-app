@@ -60,7 +60,10 @@ test("creates an inspection, autosaves every field and keeps it after reload", a
     .getByRole("listitem")
     .filter({ hasText: "SY000001 – Example Apartments" });
   await expect(card).toContainText("Example Builders Pty Ltd");
-  await expect(card).toContainText("Edited");
+  // When it was edited shows on the Continue card.
+  await expect(
+    page.getByText(/^Continue where you left off · edited/),
+  ).toBeVisible();
 });
 
 test("saves an edit made just before leaving the screen", async ({ page }) => {
@@ -79,23 +82,34 @@ test("saves an edit made just before leaving the screen", async ({ page }) => {
 test("deletes an inspection only after confirming", async ({ page }) => {
   await newInspection(page);
   await fillJob(page);
-  await page.getByRole("link", { name: "Back to inspections" }).click();
 
-  const deleteButton = page.getByRole("button", {
-    name: "Delete SY000001 – Example Apartments",
-  });
+  // Deleting lives on Pre-inspection (not on the home screen's rows).
+  const deleteButton = page.getByRole("button", { name: "Delete inspection" });
   await deleteButton.click();
   const dialog = page.getByRole("dialog", { name: "Delete inspection?" });
   await expect(dialog).toContainText("SY000001 – Example Apartments");
   await dialog.getByRole("button", { name: "Cancel" }).click();
+  await page.getByRole("link", { name: "Back to inspections" }).click();
   await expect(
     page
       .getByRole("list", { name: "Recent inspections" })
       .getByRole("listitem"),
   ).toHaveCount(1);
+  await expect(
+    page.getByRole("button", { name: /^Delete SY000001/ }),
+  ).toHaveCount(0);
 
+  await page
+    .getByRole("list", { name: "Recent inspections" })
+    .getByRole("link")
+    .click();
+  await page
+    .getByRole("navigation", { name: "Inspection sections" })
+    .getByRole("link", { name: "Pre-inspection", exact: true })
+    .click();
   await deleteButton.click();
   await dialog.getByRole("button", { name: "Delete" }).click();
+  // The project is still there, so Recent says it's empty.
   await expect(page.getByText("No inspections yet")).toBeVisible();
 });
 

@@ -194,7 +194,7 @@ function PickerDialog({
 export function ProjectLabel({ project }: { project: Project }) {
   return (
     <>
-      <span className="inspection-card-title">{inspectionTitle(project)}</span>
+      <span className="list-row-title">{inspectionTitle(project)}</span>
       {project.client.company && (
         <span className="muted">{project.client.company}</span>
       )}

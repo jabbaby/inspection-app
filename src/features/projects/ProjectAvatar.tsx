@@ -14,14 +14,17 @@ function initials(project: Pick<Project, "jobName" | "jobNumber">) {
 /** A coloured initials badge, the same colour for a project every time. */
 export function ProjectAvatar({
   project,
+  large = false,
 }: {
   project: Pick<Project, "id" | "jobName" | "jobNumber">;
+  /** The bigger badge, e.g. on the home screen's Continue card. */
+  large?: boolean;
 }) {
   let hash = 0;
   for (const c of project.id) hash = (hash * 31 + c.charCodeAt(0)) >>> 0;
   return (
     <span
-      className="project-avatar"
+      className={large ? "project-avatar avatar-large" : "project-avatar"}
       style={{ background: COLOURS[hash % COLOURS.length] }}
       aria-hidden="true"
     >
