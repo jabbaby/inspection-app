@@ -1,13 +1,14 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { Files, List, MapPin, Maximize } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router";
+import { useParams, useSearchParams } from "react-router";
+import { NotFound } from "../../app/NotFound";
 import { redoLast, undoLast, useUndo } from "../../app/undo";
 import { db } from "../../db/db";
 import { listDrawings, setPageSizes } from "../../db/drawings";
 import { moveObservationBox, updateItem } from "../../db/items";
 import { createItemWithUndo, setArrowsWithUndo } from "../items/itemActions";
-import { CompactInspectionHeader } from "../inspections/InspectionTabs";
+import { InspectionHeader } from "../inspections/InspectionTabs";
 import { QuickPhotoButton } from "../photos/QuickPhotoButton";
 import { DrawingsSection } from "./DrawingsSection";
 import { kindName } from "../items/letters";
@@ -303,14 +304,7 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
 
   if (inspection === undefined || drawings === undefined) return null;
   if (!inspection) {
-    return (
-      <section>
-        <p>
-          <Link to="/">‹ Inspections</Link>
-        </p>
-        <h1>Inspection not found</h1>
-      </section>
-    );
+    return <NotFound what="Inspection" />;
   }
 
   const currentDrawing = drawings.find((d) => d.id === current?.drawingId);
@@ -319,7 +313,7 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
 
   return (
     <section className="drawing-screen">
-      <CompactInspectionHeader inspectionId={inspectionId} />
+      <InspectionHeader inspectionId={inspectionId} current="inspection" />
       {!showList && (
         <div className="viewer-toolbar" role="toolbar" aria-label="Drawings">
           <span className="viewer-panels">

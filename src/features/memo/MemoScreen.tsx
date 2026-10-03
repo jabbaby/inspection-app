@@ -1,7 +1,8 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { FileDown } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router";
+import { useParams } from "react-router";
+import { NotFound } from "../../app/NotFound";
 import { AutoGrowTextarea } from "../../app/AutoGrowTextarea";
 import { saveStateLabel, useAutosave } from "../../app/useAutosave";
 import { db } from "../../db/db";
@@ -65,15 +66,7 @@ export function MemoScreen() {
   );
   if (!found) return null;
   const { inspection, memoId } = found;
-  if (!inspection)
-    return (
-      <section>
-        <p>
-          <Link to="/">‹ Inspections</Link>
-        </p>
-        <h1>Inspection not found</h1>
-      </section>
-    );
+  if (!inspection) return <NotFound what="Inspection" />;
   return (
     <>
       {memoId ? (
@@ -170,14 +163,7 @@ function MemoEditorFor({ inspectionId }: { inspectionId: string }) {
   if (load.status === "loading") return null;
   if (load.status === "missing" || !job || !memo || !items || !snippets) {
     if (load.status !== "missing") return null;
-    return (
-      <section>
-        <p>
-          <Link to="/">‹ Inspections</Link>
-        </p>
-        <h1>Memo not found</h1>
-      </section>
-    );
+    return <NotFound what="Memo" />;
   }
 
   async function setSignature(source: Uint8Array | "mine" | null) {

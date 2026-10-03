@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
+import { rememberBack } from "../../app/backTarget";
+import { NotFound } from "../../app/NotFound";
 import { saveStateLabel, useAutosave } from "../../app/useAutosave";
 import { db } from "../../db/db";
 import { deleteInspection, missingJobFields } from "../../db/inspections";
@@ -15,6 +17,7 @@ import type { JobInspection } from "../../db/types";
 import { ProjectPicker } from "../projects/ProjectPicker";
 import { DeleteInspectionDialog } from "./DeleteInspectionDialog";
 import { InspectionHeader } from "./InspectionTabs";
+import { tabPath } from "./tabPath";
 import { inspectionTitle } from "./inspectionTitle";
 import { JobDetailsForm, type JobDetailsValues } from "./JobDetailsForm";
 import {
@@ -30,18 +33,6 @@ type Load =
   | { status: "loading" }
   | { status: "missing" }
   | { status: "ready"; inspection: JobInspection };
-
-function NotFound() {
-  return (
-    <section>
-      <p>
-        <Link to="/">‹ Inspections</Link>
-      </p>
-      <h1>Inspection not found</h1>
-      <p>It may have been deleted on this device.</p>
-    </section>
-  );
-}
 
 /**
  * Pre-inspection tab: the inspection's project (shared job details,
@@ -83,7 +74,8 @@ function PreInspectionFor({ id }: { id: string }) {
   }, [id, show]);
 
   if (load.status === "loading") return null;
-  if (load.status === "missing" || !values) return <NotFound />;
+  if (load.status === "missing" || !values)
+    return <NotFound what="Inspection" />;
 
   const { inspection } = load;
   const hasProject = inspection.projectId !== null;
@@ -121,6 +113,12 @@ function PreInspectionFor({ id }: { id: string }) {
             <Link
               to={`/projects/${inspection.projectId}`}
               data-testid="project-link"
+              onClick={() =>
+                rememberBack(
+                  `project:${inspection.projectId}`,
+                  tabPath(id, "details"),
+                )
+              }
             >
               {inspectionTitle(values)}
             </Link>

@@ -187,6 +187,43 @@ test("deleting a project says how many inspections go with it", async ({
   await expect(page.getByText("No inspections yet")).toBeVisible();
 });
 
+test("back returns to the screen an inspection or project was opened from", async ({
+  page,
+}) => {
+  await page.goto("./");
+  await startInspection(page, PROJECT);
+  // Home → project → inspection: back goes to the project, then home.
+  await page.goto("./");
+  await page
+    .getByRole("link", { name: /Example Apartments/ })
+    .last()
+    .click();
+  await expect(page.getByTestId("project-title")).toBeVisible();
+  await page
+    .getByRole("list", { name: "Project inspections" })
+    .getByRole("link")
+    .click();
+  await openTab(page, "Site memo");
+  await page.getByRole("link", { name: "Back to project" }).click();
+  await expect(page.getByTestId("project-title")).toHaveText(
+    "SY000001 – Example Apartments",
+  );
+  await page.getByRole("link", { name: "Back to inspections" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Inspections", exact: true }),
+  ).toBeVisible();
+
+  // Inspection → its project: back goes to the inspection.
+  await page
+    .getByRole("list", { name: "Recent inspections" })
+    .getByRole("link")
+    .click();
+  await openTab(page, "Pre-inspection");
+  await page.getByTestId("project-link").click();
+  await page.getByRole("link", { name: "Back to inspection" }).click();
+  await expect(page).toHaveURL(/\/details$/);
+});
+
 test("Recent shows the last 10 inspections edited", async ({ page }) => {
   test.slow(); // creates 11 inspections
   await page.goto("./");

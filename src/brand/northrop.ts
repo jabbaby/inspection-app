@@ -64,6 +64,9 @@ export const northrop = {
       "./assets/northrop-wordmark-cream.png",
       import.meta.url,
     ).href,
+    /** Red wordmark for the app's top bar. */
+    wordmarkRed: new URL("./assets/northrop-wordmark-red.png", import.meta.url)
+      .href,
     /** Red "N" roundel for the footer (sample image3.png). */
     icon: new URL("./assets/northrop-icon.png", import.meta.url).href,
     /** Static Figtree TTFs for PDF embedding (SIL OFL, see assets/fonts/OFL.txt). */

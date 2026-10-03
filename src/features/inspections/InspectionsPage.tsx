@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
+import { rememberBack } from "../../app/backTarget";
 import { appCommit, appVersion } from "../../app/version";
 import { db } from "../../db/db";
 import { createInspection, deleteInspection } from "../../db/inspections";
@@ -71,6 +72,7 @@ export function InspectionsPage() {
   async function start(projectId: string | null) {
     setChoosing(false);
     const inspection = await createInspection(db, new Date(), projectId);
+    rememberBack(`inspection:${inspection.id}`, "/");
     // A new inspection starts with its job details.
     navigate(tabPath(inspection.id, "details"));
   }
@@ -199,10 +201,13 @@ export function InspectionCard({
   inspection,
   progress,
   onDelete,
+  from = "/",
 }: {
   inspection: JobInspection;
   progress?: InspectionProgress;
   onDelete?: (inspection: JobInspection) => void;
+  /** The screen it's listed on, where its back button returns. */
+  from?: string;
 }) {
   const what = inspection.itemInspected.trim() || "Untitled inspection";
   return (
@@ -214,6 +219,7 @@ export function InspectionCard({
             : tabPath(inspection.id, "details")
         }
         className="inspection-card-link"
+        onClick={() => rememberBack(`inspection:${inspection.id}`, from)}
       >
         <span className="inspection-card-title">{what}</span>
         <span>
@@ -300,7 +306,11 @@ function ProjectsList({
             const count = counts.get(p.id) ?? 0;
             return (
               <li key={p.id}>
-                <Link to={`/projects/${p.id}`} className="project-row">
+                <Link
+                  to={`/projects/${p.id}`}
+                  className="project-row"
+                  onClick={() => rememberBack(`project:${p.id}`, "/")}
+                >
                   <ProjectAvatar project={p} />
                   <span className="project-row-text">
                     <span className="inspection-card-title">

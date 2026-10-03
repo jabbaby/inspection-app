@@ -1,7 +1,10 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
+import { AppBar, BackLink, BarTitle } from "../../app/AppBar";
+import { backTarget, rememberBack } from "../../app/backTarget";
 import { ConfirmDialog } from "../../app/ConfirmDialog";
+import { NotFound } from "../../app/NotFound";
 import { saveStateLabel, useAutosave } from "../../app/useAutosave";
 import { db } from "../../db/db";
 import { createInspection } from "../../db/inspections";
@@ -14,7 +17,6 @@ import {
 } from "../../db/projects";
 import type { Contact, Project } from "../../db/types";
 import {
-  ArrowLeft,
   Building2,
   ClipboardList,
   Contact as ContactIcon,
@@ -30,8 +32,6 @@ import {
 } from "../inspections/JobDetailsForm";
 import { PROJECT_FIELDS, toPatch } from "../inspections/jobDetails";
 import { tabPath } from "../inspections/tabPath";
-
-const BACK = "/";
 
 /**
  * A project (SPEC section 12): its details (shared by all its
@@ -49,15 +49,7 @@ export function ProjectPage() {
     };
   }, [id]);
   if (project === undefined) return null;
-  if (project === null)
-    return (
-      <section>
-        <p>
-          <Link to={BACK}>‹ Inspections</Link>
-        </p>
-        <h1>Project not found</h1>
-      </section>
-    );
+  if (project === null) return <NotFound what="Project" />;
   return <ProjectFor key={id} initial={project} />;
 }
 
@@ -103,6 +95,8 @@ function ProjectFor({ initial }: { initial: Project }) {
     ) ?? [];
 
   const inspections = live?.inspections ?? [];
+  const back = backTarget(`project:${id}`);
+  const here = `/projects/${id}`;
   const title = inspectionTitle(values);
 
   async function setContacts(contacts: Contact[]) {
@@ -113,20 +107,27 @@ function ProjectFor({ initial }: { initial: Project }) {
 
   return (
     <section className="project-page">
-      <div className="inspection-title-row">
-        <Link to={BACK} className="back-link" aria-label="Back to inspections">
-          <ArrowLeft aria-hidden="true" />
-        </Link>
+      <AppBar
+        left={
+          <>
+            <BackLink to={back.path} label={back.label} />
+            <BarTitle kicker="Project" heading={title} />
+          </>
+        }
+        right={
+          <span className="save-state" role="status" data-testid="save-state">
+            {saveStateLabel(autosave.state)}
+          </span>
+        }
+      />
+      <div className="page-title-row">
         <ProjectAvatar project={{ ...initial, ...values }} />
-        <div className="inspection-title-text">
+        <div className="page-title-text">
           <h1 data-testid="project-title">{title}</h1>
           {values.clientCompany && (
             <span className="muted">{values.clientCompany}</span>
           )}
         </div>
-        <span className="save-state" role="status" data-testid="save-state">
-          {saveStateLabel(autosave.state)}
-        </span>
       </div>
 
       <div className="settings-cards">
@@ -156,7 +157,12 @@ function ProjectFor({ initial }: { initial: Project }) {
           {duplicates.length > 0 && (
             <p className="notice" data-testid="duplicate-job">
               Another project also has job number {duplicates[0].jobNumber}:{" "}
-              <Link to={`/projects/${duplicates[0].id}`}>
+              <Link
+                to={`/projects/${duplicates[0].id}`}
+                onClick={() =>
+                  rememberBack(`project:${duplicates[0].id}`, here)
+                }
+              >
                 {inspectionTitle(duplicates[0])}
               </Link>
               .
@@ -180,6 +186,7 @@ function ProjectFor({ initial }: { initial: Project }) {
               className="primary"
               onClick={async () => {
                 const inspection = await createInspection(db, new Date(), id);
+                rememberBack(`inspection:${inspection.id}`, here);
                 navigate(tabPath(inspection.id, "details"));
               }}
             >
@@ -191,7 +198,7 @@ function ProjectFor({ initial }: { initial: Project }) {
           ) : (
             <ul className="inspection-list" aria-label="Project inspections">
               {inspections.map((i) => (
-                <InspectionCard key={i.id} inspection={i} />
+                <InspectionCard key={i.id} inspection={i} from={here} />
               ))}
             </ul>
           )}
@@ -233,7 +240,7 @@ function ProjectFor({ initial }: { initial: Project }) {
         onConfirm={() => {
           autosave.cancel();
           setConfirmDelete(false);
-          void deleteProject(db, id).then(() => navigate(BACK));
+          void deleteProject(db, id).then(() => navigate("/"));
         }}
       >
         <p>

@@ -1,7 +1,9 @@
 import { useLiveQuery } from "dexie-react-hooks";
-import { ArrowLeft, Check } from "lucide-react";
+import { Check } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
+import { AppBar, BackLink, BarTitle } from "../../app/AppBar";
+import { backTarget } from "../../app/backTarget";
 import { db } from "../../db/db";
 import { missingJobFields } from "../../db/inspections";
 import { getMemo } from "../../db/memos";
@@ -72,24 +74,19 @@ const STEPS: { key: InspectionTab; label: string }[] = [
 
 /**
  * The inspection's three steps (SPEC section 12): Pre-inspection,
- * Inspection, Site memo, each with how far it has got. Compact (one line,
- * no status) above the drawings, where space matters.
+ * Inspection, Site memo, as a segmented control in the top bar. A done
+ * step shows a tick; each step's status is read out to screen readers.
  */
 export function InspectionTabs({
   inspectionId,
   current,
-  compact = false,
 }: {
   inspectionId: string;
   current: InspectionTab;
-  compact?: boolean;
 }) {
   const steps = useSteps(inspectionId);
   return (
-    <nav
-      className={`step-bar${compact ? " step-bar-compact" : ""}`}
-      aria-label="Inspection sections"
-    >
+    <nav className="bar-segments" aria-label="Inspection sections">
       {STEPS.map((base, i) => {
         const step = steps?.[i];
         const isCurrent = base.key === current;
@@ -99,23 +96,18 @@ export function InspectionTabs({
             to={tabPath(inspectionId, base.key)}
             aria-label={base.label}
             aria-current={isCurrent ? "page" : undefined}
-            className="step"
+            title={step?.status}
             data-tone={step?.tone ?? "plain"}
           >
-            <span className={`step-number${step?.done ? " step-done" : ""}`}>
-              {step?.done && !isCurrent ? <Check aria-hidden="true" /> : i + 1}
-            </span>
-            <span className="step-text">
-              <span className="step-label">{base.label}</span>
-              {!compact && step && (
-                <span
-                  className="step-status"
-                  data-testid={`step-status-${base.key}`}
-                >
-                  {step.status}
-                </span>
-              )}
-            </span>
+            {step?.done && !isCurrent && (
+              <Check aria-hidden="true" className="step-done" />
+            )}
+            {base.label}
+            {step && (
+              <span className="sr-only" data-testid={`step-status-${base.key}`}>
+                {step.status}
+              </span>
+            )}
           </Link>
         );
       })}
@@ -124,8 +116,8 @@ export function InspectionTabs({
 }
 
 /**
- * Back to Inspections, the job and item inspected, and the step bar. Stays
- * at the top while the page scrolls.
+ * The top bar inside an inspection: back (to where it was opened from), the
+ * job and item inspected, the steps, and e.g. the save state.
  */
 export function InspectionHeader({
   inspectionId,
@@ -137,60 +129,34 @@ export function InspectionHeader({
   /** Shown instead of the saved title (e.g. while job details are typed). */
   title?: string;
   current: InspectionTab;
-  /** E.g. the save state, shown beside the title. */
+  /** E.g. the save state, shown on the right. */
   status?: ReactNode;
 }) {
   const job = useLiveQuery(
     () => loadJobInspection(db, inspectionId),
     [inspectionId],
   );
+  const back = backTarget(`inspection:${inspectionId}`);
+  const item = job?.itemInspected.trim();
+  const jobTitle = (
+    <span data-testid="inspection-title">
+      {title ?? (job ? inspectionTitle(job) : "")}
+    </span>
+  );
   return (
-    <header className="inspection-header">
-      <div className="inspection-title-row">
-        <Link to="/" className="back-link" aria-label="Back to inspections">
-          <ArrowLeft aria-hidden="true" />
-        </Link>
-        <div className="inspection-title-text">
-          <h1 data-testid="inspection-title">
-            {title ?? (job ? inspectionTitle(job) : "")}
-          </h1>
-          {job?.itemInspected.trim() && (
-            <span className="muted">{job.itemInspected}</span>
+    <AppBar
+      left={
+        <>
+          <BackLink to={back.path} label={back.label} />
+          {item ? (
+            <BarTitle kicker={jobTitle} heading={item} />
+          ) : (
+            <BarTitle heading={jobTitle} />
           )}
-        </div>
-        {status}
-      </div>
-      <InspectionTabs inspectionId={inspectionId} current={current} />
-    </header>
-  );
-}
-
-/** The compact header above the drawings: back, the job, and the steps. */
-export function CompactInspectionHeader({
-  inspectionId,
-}: {
-  inspectionId: string;
-}) {
-  const job = useLiveQuery(
-    () => loadJobInspection(db, inspectionId),
-    [inspectionId],
-  );
-  return (
-    <header className="inspection-header inspection-header-compact">
-      <Link to="/" className="back-link" aria-label="Back to inspections">
-        <ArrowLeft aria-hidden="true" />
-      </Link>
-      <span className="compact-title" data-testid="inspection-title">
-        {job ? inspectionTitle(job) : ""}
-        {job?.itemInspected.trim() && (
-          <span className="muted"> · {job.itemInspected}</span>
-        )}
-      </span>
-      <InspectionTabs
-        inspectionId={inspectionId}
-        current="inspection"
-        compact
-      />
-    </header>
+        </>
+      }
+      centre={<InspectionTabs inspectionId={inspectionId} current={current} />}
+      right={status}
+    />
   );
 }
