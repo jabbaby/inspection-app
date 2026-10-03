@@ -61,9 +61,10 @@ test("creates an inspection, autosaves every field and keeps it after reload", a
     .filter({ hasText: "SY000001 – Example Apartments" });
   await expect(card).toContainText("Example Builders Pty Ltd");
   // When it was edited shows on the Continue card.
-  await expect(
-    page.getByText(/^Continue where you left off · edited/),
-  ).toBeVisible();
+  const continueTile = page.getByRole("region", {
+    name: "Continue where you left off",
+  });
+  await expect(continueTile).toContainText(/Edited (just now|\d+ min ago)/);
 });
 
 test("saves an edit made just before leaving the screen", async ({ page }) => {

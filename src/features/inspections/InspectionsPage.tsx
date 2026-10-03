@@ -1,24 +1,21 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import {
+  ArrowUpRight,
   Check,
   ChevronRight,
   ClipboardPlus,
-  Database,
-  Files,
-  FolderSearch,
-  Images,
+  FileText,
   MapPin,
   Plus,
   Search,
   ShieldAlert,
   ShieldCheck,
-  TriangleAlert,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
 import { rememberBack } from "../../app/backTarget";
-import { northrop } from "../../brand/northrop";
 import { appCommit, appVersion } from "../../app/version";
+import { northrop } from "../../brand/northrop";
 import { db } from "../../db/db";
 import { createInspection } from "../../db/inspections";
 import { createProject, jobInspection } from "../../db/projects";
@@ -32,6 +29,7 @@ import { formatLongDate } from "../../lib/dates";
 import { ProjectAvatar } from "../projects/ProjectAvatar";
 import { ProjectPicker } from "../projects/ProjectPicker";
 import { matchesSearch } from "../projects/projectSearch";
+import { DrawingThumb } from "./DrawingThumb";
 import {
   editedAgo,
   emptyProgress,
@@ -44,6 +42,7 @@ import {
   nextStep,
   progressByInspection,
   stepsDone,
+  type Attention,
   type InspectionProgress,
 } from "./homeData";
 import { inspectionTitle } from "./inspectionTitle";
@@ -53,9 +52,10 @@ import { tabPath, type InspectionTab } from "./tabPath";
 const RECENT = 10;
 
 /**
- * Inspections home (SPEC section 12): a greeting, the inspection to carry
- * on with, what needs attention, recent inspections and projects. New
- * inspection asks for its project first.
+ * Inspections home (SPEC section 12): a greeting, then tiles (the
+ * inspection to carry on with, this month's items and memos, what needs
+ * attention, storage), recent inspections and projects. New inspection
+ * asks for its project first.
  */
 export function InspectionsPage() {
   const navigate = useNavigate();
@@ -74,6 +74,7 @@ export function InspectionsPage() {
         db.settings.get(SETTINGS_ID),
       ]);
     const byId = new Map(projects.map((p) => [p.id, p]));
+    const latestMemo = [...memos].sort((a, b) => b.createdAt - a.createdAt)[0];
     return {
       inspections: inspections.map((i) =>
         jobInspection(i, i.projectId ? byId.get(i.projectId) : null),
@@ -81,6 +82,7 @@ export function InspectionsPage() {
       projects,
       progress: progressByInspection(inspections, memos, items, drawings),
       month: monthStats(inspections, memos, items),
+      latestMemo: latestMemo?.reference ?? null,
       name: settings?.inspectorName ?? "",
     };
   }, []);
@@ -128,6 +130,11 @@ export function InspectionsPage() {
     return (
       <section className="home">
         <div className="empty-state home-first-run">
+          <img
+            className="home-wordmark"
+            src={northrop.assets.wordmarkRed}
+            alt={northrop.name}
+          />
           <span className="empty-state-icon">
             <ClipboardPlus aria-hidden="true" />
           </span>
@@ -153,7 +160,12 @@ export function InspectionsPage() {
     ? []
     : data.inspections.slice(RECENT).filter((i) => !i.projectId);
   const latest = data.inspections[0];
-  const attention = needsAttention(data.inspections, data.progress);
+  const attention = needsAttention(data.inspections, data.progress, 3);
+  const attentionCount = needsAttention(
+    data.inspections,
+    data.progress,
+    Infinity,
+  ).length;
 
   return (
     <section className="home">
@@ -183,62 +195,71 @@ export function InspectionsPage() {
         {newInspection}
       </header>
 
-      <div className="home-columns">
-        <div className="home-main">
-          {!searching && latest && (
-            <ContinueCard
+      {!searching && (
+        <div className="bento">
+          {latest ? (
+            <ContinueTile
               inspection={latest}
               progress={data.progress.get(latest.id) ?? emptyProgress()}
             />
-          )}
-
-          {!searching && attention.length > 0 && (
-            <section aria-labelledby="attention-heading">
-              <h2 id="attention-heading" className="eyebrow">
-                Needs attention · {attention.length}
-              </h2>
-              <ul className="attention-grid" aria-label="Needs attention">
-                {attention.map((a) => (
-                  <li key={a.inspection.id}>
-                    <InspectionLink
-                      inspection={a.inspection}
-                      tab={a.tab}
-                      className={`attention-card tone-${a.tone}`}
-                    >
-                      <span className="attention-icon">
-                        {a.tone === "danger" ? (
-                          <FolderSearch aria-hidden="true" />
-                        ) : (
-                          <TriangleAlert aria-hidden="true" />
-                        )}
-                      </span>
-                      <span className="list-row-main">
-                        <span className="list-row-title">
-                          {titleOf(a.inspection)}
-                        </span>
-                        <span className="attention-reason">{a.reason}</span>
-                      </span>
-                    </InspectionLink>
-                  </li>
-                ))}
-              </ul>
+          ) : (
+            <section className="tile tile-continue tile-start">
+              <p className="eyebrow">Get started</p>
+              <h2>Start an inspection</h2>
+              <p className="muted">Your projects are ready below.</p>
+              {newInspection}
             </section>
           )}
+          <NumberTile
+            className="tile-warm"
+            label="Items logged"
+            value={data.month.items}
+            note="this month"
+            icon={<MapPin aria-hidden="true" />}
+          />
+          <AttentionTile attention={attention} count={attentionCount} />
+          <NumberTile
+            className="tile-plain"
+            label="Memos this month"
+            value={data.month.memos}
+            note={
+              data.latestMemo ? (
+                <span className="chip chip-ok">Latest {data.latestMemo}</span>
+              ) : (
+                "None yet"
+              )
+            }
+            icon={<FileText aria-hidden="true" />}
+          />
+          <StorageTile />
+        </div>
+      )}
 
-          <section aria-labelledby="recent-heading">
+      <div className="home-lower">
+        <section className="tile tile-list" aria-labelledby="recent-heading">
+          <div className="tile-head">
             <h2 id="recent-heading" className="eyebrow">
               {searching ? "Matching inspections" : "Recent inspections"}
             </h2>
-            {recent.length === 0 ? (
-              <p className="list-empty">
-                {searching ? "No inspections match." : "No inspections yet"}
-              </p>
-            ) : (
-              <ul className="list-panel" aria-label="Recent inspections">
+            {!searching && <span className="chip">Last {RECENT} edited</span>}
+          </div>
+          {recent.length === 0 ? (
+            <p className="list-empty">
+              {searching ? "No inspections match." : "No inspections yet"}
+            </p>
+          ) : (
+            <>
+              <div className="recent-columns" aria-hidden="true">
+                <span>Inspection</span>
+                <span>Project</span>
+                <span>Date</span>
+                <span>Status</span>
+              </div>
+              <ul className="recent-table" aria-label="Recent inspections">
                 {groupByWeek(recent).map((group) => (
                   <GroupRows key={group.label} label={group.label}>
                     {group.inspections.map((inspection) => (
-                      <InspectionCard
+                      <RecentRow
                         key={inspection.id}
                         inspection={inspection}
                         progress={data.progress.get(inspection.id)}
@@ -247,34 +268,30 @@ export function InspectionsPage() {
                   </GroupRows>
                 ))}
               </ul>
-            )}
-            {olderUnsorted.length > 0 && (
-              <>
-                <h3 className="eyebrow home-subhead">Also needing a project</h3>
-                <ul className="list-panel" aria-label="Needs a project">
-                  {olderUnsorted.map((inspection) => (
-                    <InspectionCard
-                      key={inspection.id}
-                      inspection={inspection}
-                      progress={data.progress.get(inspection.id)}
-                    />
-                  ))}
-                </ul>
-              </>
-            )}
-          </section>
-        </div>
+            </>
+          )}
+          {olderUnsorted.length > 0 && (
+            <>
+              <h3 className="eyebrow home-subhead">Also needing a project</h3>
+              <ul className="recent-table" aria-label="Needs a project">
+                {olderUnsorted.map((inspection) => (
+                  <RecentRow
+                    key={inspection.id}
+                    inspection={inspection}
+                    progress={data.progress.get(inspection.id)}
+                  />
+                ))}
+              </ul>
+            </>
+          )}
+        </section>
 
-        <aside className="home-side">
-          <ProjectsPanel
-            projects={data.projects}
-            inspections={data.inspections}
-            search={search}
-            onNew={() => setChoosing("project")}
-          />
-          {!searching && <MonthCard month={data.month} />}
-          {!searching && <StorageCard />}
-        </aside>
+        <ProjectsTile
+          projects={data.projects}
+          inspections={data.inspections}
+          search={search}
+          onNew={() => setChoosing("project")}
+        />
       </div>
 
       <p className="app-version home-version">
@@ -331,8 +348,8 @@ function GroupRows({
   );
 }
 
-/** The inspection edited last: where it's got to and the next step. */
-function ContinueCard({
+/** The inspection edited last: a preview of its drawing and the next step. */
+function ContinueTile({
   inspection,
   progress,
 }: {
@@ -341,15 +358,16 @@ function ContinueCard({
 }) {
   const done = stepsDone(inspection, progress);
   const next = nextStep(inspection, progress);
-  const plural = (n: number, word: string) =>
-    `${n} ${word}${n === 1 ? "" : "s"}`;
   return (
-    <section className="card continue-card" aria-labelledby="continue-heading">
-      <p className="eyebrow" id="continue-heading">
-        Continue where you left off · edited {editedAgo(inspection.updatedAt)}
-      </p>
+    <section className="tile tile-continue" aria-labelledby="continue-heading">
+      <div className="tile-head">
+        <p className="eyebrow" id="continue-heading">
+          Continue where you left off
+        </p>
+        <span className="chip">Edited {editedAgo(inspection.updatedAt)}</span>
+      </div>
       <div className="continue-title">
-        <InspectionAvatar inspection={inspection} large />
+        <InspectionAvatar inspection={inspection} />
         <div className="list-row-main">
           <h2>{titleOf(inspection)}</h2>
           <span className="list-row-meta">
@@ -362,6 +380,7 @@ function ContinueCard({
           </span>
         </div>
       </div>
+      <DrawingThumb inspectionId={inspection.id} />
       <ol className="progress-steps" aria-label="Progress">
         {["Pre-inspection", "Inspection", "Site memo"].map((label, i) => (
           <li key={label} className={done[i] ? "done" : undefined}>
@@ -374,38 +393,161 @@ function ContinueCard({
           </li>
         ))}
       </ol>
-      <ul className="continue-stats" aria-label="Contents">
-        <li>
-          <Files aria-hidden="true" /> {plural(progress.drawings, "drawing")}
-        </li>
-        <li>
-          <MapPin aria-hidden="true" className="tone-instruction" />{" "}
-          {plural(progress.instructions, "instruction")}
-        </li>
-        <li>
-          <MapPin aria-hidden="true" className="tone-observation" />{" "}
-          {plural(progress.observations, "observation")}
-        </li>
-        <li>
-          <Images aria-hidden="true" /> {plural(progress.photos, "photo")}
-        </li>
-      </ul>
-      <div className="button-row">
+      <div className="continue-foot">
+        <span className="muted small">
+          {progress.instructions} instruction
+          {progress.instructions === 1 ? "" : "s"} · {progress.observations}{" "}
+          observation{progress.observations === 1 ? "" : "s"} ·{" "}
+          {progress.photos} photo{progress.photos === 1 ? "" : "s"}
+        </span>
         <InspectionLink
           inspection={inspection}
           tab={next.tab}
           className="button-link emphasis"
         >
-          {next.label}
+          {next.label} <ArrowUpRight aria-hidden="true" />
         </InspectionLink>
-        {next.tab !== "inspection" && inspection.projectId && (
-          <InspectionLink
-            inspection={inspection}
-            tab="inspection"
-            className="button-link"
+      </div>
+    </section>
+  );
+}
+
+/** A tile with one big number. */
+function NumberTile({
+  className,
+  label,
+  value,
+  note,
+  icon,
+}: {
+  className: string;
+  label: string;
+  value: number;
+  note: ReactNode;
+  icon: ReactNode;
+}) {
+  return (
+    <section className={`tile tile-number ${className}`}>
+      <div className="tile-head">
+        <h2 className="eyebrow">{label}</h2>
+        <span className="tile-icon">{icon}</span>
+      </div>
+      <div className="tile-figure">
+        <span className="big-number">{value}</span>
+        <span className="tile-note">{note}</span>
+      </div>
+    </section>
+  );
+}
+
+/** How many inspections need something, and the first few of them. */
+function AttentionTile({
+  attention,
+  count,
+}: {
+  attention: Attention[];
+  count: number;
+}) {
+  return (
+    <section
+      className="tile tile-number tile-dark"
+      aria-labelledby="attention-heading"
+    >
+      <div className="tile-head">
+        <h2 id="attention-heading" className="eyebrow">
+          Needs attention
+        </h2>
+        <span className="tile-icon">
+          {count ? (
+            <ArrowUpRight aria-hidden="true" />
+          ) : (
+            <Check aria-hidden="true" />
+          )}
+        </span>
+      </div>
+      {count === 0 ? (
+        <div className="tile-figure">
+          <span className="big-number">0</span>
+          <span className="tile-note">All clear</span>
+        </div>
+      ) : (
+        <>
+          <span className="big-number">{count}</span>
+          <ul className="attention-list" aria-label="Needs attention">
+            {attention.map((a) => (
+              <li key={a.inspection.id}>
+                <InspectionLink
+                  inspection={a.inspection}
+                  tab={a.tab}
+                  className={`attention-link tone-${a.tone}`}
+                >
+                  <span className="attention-dot" aria-hidden="true" />
+                  <span className="attention-text">
+                    {titleOf(a.inspection)}
+                    <span className="attention-reason"> · {a.reason}</span>
+                  </span>
+                </InspectionLink>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </section>
+  );
+}
+
+/** Storage used, as a ring, and whether the iPad keeps the data. */
+function StorageTile() {
+  const [storage, setStorage] = useState<StorageStatus | null>(null);
+  useEffect(() => {
+    void getStorageStatus().then(setStorage);
+  }, []);
+  const known = storage && storage.usage !== undefined && storage.quota;
+  const used = known
+    ? Math.min(100, (storage.usage! / storage.quota!) * 100)
+    : 0;
+  const r = 30;
+  const length = 2 * Math.PI * r;
+  return (
+    <section
+      className="tile tile-plain tile-storage"
+      aria-labelledby="storage-heading"
+    >
+      <svg viewBox="0 0 76 76" className="storage-ring" aria-hidden="true">
+        <circle cx="38" cy="38" r={r} className="ring-track" />
+        <circle
+          cx="38"
+          cy="38"
+          r={r}
+          className="ring-value"
+          strokeDasharray={`${Math.max((used / 100) * length, 2)} ${length}`}
+          transform="rotate(-90 38 38)"
+        />
+      </svg>
+      <div className="list-row-main">
+        <h2 id="storage-heading" className="eyebrow">
+          Storage
+        </h2>
+        <span className="storage-figure">
+          {known ? formatBytes(storage.usage!) : "Not reported"}
+        </span>
+        {known && (
+          <span className="muted small">of {formatBytes(storage.quota!)}</span>
+        )}
+        {storage?.persisted !== undefined && (
+          <span
+            className={storage.persisted ? "storage-kept" : "storage-at-risk"}
           >
-            Open drawings
-          </InspectionLink>
+            {storage.persisted ? (
+              <>
+                <ShieldCheck aria-hidden="true" /> Kept by the iPad
+              </>
+            ) : (
+              <>
+                <ShieldAlert aria-hidden="true" /> May be cleared
+              </>
+            )}
+          </span>
         )}
       </div>
     </section>
@@ -413,19 +555,10 @@ function ContinueCard({
 }
 
 /** The project's badge, or a plain one for an inspection without a project. */
-function InspectionAvatar({
-  inspection,
-  large = false,
-}: {
-  inspection: JobInspection;
-  large?: boolean;
-}) {
+function InspectionAvatar({ inspection }: { inspection: JobInspection }) {
   if (!inspection.projectId)
     return (
-      <span
-        className={`project-avatar avatar-none${large ? " avatar-large" : ""}`}
-        aria-hidden="true"
-      >
+      <span className="project-avatar avatar-none" aria-hidden="true">
         ?
       </span>
     );
@@ -436,7 +569,6 @@ function InspectionAvatar({
         jobName: inspection.jobName,
         jobNumber: inspection.jobNumber,
       }}
-      large={large}
     />
   );
 }
@@ -462,10 +594,54 @@ export function StatusChip({
   );
 }
 
+/** Where an inspection opens: its Inspection step, or Pre-inspection while it needs a project. */
+function openPath(inspection: JobInspection) {
+  return inspection.projectId
+    ? `/inspections/${inspection.id}`
+    : tabPath(inspection.id, "details");
+}
+
+/** One recent inspection as a table row: what, project, date, status. */
+function RecentRow({
+  inspection,
+  progress,
+}: {
+  inspection: JobInspection;
+  progress?: InspectionProgress;
+}) {
+  return (
+    <li>
+      <Link
+        to={openPath(inspection)}
+        className="recent-row"
+        onClick={() => rememberBack(`inspection:${inspection.id}`, "/")}
+      >
+        <span className="recent-what">
+          <InspectionAvatar inspection={inspection} />
+          <span className="list-row-title">{titleOf(inspection)}</span>
+        </span>
+        <span className="recent-project">
+          <span className="list-row-meta">
+            {inspection.projectId ? inspectionTitle(inspection) : "No project"}
+          </span>
+          {inspection.client.company && (
+            <span className="list-row-meta small">
+              {inspection.client.company}
+            </span>
+          )}
+        </span>
+        <span className="list-row-meta">{formatLongDate(inspection.date)}</span>
+        <span>
+          <StatusChip inspection={inspection} progress={progress} />
+        </span>
+      </Link>
+    </li>
+  );
+}
+
 /**
- * One inspection as a row: its project badge, what was inspected, the job
- * and date, and its status. Opens on its Inspection step (Pre-inspection
- * while it needs a project).
+ * One inspection as a row (the project page): its project badge, what was
+ * inspected, the job and date, and its status.
  */
 export function InspectionCard({
   inspection,
@@ -480,11 +656,7 @@ export function InspectionCard({
   return (
     <li>
       <Link
-        to={
-          inspection.projectId
-            ? `/inspections/${inspection.id}`
-            : tabPath(inspection.id, "details")
-        }
+        to={openPath(inspection)}
         className="list-row inspection-row"
         onClick={() => rememberBack(`inspection:${inspection.id}`, from)}
       >
@@ -508,7 +680,7 @@ export function InspectionCard({
   );
 }
 
-function ProjectsPanel({
+function ProjectsTile({
   projects,
   inspections,
   search,
@@ -536,8 +708,8 @@ function ProjectsPanel({
     .sort((a, b) => activity(b) - activity(a));
 
   return (
-    <section className="card side-card" aria-labelledby="projects-heading">
-      <div className="side-card-head">
+    <section className="tile tile-list" aria-labelledby="projects-heading">
+      <div className="tile-head">
         <h2 id="projects-heading" className="eyebrow">
           Projects
         </h2>
@@ -579,73 +751,6 @@ function ProjectsPanel({
           })}
         </ul>
       )}
-    </section>
-  );
-}
-
-function MonthCard({
-  month,
-}: {
-  month: { inspections: number; memos: number; items: number };
-}) {
-  return (
-    <section className="card side-card" aria-labelledby="month-heading">
-      <h2 id="month-heading" className="eyebrow">
-        This month
-      </h2>
-      <dl className="stat-row">
-        <div>
-          <dt>Inspections</dt>
-          <dd>{month.inspections}</dd>
-        </div>
-        <div>
-          <dt>Memos</dt>
-          <dd>{month.memos}</dd>
-        </div>
-        <div>
-          <dt>Items</dt>
-          <dd>{month.items}</dd>
-        </div>
-      </dl>
-    </section>
-  );
-}
-
-function StorageCard() {
-  const [storage, setStorage] = useState<StorageStatus | null>(null);
-  useEffect(() => {
-    void getStorageStatus().then(setStorage);
-  }, []);
-  if (!storage || storage.usage === undefined || !storage.quota) return null;
-  const used = Math.min(100, (storage.usage / storage.quota) * 100);
-  return (
-    <section className="card side-card" aria-labelledby="storage-heading">
-      <div className="side-card-head">
-        <h2 id="storage-heading" className="eyebrow">
-          <Database aria-hidden="true" /> Storage
-        </h2>
-        {storage.persisted !== undefined && (
-          <span
-            className={storage.persisted ? "storage-kept" : "storage-at-risk"}
-          >
-            {storage.persisted ? (
-              <>
-                <ShieldCheck aria-hidden="true" /> Kept by the iPad
-              </>
-            ) : (
-              <>
-                <ShieldAlert aria-hidden="true" /> May be cleared
-              </>
-            )}
-          </span>
-        )}
-      </div>
-      <div className="meter" aria-hidden="true">
-        <span style={{ width: `${Math.max(used, 1)}%` }} />
-      </div>
-      <p className="muted small">
-        {formatBytes(storage.usage)} used of {formatBytes(storage.quota)}
-      </p>
     </section>
   );
 }
