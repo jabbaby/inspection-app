@@ -3225,3 +3225,62 @@ a.list-row {
 .item-list {
   border-radius: var(--radius-lg);
 }
+
+/* Bento polish for the other screens: borderless 22 px tiles on the grey
+   page, and page titles in the home greeting's tight style. */
+h1 {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.card,
+.settings-card,
+.detail-card,
+.memo-section,
+.page-section {
+  border: 0;
+  border-radius: 22px;
+}
+
+.list-panel {
+  border: 0;
+  border-radius: 22px;
+}
+
+.settings-card .list-panel,
+.detail-card .list-panel {
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-lg);
+}
+
+.card-icon {
+  border-radius: 50%;
+}
+
+.job-summary {
+  border-radius: var(--radius-lg);
+}
+
+.memo-preview {
+  border-radius: 22px;
+}
+
+.signature-preview,
+.snippet-row {
+  border-radius: var(--radius-lg);
+}
+
+.chip-link {
+  border-radius: var(--radius-pill);
+}
+
+@media (prefers-color-scheme: dark) {
+  .card,
+  .settings-card,
+  .detail-card,
+  .memo-section,
+  .page-section,
+  .list-panel {
+    border: 1px solid var(--line-soft);
+  }
+}
