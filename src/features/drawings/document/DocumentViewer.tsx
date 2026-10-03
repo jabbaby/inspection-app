@@ -245,7 +245,10 @@ export function DocumentViewer(props: Props) {
         ? old
         : next;
     });
-    const centre = pageAtY(currentLayout(), (top.y + bottom.y) / 2);
+    // The current page is the one a third of the way down the view, where
+    // the eye reads: with two short pages on screen (portrait), the centre
+    // can fall on the next page while this one fills the top.
+    const centre = pageAtY(currentLayout(), top.y + (bottom.y - top.y) / 3);
     if (centre && centre.key !== currentKey.current) {
       currentKey.current = centre.key;
       setCurrentPageKey(centre.key);
