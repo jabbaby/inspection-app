@@ -1,4 +1,5 @@
 import { useLiveQuery } from "dexie-react-hooks";
+import { FileDown } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 import { AutoGrowTextarea } from "../../app/AutoGrowTextarea";
@@ -40,6 +41,7 @@ import {
 } from "./buildMemo";
 import { InspectionHeader } from "../inspections/InspectionTabs";
 import { inspectionTitle } from "../inspections/inspectionTitle";
+import { PhotosSection } from "../photos/PhotosSection";
 import { SignatureField } from "../signature/SignatureField";
 import { CreateMemo } from "./CreateMemo";
 import { MemoPreview } from "./MemoPreview";
@@ -86,8 +88,11 @@ export function MemoScreen() {
           <CreateMemo inspection={inspection} />
         </section>
       )}
+      <PhotosSection inspectionId={id} jobNumber={inspection.jobNumber} />
       <div className="later-section">
-        <h2>Export</h2>
+        <h2 className="section-title">
+          <FileDown aria-hidden="true" /> Export
+        </h2>
         <p className="muted">
           One PDF pack: memo, marked-up drawings and photos. Coming in build
           step 8.

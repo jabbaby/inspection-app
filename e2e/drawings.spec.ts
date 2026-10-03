@@ -54,13 +54,32 @@ async function typicalPdf(name = "S-101 Level 3.pdf") {
   };
 }
 
+/**
+ * Shows a drawing in the Inspection step: from the drawings list if it is
+ * showing (e.g. after a failed upload), else from the Drawings panel.
+ */
 async function openDrawing(page: Page, name: string) {
-  await page.getByRole("link", { name: new RegExp(`^${name}`) }).click();
+  const pattern = new RegExp(`^${name}`);
+  const inList = page
+    .locator(".drawings-empty")
+    .getByRole("button", { name: pattern });
+  if (await inList.isVisible()) await inList.click();
   await expect(
     page.locator('[data-testid="drawing-viewer"][data-ready="true"]'),
   ).toBeVisible({
     timeout: 20_000,
   });
+  const indicator = page.getByTestId("page-indicator");
+  await expect(indicator).not.toHaveText("");
+  if (pattern.test((await indicator.textContent()) ?? "")) return;
+  const toggle = page.getByRole("button", { name: "Drawings", exact: true });
+  await toggle.click();
+  await page
+    .getByRole("complementary", { name: "Drawings" })
+    .getByRole("button", { name: pattern })
+    .click();
+  await toggle.click();
+  await expect(indicator).toHaveText(pattern);
 }
 
 /** Add pin, then tap at a fraction of a page. Returns the tap point. */
@@ -130,12 +149,11 @@ async function threeItemsInPanel(page: Page) {
   await expect(panelRows(page)).toHaveCount(3);
 }
 
-test("Open markup opens the drawings, and the viewer keeps the tabs", async ({
+test("the Inspection step opens straight into the drawings", async ({
   page,
 }) => {
   await setupInspection(page);
   await uploadDrawings(page, [await typicalPdf()]);
-  await page.getByRole("link", { name: "Open markup" }).click();
   await expect(
     page.locator('[data-testid="drawing-viewer"][data-ready="true"]'),
   ).toBeVisible({ timeout: 20_000 });
@@ -152,7 +170,15 @@ test("Open markup opens the drawings, and the viewer keeps the tabs", async ({
   await openTab(page, "Inspection");
   await expect(page).toHaveURL(/\/inspection$/);
   await expect(
-    page.getByRole("link", { name: /^S-101 Level 3/ }),
+    page.locator('[data-testid="drawing-viewer"][data-ready="true"]'),
+  ).toBeVisible({ timeout: 20_000 });
+
+  // Drawings are managed from the Drawings panel.
+  await page.getByRole("button", { name: "Drawings", exact: true }).click();
+  await expect(
+    page
+      .getByRole("complementary", { name: "Drawings" })
+      .getByRole("button", { name: "Rename S-101 Level 3" }),
   ).toBeVisible();
 });
 
@@ -474,11 +500,8 @@ test("letters follow the pins' order in the document", async ({ page }) => {
   ).toHaveAttribute("data-page", /:2$/);
 });
 
-test("the items list opens the right drawing page and item", async ({
-  page,
-}) => {
+test("pins on a later page are lettered per kind", async ({ page }) => {
   await setupInspection(page);
-  const home = page.url();
   await uploadDrawings(page, [await typicalPdf()]);
   await openDrawing(page, "S-101 Level 3");
   await addPinAt(page, 0.3, 0.3);
@@ -501,27 +524,9 @@ test("the items list opens the right drawing page and item", async ({
     .getByRole("button", { name: "Observation", exact: true })
     .click();
   await typeItem(page, "Second on page two");
-
-  await page.goto(home);
-  // Observations first, under headings, each kind lettered from A.
-  const section = page.locator('[aria-labelledby="items-heading"]');
-  await expect(section.getByRole("heading", { level: 3 })).toHaveText([
-    "Observations",
-    "Instructions",
-  ]);
-  const items = section.getByRole("listitem");
-  await expect(items).toHaveCount(2);
-  await expect(items.nth(0)).toContainText("A. Second on page two");
-  await expect(items.nth(0)).toContainText(
-    "Observation · S-101 Level 3, page 2",
-  );
-  await expect(items.nth(1)).toContainText("A. First");
-
-  await items.nth(0).getByRole("link").click();
-  await expect(page.getByTestId("page-indicator")).toHaveText(
-    "S-101 Level 3 · page 2 of 3",
-  );
   await expect(sheet(page).getByRole("heading")).toHaveText("Observation A");
+  await expect(pinByLetter(page, "A", "observation")).toBeVisible();
+  await expect(pinByLetter(page, "A")).toHaveCount(1);
 });
 
 test("at fit width the document only scrolls up and down", async ({ page }) => {
@@ -673,7 +678,7 @@ test("all drawings scroll as one document", async ({ page }) => {
   await addPinAt(page, 0.5, 0.5, 3);
   await expect(sheet(page).getByRole("heading")).toHaveText("Instruction A");
 
-  // Opening a drawing from the inspection scrolls straight to it.
+  // Opening a drawing from the Drawings panel scrolls straight to it.
   await page.goto(home);
   await openDrawing(page, "S-102 Level 4");
   await expect(page.getByTestId("page-indicator")).toHaveText(
@@ -932,6 +937,7 @@ test("deleting a drawing removes its items", async ({ page }) => {
   await openDrawing(page, "S-101 Level 3");
   await addPinAt(page, 0.3, 0.3);
   await page.goto(home);
+  await page.getByRole("button", { name: "Drawings", exact: true }).click();
 
   await page.getByRole("button", { name: "Delete S-101 Level 3" }).click();
   const dialog = page.getByRole("dialog", { name: "Delete drawing?" });
@@ -940,7 +946,7 @@ test("deleting a drawing removes its items", async ({ page }) => {
   );
   await dialog.getByRole("button", { name: "Delete" }).click();
   await expect(page.getByText("No drawings yet.")).toBeVisible();
-  await expect(page.getByText("No items yet.")).toBeVisible();
+  await expect(page.getByTestId("viewer-pin")).toHaveCount(0);
 });
 
 // Tagged @offline: runs in the Chromium project only (see playwright.config.ts).
@@ -1134,8 +1140,9 @@ test("saving photos shares camera shots at full size, named by job and item", as
   expect(shared[0][0].size).toBe(original.length);
   await dialog.getByRole("button", { name: "Done" }).click();
 
-  // From the inspection home, then free the full-size copy.
+  // From the Site memo step, then free the full-size copy.
   await page.goto(home);
+  await openTab(page, "Site memo");
   const section = page.locator('[aria-labelledby="photos-heading"]');
   await expect(page.getByTestId("photos-summary")).toContainText(
     "2 photos · 1 full-size camera copy kept",
@@ -1212,11 +1219,12 @@ test("photo viewer: a quick flick changes photo; neighbours are preloaded", asyn
   await expect(viewer).toContainText("photo 2 of 2");
 });
 
-test("general photos on the inspection home save as General and delete with a confirm", async ({
+test("general photos on the Site memo step save as General and delete with a confirm", async ({
   page,
 }) => {
   await stubShareSheet(page);
   await setupInspection(page);
+  await openTab(page, "Site memo");
   const section = page.locator('[aria-labelledby="photos-heading"]');
   const general = section.getByRole("group", { name: "General photos" });
   await addPhotos(page, "photo-library-input", [

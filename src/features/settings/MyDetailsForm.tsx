@@ -1,4 +1,5 @@
 import { useLiveQuery } from "dexie-react-hooks";
+import { Signature, User } from "lucide-react";
 import { useState } from "react";
 import { saveStateLabel, useAutosave } from "../../app/useAutosave";
 import { db } from "../../db/db";
@@ -13,14 +14,29 @@ type Details = Pick<
 
 const SENT_VIA: SentVia[] = ["Aconex", "Email"];
 
-/** Inspector details: prefill new inspections and (step 7) the memo sign-off. */
+/** Inspector details: prefill new inspections and the memo sign-off. */
 export function MyDetailsForm() {
   // Settings are created on first run; show the form once they exist.
   const settings = useLiveQuery(() => db.settings.get(SETTINGS_ID), []);
-  return settings ? (
-    <>
-      <MyDetailsFields initial={settings} />
-      <h3>Signature</h3>
+  return settings ? <MyDetailsFields initial={settings} /> : null;
+}
+
+/** My signature, copied into each new memo. */
+export function MySignature() {
+  const settings = useLiveQuery(() => db.settings.get(SETTINGS_ID), []);
+  if (!settings) return null;
+  return (
+    <section
+      id="signature"
+      className="settings-card"
+      aria-labelledby="signature-heading"
+    >
+      <h2 id="signature-heading" className="card-title">
+        <span className="card-icon">
+          <Signature aria-hidden="true" />
+        </span>
+        Signature
+      </h2>
       <p className="muted">
         Copied into each new memo, between &ldquo;Yours sincerely,&rdquo; and
         your name. Memos you&rsquo;ve already made keep theirs.
@@ -31,8 +47,8 @@ export function MyDetailsForm() {
         onSave={(png) => setMySignature(db, png)}
         onRemove={() => clearMySignature(db)}
       />
-    </>
-  ) : null;
+    </section>
+  );
 }
 
 /** Owns the field values after the first load so typing is never overwritten. */
@@ -55,9 +71,18 @@ function MyDetailsFields({ initial }: { initial: Details }) {
   };
 
   return (
-    <section aria-labelledby="my-details-heading">
+    <section
+      id="my-details"
+      className="settings-card"
+      aria-labelledby="my-details-heading"
+    >
       <div className="page-heading">
-        <h2 id="my-details-heading">My details</h2>
+        <h2 id="my-details-heading" className="card-title">
+          <span className="card-icon">
+            <User aria-hidden="true" />
+          </span>
+          My details
+        </h2>
         <span
           className="save-state"
           role="status"

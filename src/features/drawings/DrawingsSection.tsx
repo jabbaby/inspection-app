@@ -1,6 +1,6 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useRef, useState } from "react";
-import { Link } from "react-router";
+import { FilePlus, Files, Pencil, Trash2 } from "lucide-react";
 import { ConfirmDialog } from "../../app/ConfirmDialog";
 import { db } from "../../db/db";
 import {
@@ -30,7 +30,21 @@ async function storePdf(inspectionId: string, name: string, bytes: Uint8Array) {
   });
 }
 
-export function DrawingsSection({ inspectionId }: { inspectionId: string }) {
+/**
+ * An inspection's drawings: add (PDFs from Files, or a synthetic test
+ * drawing), rename and delete. In the viewer's Drawings panel, tapping a
+ * drawing scrolls to it (`onOpen`); with no drawings yet it fills the view.
+ */
+export function DrawingsSection({
+  inspectionId,
+  onOpen,
+  onActivity,
+}: {
+  inspectionId: string;
+  onOpen?: (drawingId: string) => void;
+  /** Reports adding in progress, and whether any file failed. */
+  onActivity?: (state: { busy: boolean; failed: boolean }) => void;
+}) {
   const drawings = useLiveQuery(
     () => listDrawings(db, inspectionId),
     [inspectionId],
@@ -54,6 +68,7 @@ export function DrawingsSection({ inspectionId }: { inspectionId: string }) {
   const [deleting, setDeleting] = useState<Drawing | null>(null);
 
   async function addFiles(files: File[]) {
+    onActivity?.({ busy: true, failed: false });
     const failed: string[] = [];
     for (const [i, file] of files.entries()) {
       setStatus(`Adding ${file.name} (${i + 1} of ${files.length})…`);
@@ -70,6 +85,7 @@ export function DrawingsSection({ inspectionId }: { inspectionId: string }) {
     }
     setStatus(null);
     setErrors(failed);
+    onActivity?.({ busy: false, failed: failed.length > 0 });
   }
 
   async function addSynthetic() {
@@ -94,9 +110,11 @@ export function DrawingsSection({ inspectionId }: { inspectionId: string }) {
   const deletingCount = deleting ? (counts?.get(deleting.id) ?? 0) : 0;
 
   return (
-    <div className="later-section" aria-labelledby="drawings-heading">
+    <div className="drawings-section" aria-labelledby="drawings-heading">
       <div className="page-heading">
-        <h2 id="drawings-heading">Drawings</h2>
+        <h2 id="drawings-heading" className="section-title">
+          <Files aria-hidden="true" /> Drawings
+        </h2>
         <span className="button-row">
           <button
             type="button"
@@ -104,7 +122,7 @@ export function DrawingsSection({ inspectionId }: { inspectionId: string }) {
             disabled={busy}
             onClick={() => fileInput.current?.click()}
           >
-            Add drawings
+            <FilePlus aria-hidden="true" /> Add drawings
           </button>
           <button
             type="button"
@@ -151,9 +169,10 @@ export function DrawingsSection({ inspectionId }: { inspectionId: string }) {
             const count = counts?.get(drawing.id) ?? 0;
             return (
               <li key={drawing.id} className="inspection-card">
-                <Link
-                  to={`/inspections/${inspectionId}/document?drawing=${drawing.id}`}
-                  className="inspection-card-link"
+                <button
+                  type="button"
+                  className="inspection-card-link link-like"
+                  onClick={() => onOpen?.(drawing.id)}
                 >
                   <span className="inspection-card-title">{drawing.name}</span>
                   <span>
@@ -164,24 +183,27 @@ export function DrawingsSection({ inspectionId }: { inspectionId: string }) {
                       ? ` · ${formatBytes(drawing.fileSize)}`
                       : ""}
                   </span>
-                </Link>
+                </button>
                 <button
                   type="button"
+                  className="icon-button"
                   aria-label={`Rename ${drawing.name}`}
+                  title="Rename"
                   onClick={() => {
                     setNewName(drawing.name);
                     setRenaming(drawing);
                   }}
                 >
-                  Rename
+                  <Pencil aria-hidden="true" />
                 </button>
                 <button
                   type="button"
-                  className="danger-outline"
+                  className="icon-button danger-outline"
                   aria-label={`Delete ${drawing.name}`}
+                  title="Delete"
                   onClick={() => setDeleting(drawing)}
                 >
-                  Delete
+                  <Trash2 aria-hidden="true" />
                 </button>
               </li>
             );

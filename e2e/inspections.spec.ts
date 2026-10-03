@@ -54,8 +54,9 @@ test("creates an inspection, autosaves every field and keeps it after reload", a
     "Level 3 slab reinforcement",
   );
 
-  await page.getByRole("link", { name: "‹ Inspections" }).click();
+  await page.getByRole("link", { name: "Back to inspections" }).click();
   const card = page
+    .getByRole("list", { name: "Recent inspections" })
     .getByRole("listitem")
     .filter({ hasText: "SY000001 – Example Apartments" });
   await expect(card).toContainText("Example Builders Pty Ltd");
@@ -67,8 +68,10 @@ test("saves an edit made just before leaving the screen", async ({ page }) => {
   const url = page.url();
   await field(page, "Job name").fill("Quick edit");
   // Leave immediately, before the autosave delay has passed.
-  await page.getByRole("link", { name: "‹ Inspections" }).click();
-  await expect(page.getByRole("listitem")).toContainText("Quick edit");
+  await page.getByRole("link", { name: "Back to inspections" }).click();
+  await expect(
+    page.getByRole("list", { name: "Recent inspections" }),
+  ).toContainText("Quick edit");
   await page.goto(url);
   await expect(field(page, "Job name")).toHaveValue("Quick edit");
 });
@@ -76,7 +79,7 @@ test("saves an edit made just before leaving the screen", async ({ page }) => {
 test("deletes an inspection only after confirming", async ({ page }) => {
   await newInspection(page);
   await fillJob(page);
-  await page.getByRole("link", { name: "‹ Inspections" }).click();
+  await page.getByRole("link", { name: "Back to inspections" }).click();
 
   const deleteButton = page.getByRole("button", {
     name: "Delete SY000001 – Example Apartments",
@@ -85,7 +88,11 @@ test("deletes an inspection only after confirming", async ({ page }) => {
   const dialog = page.getByRole("dialog", { name: "Delete inspection?" });
   await expect(dialog).toContainText("SY000001 – Example Apartments");
   await dialog.getByRole("button", { name: "Cancel" }).click();
-  await expect(page.getByRole("listitem")).toHaveCount(1);
+  await expect(
+    page
+      .getByRole("list", { name: "Recent inspections" })
+      .getByRole("listitem"),
+  ).toHaveCount(1);
 
   await deleteButton.click();
   await dialog.getByRole("button", { name: "Delete" }).click();
@@ -126,21 +133,25 @@ test("an inspection has Pre-inspection, Inspection and Site memo tabs", async ({
   await expect(tab("Pre-inspection")).toHaveAttribute("aria-current", "page");
 
   // Opening it again goes to the Inspection tab.
-  await page.getByRole("link", { name: "‹ Inspections" }).click();
+  await page.getByRole("link", { name: "Back to inspections" }).click();
   await page
-    .getByRole("link", { name: /^SY000001 – Example Apartments/ })
+    .getByRole("list", { name: "Recent inspections" })
+    .getByRole("link")
     .click();
   await expect(page).toHaveURL(/\/inspection$/);
   await expect(tab("Inspection")).toHaveAttribute("aria-current", "page");
+  // No drawings yet: the step starts by adding them.
   await expect(page.getByRole("heading", { name: "Drawings" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Photos" })).toBeVisible();
-  // No drawings yet, so nothing to mark up.
-  await expect(page.getByRole("link", { name: "Open markup" })).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Add drawings" }),
+  ).toBeVisible();
   await expect(field(page, "Job number")).toHaveCount(0);
 
   await openTab(page, "Site memo");
   await expect(tab("Site memo")).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("button", { name: "Create memo" })).toBeEnabled();
+  // Photos live here, grouped as in the appendix.
+  await expect(page.getByRole("heading", { name: "Photos" })).toBeVisible();
 
   await openTab(page, "Pre-inspection");
   await expect(field(page, "Job number")).toHaveValue("SY000001");

@@ -13,6 +13,8 @@ export function AutoGrowTextarea(
     const el = ref.current;
     if (!el) return;
     const fit = () => {
+      // Hidden (e.g. in a folded row): measure once it is shown.
+      if (el.clientWidth === 0) return;
       el.style.height = "auto";
       const border = el.offsetHeight - el.clientHeight;
       el.style.height = `${el.scrollHeight + border}px`;

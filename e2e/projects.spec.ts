@@ -6,12 +6,10 @@ const field = (page: Page, label: string) =>
 
 const PROJECT = { jobNumber: "SY000001", jobName: "Example Apartments" };
 
+/** The home screen, where Projects sit beside Recent inspections. */
 async function openProjects(page: Page) {
   await page.goto("./");
-  await page
-    .getByRole("navigation", { name: "Inspections view" })
-    .getByRole("link", { name: "Projects" })
-    .click();
+  await expect(page.getByRole("heading", { name: "Projects" })).toBeVisible();
 }
 
 test("inspections in a project share its details", async ({ page }) => {
@@ -89,15 +87,14 @@ test("an inspection without a project is flagged until it gets one", async ({
   await field(page, "Item inspected").fill("Footings");
   await expect(page.getByTestId("save-state")).toHaveText("Saved");
 
-  // Flagged in Recent and at the top of Projects.
+  // Flagged in Recent; it opens on Pre-inspection.
   await page.goto("./");
-  await expect(
-    page.getByRole("list", { name: "Recent inspections" }),
-  ).toContainText("Needs a project");
-  await openProjects(page);
-  const unsorted = page.getByRole("list", { name: "Needs a project" });
-  await expect(unsorted.getByRole("listitem")).toHaveCount(1);
-  await unsorted.getByRole("link").click();
+  const flagged = page
+    .getByRole("list", { name: "Recent inspections" })
+    .getByRole("listitem")
+    .filter({ hasText: "Needs a project" });
+  await expect(flagged).toHaveCount(1);
+  await flagged.getByRole("link").click();
 
   // Assign it to the existing project.
   await page.getByRole("button", { name: "Assign to project" }).click();
@@ -202,5 +199,9 @@ test("Recent shows the last 10 inspections edited", async ({ page }) => {
   const recent = page.getByRole("list", { name: "Recent inspections" });
   await expect(recent.getByRole("listitem")).toHaveCount(10);
   await expect(recent.getByRole("listitem").first()).toContainText("Item 11");
-  await expect(recent).not.toContainText("Item 1 ·");
+  await expect(recent.getByText("Item 1", { exact: true })).toHaveCount(0);
+  // Older ones still needing a project stay listed underneath.
+  await expect(
+    page.getByRole("list", { name: "Needs a project" }),
+  ).toContainText("Item 1");
 });

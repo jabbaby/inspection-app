@@ -13,6 +13,15 @@ import {
   type ProjectPatch,
 } from "../../db/projects";
 import type { Contact, Project } from "../../db/types";
+import {
+  ArrowLeft,
+  Building2,
+  ClipboardList,
+  Contact as ContactIcon,
+  Plus,
+  Trash2,
+} from "lucide-react";
+import { ProjectAvatar } from "./ProjectAvatar";
 import { InspectionCard } from "../inspections/InspectionsPage";
 import { inspectionTitle } from "../inspections/inspectionTitle";
 import {
@@ -22,7 +31,7 @@ import {
 import { PROJECT_FIELDS, toPatch } from "../inspections/jobDetails";
 import { tabPath } from "../inspections/tabPath";
 
-const BACK = "/?view=projects";
+const BACK = "/";
 
 /**
  * A project (SPEC section 12): its details (shared by all its
@@ -44,7 +53,7 @@ export function ProjectPage() {
     return (
       <section>
         <p>
-          <Link to={BACK}>‹ Projects</Link>
+          <Link to={BACK}>‹ Inspections</Link>
         </p>
         <h1>Project not found</h1>
       </section>
@@ -104,74 +113,105 @@ function ProjectFor({ initial }: { initial: Project }) {
 
   return (
     <section className="project-page">
-      <p>
-        <Link to={BACK}>‹ Projects</Link>
-      </p>
-      <div className="page-heading">
-        <h1 data-testid="project-title">{title}</h1>
+      <div className="inspection-title-row">
+        <Link to={BACK} className="back-link" aria-label="Back to inspections">
+          <ArrowLeft aria-hidden="true" />
+        </Link>
+        <ProjectAvatar project={{ ...initial, ...values }} />
+        <div className="inspection-title-text">
+          <h1 data-testid="project-title">{title}</h1>
+          {values.clientCompany && (
+            <span className="muted">{values.clientCompany}</span>
+          )}
+        </div>
         <span className="save-state" role="status" data-testid="save-state">
           {saveStateLabel(autosave.state)}
         </span>
       </div>
 
-      <h2>Project details</h2>
-      <p className="muted">
-        Shared by every inspection in this project and their memos.
-      </p>
-      <JobDetailsForm
-        label="Project details"
-        only={PROJECT_FIELDS}
-        values={values}
-        onChange={(key, value) => {
-          setValues((v) => ({ ...v, [key]: value }));
-          autosave.queue(toPatch(key, value).project ?? {});
-        }}
-        onBlur={() => void autosave.flush()}
-      />
-      {duplicates.length > 0 && (
-        <p className="notice" data-testid="duplicate-job">
-          Another project also has job number {duplicates[0].jobNumber}:{" "}
-          <Link to={`/projects/${duplicates[0].id}`}>
-            {inspectionTitle(duplicates[0])}
-          </Link>
-          .
-        </p>
-      )}
-
-      <div className="later-section">
-        <div className="page-heading">
-          <h2>Inspections</h2>
-          <button
-            type="button"
-            className="primary"
-            onClick={async () => {
-              const inspection = await createInspection(db, new Date(), id);
-              navigate(tabPath(inspection.id, "details"));
+      <div className="settings-cards">
+        <section
+          className="settings-card"
+          aria-labelledby="project-details-heading"
+        >
+          <h2 id="project-details-heading" className="card-title">
+            <span className="card-icon">
+              <Building2 aria-hidden="true" />
+            </span>
+            Project details
+          </h2>
+          <p className="muted">
+            Shared by every inspection in this project and their memos.
+          </p>
+          <JobDetailsForm
+            label="Project details"
+            only={PROJECT_FIELDS}
+            values={values}
+            onChange={(key, value) => {
+              setValues((v) => ({ ...v, [key]: value }));
+              autosave.queue(toPatch(key, value).project ?? {});
             }}
-          >
-            New inspection
-          </button>
-        </div>
-        {!live ? null : inspections.length === 0 ? (
-          <p className="muted">No inspections in this project yet.</p>
-        ) : (
-          <ul className="inspection-list" aria-label="Project inspections">
-            {inspections.map((i) => (
-              <InspectionCard key={i.id} inspection={i} />
-            ))}
-          </ul>
-        )}
-      </div>
+            onBlur={() => void autosave.flush()}
+          />
+          {duplicates.length > 0 && (
+            <p className="notice" data-testid="duplicate-job">
+              Another project also has job number {duplicates[0].jobNumber}:{" "}
+              <Link to={`/projects/${duplicates[0].id}`}>
+                {inspectionTitle(duplicates[0])}
+              </Link>
+              .
+            </p>
+          )}
+        </section>
 
-      <div className="later-section" aria-labelledby="contacts-heading">
-        <h2 id="contacts-heading">Contacts</h2>
-        <p className="muted">
-          Offered when adding memo recipients. Recipients typed into a memo are
-          added here.
-        </p>
-        {live && (
-          <ContactsEditor initial={live.contacts} onSave={setContacts} />
-        )}
+        <section
+          className="settings-card"
+          aria-labelledby="project-inspections-heading"
+        >
+          <div className="page-heading">
+            <h2 id="project-inspections-heading" className="card-title">
+              <span className="card-icon">
+                <ClipboardList aria-hidden="true" />
+              </span>
+              Inspections
+            </h2>
+            <button
+              type="button"
+              className="primary"
+              onClick={async () => {
+                const inspection = await createInspection(db, new Date(), id);
+                navigate(tabPath(inspection.id, "details"));
+              }}
+            >
+              <Plus aria-hidden="true" /> New inspection
+            </button>
+          </div>
+          {!live ? null : inspections.length === 0 ? (
+            <p className="muted">No inspections in this project yet.</p>
+          ) : (
+            <ul className="inspection-list" aria-label="Project inspections">
+              {inspections.map((i) => (
+                <InspectionCard key={i.id} inspection={i} />
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="settings-card" aria-labelledby="contacts-heading">
+          <h2 id="contacts-heading" className="card-title">
+            <span className="card-icon">
+              <ContactIcon aria-hidden="true" />
+            </span>
+            Contacts
+          </h2>
+          <p className="muted">
+            Offered when adding memo recipients. Recipients typed into a memo
+            are added here.
+          </p>
+          {live && (
+            <ContactsEditor initial={live.contacts} onSave={setContacts} />
+          )}
+        </section>
       </div>
 
       <div className="later-section">
@@ -180,7 +220,7 @@ function ProjectFor({ initial }: { initial: Project }) {
           className="danger-outline"
           onClick={() => setConfirmDelete(true)}
         >
-          Delete project
+          <Trash2 aria-hidden="true" /> Delete project
         </button>
       </div>
 

@@ -1,3 +1,4 @@
+import { ClipboardList, Settings, Wifi, WifiOff } from "lucide-react";
 import { Link, NavLink, Outlet, useLocation } from "react-router";
 import { UpdatePrompt } from "./UpdatePrompt";
 import { useOnlineStatus } from "./useOnlineStatus";
@@ -5,7 +6,10 @@ import { useOnlineStatus } from "./useOnlineStatus";
 export function Shell() {
   const online = useOnlineStatus();
   const { pathname } = useLocation();
-  const inInspections = pathname === "/" || pathname.startsWith("/inspections");
+  const inInspections =
+    pathname === "/" ||
+    pathname.startsWith("/inspections") ||
+    pathname.startsWith("/projects");
 
   return (
     <div className="shell">
@@ -17,15 +21,22 @@ export function Shell() {
             className={inInspections ? "active" : undefined}
             aria-current={inInspections ? "page" : undefined}
           >
-            Inspections
+            <ClipboardList aria-hidden="true" /> Inspections
           </Link>
-          <NavLink to="/settings">Settings</NavLink>
+          <NavLink to="/settings">
+            <Settings aria-hidden="true" /> Settings
+          </NavLink>
         </nav>
         <span
           className={`net-status ${online ? "online" : "offline"}`}
           role="status"
           data-testid="net-status"
         >
+          {online ? (
+            <Wifi aria-hidden="true" />
+          ) : (
+            <WifiOff aria-hidden="true" />
+          )}
           {online ? "Online" : "Offline"}
         </span>
       </header>

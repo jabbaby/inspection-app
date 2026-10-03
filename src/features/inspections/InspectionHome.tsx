@@ -1,4 +1,3 @@
-import { useLiveQuery } from "dexie-react-hooks";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { saveStateLabel, useAutosave } from "../../app/useAutosave";
@@ -13,9 +12,6 @@ import {
   type JobPatch,
 } from "../../db/projects";
 import type { JobInspection } from "../../db/types";
-import { DrawingsSection } from "../drawings/DrawingsSection";
-import { ItemsSection } from "../items/ItemsSection";
-import { PhotosSection } from "../photos/PhotosSection";
 import { ProjectPicker } from "../projects/ProjectPicker";
 import { DeleteInspectionDialog } from "./DeleteInspectionDialog";
 import { InspectionHeader } from "./InspectionTabs";
@@ -234,48 +230,6 @@ function PreInspectionFor({ id }: { id: string }) {
           void deleteInspection(db, id).then(() => navigate("/"));
         }}
       />
-    </section>
-  );
-}
-
-/** Inspection tab: Open markup, then drawings, items and general photos. */
-export function InspectionScreen() {
-  const { id = "" } = useParams();
-  const data = useLiveQuery(
-    async () => ({
-      inspection: (await loadJobInspection(db, id)) ?? null,
-      drawingCount: await db.drawings.where("inspectionId").equals(id).count(),
-    }),
-    [id],
-  );
-  if (!data) return null;
-  const { inspection, drawingCount } = data;
-  if (!inspection) return <NotFound />;
-
-  return (
-    <section className="inspection-home">
-      <InspectionHeader
-        inspectionId={id}
-        title={inspectionTitle(inspection)}
-        current="inspection"
-      />
-      <p className="button-row">
-        {drawingCount > 0 ? (
-          <Link
-            className="button-link primary"
-            to={`/inspections/${id}/document`}
-          >
-            Open markup
-          </Link>
-        ) : (
-          <span className="muted">
-            Add a drawing below, then open it to mark it up.
-          </span>
-        )}
-      </p>
-      <DrawingsSection inspectionId={id} />
-      <ItemsSection inspectionId={id} />
-      <PhotosSection inspectionId={id} jobNumber={inspection.jobNumber} />
     </section>
   );
 }

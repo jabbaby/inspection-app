@@ -1,5 +1,6 @@
 import { useLiveQuery } from "dexie-react-hooks";
-import { useState } from "react";
+import { ChevronRight, Plus, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { AutoGrowTextarea } from "../../app/AutoGrowTextarea";
 import { ConfirmDialog } from "../../app/ConfirmDialog";
 import { saveStateLabel, useAutosave } from "../../app/useAutosave";
@@ -33,15 +34,38 @@ const GROUPS: { kind: SnippetKind; title: string; hint: string }[] = [
 export function SnippetsEditor() {
   const snippets = useLiveQuery(() => db.snippets.toArray(), []);
   const [deleting, setDeleting] = useState<Snippet | null>(null);
+  // A message just added opens ready to type.
+  const [added, setAdded] = useState<string | null>(null);
   if (!snippets) return null;
 
   return (
     <div className="snippets-editor">
+      <p className="chip-row">
+        {GROUPS.map((group) => (
+          <a
+            key={group.kind}
+            className="chip chip-link"
+            href={`#snippets-${group.kind}`}
+            onClick={(e) => {
+              e.preventDefault();
+              document
+                .getElementById(`snippets-${group.kind}`)
+                ?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }}
+          >
+            {group.title}{" "}
+            <strong>
+              {snippets.filter((s) => s.kind === group.kind).length}
+            </strong>
+          </a>
+        ))}
+      </p>
       {GROUPS.map((group) => {
         const list = snippets.filter((s) => s.kind === group.kind);
         return (
           <section
             key={group.kind}
+            id={`snippets-${group.kind}`}
             className="snippet-group"
             aria-label={group.title}
           >
@@ -49,17 +73,21 @@ export function SnippetsEditor() {
             <p className="muted">{group.hint}</p>
             {list.map((s) => (
               <SnippetRow
-                key={s.id}
+                // Remounts open once it is known to be the one just added.
+                key={s.id === added ? `${s.id}:new` : s.id}
                 snippet={s}
+                startOpen={s.id === added}
                 onDelete={() => setDeleting(s)}
               />
             ))}
             <p className="button-row">
               <button
                 type="button"
-                onClick={() => void addSnippet(db, group.kind)}
+                onClick={() =>
+                  void addSnippet(db, group.kind).then((s) => setAdded(s.id))
+                }
               >
-                Add
+                <Plus aria-hidden="true" /> Add
               </button>
             </p>
           </section>
@@ -86,13 +114,25 @@ export function SnippetsEditor() {
   );
 }
 
+/**
+ * One message, folded to its name and the start of its text; tap to open
+ * it for editing.
+ */
 function SnippetRow({
   snippet,
+  startOpen,
   onDelete,
 }: {
   snippet: Snippet;
+  startOpen: boolean;
   onDelete: () => void;
 }) {
+  const [open, setOpen] = useState(startOpen);
+  const row = useRef<HTMLDetailsElement>(null);
+  // A message just added may sit anywhere in the list: bring it into view.
+  useEffect(() => {
+    if (startOpen) row.current?.scrollIntoView({ block: "center" });
+  }, [startOpen]);
   const [label, setLabel] = useState(snippet.label);
   const [text, setText] = useState(snippet.text);
   const autosave = useAutosave<Partial<Pick<Snippet, "label" | "text">>>(
@@ -100,11 +140,22 @@ function SnippetRow({
     (a, b) => ({ ...a, ...b }),
   );
   return (
-    <div className="snippet-row" data-testid="snippet-row">
+    <details
+      ref={row}
+      className="snippet-row"
+      data-testid="snippet-row"
+      data-new={startOpen || undefined}
+      open={open}
+      onToggle={(e) => setOpen(e.currentTarget.open)}
+    >
+      <summary>
+        <ChevronRight aria-hidden="true" className="summary-chevron" />
+        <span className="snippet-name">{label || "Untitled"}</span>
+        {!open && <span className="snippet-preview muted">{text}</span>}
+        <span className="muted small">{saveStateLabel(autosave.state)}</span>
+      </summary>
       <label className="field">
-        <span>
-          Name <span className="muted">{saveStateLabel(autosave.state)}</span>
-        </span>
+        <span>Name</span>
         <input
           value={label}
           aria-label={`Name of ${snippet.label}`}
@@ -131,9 +182,9 @@ function SnippetRow({
       </label>
       <p className="button-row">
         <button type="button" className="danger-outline" onClick={onDelete}>
-          Delete
+          <Trash2 aria-hidden="true" /> Delete
         </button>
       </p>
-    </div>
+    </details>
   );
 }

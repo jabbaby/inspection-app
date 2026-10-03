@@ -47,7 +47,6 @@ async function addItems(page: Page) {
   await expect(page.getByTestId("drawings-status")).toHaveCount(0, {
     timeout: 20_000,
   });
-  await page.getByRole("link", { name: /^S-101 Level 3/ }).click();
   await expect(
     page.locator('[data-testid="drawing-viewer"][data-ready="true"]'),
   ).toBeVisible({ timeout: 20_000 });
@@ -203,7 +202,8 @@ test("prefilled messages are edited in Settings and offered in the memo", async 
   await expect(bodies.getByTestId("snippet-row")).toHaveCount(4);
   await bodies.getByRole("button", { name: "Add" }).click();
   await expect(bodies.getByTestId("snippet-row")).toHaveCount(5);
-  const added = bodies.getByTestId("snippet-row").last();
+  // The new message opens ready to type (wherever it sits in the list).
+  const added = bodies.locator('[data-testid="snippet-row"][data-new="true"]');
   await added.getByLabel(/^Name of/).fill("Partly complete");
   await added
     .getByLabel(/^Text of/)
@@ -213,6 +213,7 @@ test("prefilled messages are edited in Settings and offered in the memo", async 
   // Reword a standard condition.
   const conditions = page.getByRole("region", { name: "Standard conditions" });
   const photo = conditions.getByTestId("snippet-row").nth(1);
+  await photo.locator("summary").click();
   await photo
     .getByLabel(/^Text of/)
     .fill("Provide photos of completed items before proceeding.");
@@ -233,11 +234,11 @@ test("prefilled messages are edited in Settings and offered in the memo", async 
 
   // Deleting asks first.
   await page.goto("./#/settings");
-  await bodies
+  const last = bodies
     .getByTestId("snippet-row")
-    .last()
-    .getByRole("button", { name: "Delete" })
-    .click();
+    .filter({ hasText: "Partly complete" });
+  await last.locator("summary").click();
+  await last.getByRole("button", { name: "Delete" }).click();
   await page
     .getByRole("dialog", { name: /^Delete "Partly complete"/ })
     .getByRole("button", { name: "Delete" })
@@ -245,32 +246,12 @@ test("prefilled messages are edited in Settings and offered in the memo", async 
   await expect(bodies.getByTestId("snippet-row")).toHaveCount(4);
 });
 
-test("the inspection home lists observations and instructions side by side in landscape", async ({
-  page,
-}) => {
-  const home = await newInspection(page);
-  await addItems(page);
-  await page.goto(home);
-  const observations = page.getByRole("region", { name: "Observations" });
-  const instructions = page.getByRole("region", { name: "Instructions" });
-
-  await page.setViewportSize({ width: 1194, height: 834 });
-  const o = await observations.boundingBox();
-  const i = await instructions.boundingBox();
-  expect(o && i && Math.abs(o.y - i.y)).toBeLessThan(1);
-  expect(o && i && i.x - (o.x + o.width)).toBeGreaterThan(0);
-
-  // Portrait: one list under the other.
-  await page.setViewportSize({ width: 834, height: 1194 });
-  const o2 = await observations.boundingBox();
-  const i2 = await instructions.boundingBox();
-  expect(o2 && i2 && i2.y - (o2.y + o2.height)).toBeGreaterThan(0);
-});
-
 test("prefilled message boxes use body-size text and grow to fit", async ({
   page,
 }) => {
   await page.goto("./#/settings");
+  // Messages are folded: open the first.
+  await page.getByTestId("snippet-row").first().locator("summary").click();
   const text = page.getByLabel(/^Text of/).first();
   await expect(text).toHaveCSS("font-size", "16px");
   const before = (await text.boundingBox())!.height;

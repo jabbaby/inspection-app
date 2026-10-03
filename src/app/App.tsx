@@ -1,9 +1,6 @@
 import { Navigate, createHashRouter, useParams } from "react-router";
 import { RouterProvider } from "react-router/dom";
-import {
-  InspectionScreen,
-  PreInspectionScreen,
-} from "../features/inspections/InspectionHome";
+import { PreInspectionScreen } from "../features/inspections/InspectionHome";
 import { tabPath } from "../features/inspections/tabPath";
 import { InspectionsPage } from "../features/inspections/InspectionsPage";
 import { ProjectPage } from "../features/projects/ProjectPage";
@@ -22,7 +19,8 @@ const router = createHashRouter([
       // An inspection opens on its Inspection tab (SPEC section 12).
       { path: "inspections/:id", element: <OpenInspection /> },
       { path: "inspections/:id/details", element: <PreInspectionScreen /> },
-      { path: "inspections/:id/inspection", element: <InspectionScreen /> },
+      // The Inspection step is the drawings themselves.
+      { path: "inspections/:id/inspection", element: <DocumentScreen /> },
       { path: "projects/:id", element: <ProjectPage /> },
       { path: "settings", element: <SettingsPage /> },
       { path: "inspections/:id/document", element: <DocumentScreen /> },
