@@ -21,6 +21,7 @@ import {
 } from "../viewer/viewTransform";
 import { kindName } from "../../items/letters";
 import { DocPage, type SettledView } from "./DocPage";
+import { DOUBLE_TAP_MS, DOUBLE_TAP_SLOP } from "./gestures";
 import {
   DOC_WIDTH,
   hitPage,
@@ -66,8 +67,16 @@ interface Props {
   /**
    * Tap, hold, (drag,) release on the drawing: a pin at the press point,
    * with an arrow to the release point when dragged (on the same page).
+   * After a tap (double-tap and hold) the kind is observation, and `pinId`
+   * names the pin pressed, when the hold started on one.
    */
-  onHoldPlace: (page: PageLayout, at: Point, tip: Point | null) => void;
+  onHoldPlace: (
+    page: PageLayout,
+    at: Point,
+    tip: Point | null,
+    kind: "instruction" | "observation",
+    pinId: string | null,
+  ) => void;
   /**
    * The second tap of a double-tap: on a pin (often the one the first tap
    * just placed), or on the drawing (with the spot, null between pages).
@@ -102,13 +111,12 @@ const SETTLE_MS = 160;
 const PAD = 16;
 /** A touch this soon after the view scrolled stops the scroll; it isn't a tap. */
 const SCROLL_STOP_MS = 120;
-/** Two taps this close in time and space are a double-tap. */
-const DOUBLE_TAP_MS = 300;
-const DOUBLE_TAP_SLOP = 30;
 /** Holding this long without moving starts a pin with an arrow. */
 const HOLD_MS = 500;
 /** Released closer to the pin than this, the hold places just the pin. */
 const ARROW_MIN = 24;
+/** The hold ring shows only once a press has lasted this long. */
+const RING_DELAY_MS = 150;
 
 interface Tracked extends Point {
   type: string;
@@ -119,6 +127,11 @@ interface TouchLike {
   clientX: number;
   clientY: number;
   touchType?: string;
+}
+
+/** Milliseconds since a performance.now() time (event handlers only). */
+function msSince(time: number) {
+  return performance.now() - time;
 }
 
 function capture(e: React.PointerEvent) {
@@ -524,10 +537,16 @@ export function DocumentViewer(props: Props) {
    */
   const hold = useRef<{
     pointerId: number;
+    /** Where the finger went down, and where the pin (and arrow) start. */
     start: Point;
+    origin: Point;
     page: PageLayout;
     at: Point;
+    kind: "instruction" | "observation";
+    /** The pin pressed (double-tap and hold on a pin). */
+    pinId: string | null;
     timer: number;
+    ringTimer: number;
     held: boolean;
     tip: Point | null;
   } | null>(null);
@@ -572,7 +591,10 @@ export function DocumentViewer(props: Props) {
   // while the document is scrolling only stops it: on a pin or the box it
   // is swallowed; on the drawing it never places a pin.
   function onPointerDownCapture(e: React.PointerEvent) {
-    if (performance.now() - lastScroll.current > SCROLL_STOP_MS) return;
+    if (msSince(lastScroll.current) > SCROLL_STOP_MS) return;
+    // The second tap of a double-tap is never a scroll stop: the first one
+    // can make the view move (a panel opening resizes it).
+    if (nearLastTap(local(e), e.timeStamp)) return;
     if (e.pointerType === "mouse") return;
     stopTouch.current = e.pointerId;
     if (
@@ -606,7 +628,7 @@ export function DocumentViewer(props: Props) {
       !latest.current.addPinMode &&
       stopTouch.current !== e.pointerId
     )
-      startHold(e.pointerId, p);
+      startHold(e.pointerId, p, nearLastTap(p, e.timeStamp));
   }
 
   function onPointerMove(e: React.PointerEvent) {
@@ -686,13 +708,19 @@ export function DocumentViewer(props: Props) {
     }
   }
 
-  /** Records a tap; true when it is the second of a double-tap. */
-  function isSecondTap(at: Point, time: number) {
+  /** Whether a press here and now would be the second of a double-tap. */
+  function nearLastTap(at: Point, time: number) {
     const prev = lastTap.current;
-    const second =
+    return (
       prev !== null &&
       time - prev.time < DOUBLE_TAP_MS &&
-      Math.hypot(at.x - prev.at.x, at.y - prev.at.y) < DOUBLE_TAP_SLOP;
+      Math.hypot(at.x - prev.at.x, at.y - prev.at.y) < DOUBLE_TAP_SLOP
+    );
+  }
+
+  /** Records a tap; true when it is the second of a double-tap. */
+  function isSecondTap(at: Point, time: number) {
+    const second = nearLastTap(at, time);
     // A third tap starts a new pair.
     lastTap.current = second ? null : { at, time };
     return second;
@@ -715,39 +743,77 @@ export function DocumentViewer(props: Props) {
     line.setAttribute("y2", String(to.y));
   }
 
+  /** Shows the hold layer (nothing is touched until the ring is due). */
   function showHold(state: "pending" | "held" | null) {
     const layer = holdRef.current;
+    const h = hold.current;
     if (!layer) return;
-    if (state) layer.dataset.state = state;
-    else delete layer.dataset.state;
+    if (!state || !h) {
+      delete layer.dataset.state;
+      return;
+    }
+    const c = toContent(h.origin);
+    layer.style.setProperty("--hold-x", `${c.x}px`);
+    layer.style.setProperty("--hold-y", `${c.y}px`);
+    layer.dataset.kind = h.kind;
+    if (state === "pending") holdLine(c, c);
+    layer.dataset.state = state;
   }
 
-  function startHold(pointerId: number, start: Point) {
+  function beginHold(
+    pointerId: number,
+    start: Point,
+    origin: Point,
+    page: PageLayout,
+    at: Point,
+    kind: "instruction" | "observation",
+    pinId: string | null,
+  ) {
+    hold.current = {
+      pointerId,
+      start,
+      origin,
+      page,
+      at,
+      kind,
+      pinId,
+      timer: window.setTimeout(fireHold, HOLD_MS),
+      ringTimer: window.setTimeout(() => showHold("pending"), RING_DELAY_MS),
+      held: false,
+      tip: null,
+    };
+  }
+
+  /** A press on the drawing; after a tap (`second`) it makes an observation. */
+  function startHold(pointerId: number, start: Point, second: boolean) {
     const hit = hitPage(
       currentLayout(),
       screenToPage(currentTransform(), start),
     );
     if (!hit) return;
-    hold.current = {
-      pointerId,
-      start,
-      page: hit.page,
-      at: hit.at,
-      timer: window.setTimeout(fireHold, HOLD_MS),
-      held: false,
-      tip: null,
-    };
-    const c = toContent(start);
-    holdRef.current?.style.setProperty("--hold-x", `${c.x}px`);
-    holdRef.current?.style.setProperty("--hold-y", `${c.y}px`);
-    holdLine(c, c);
-    showHold("pending");
+    const kind = second ? "observation" : "instruction";
+    beginHold(pointerId, start, start, hit.page, hit.at, kind, null);
+  }
+
+  /** The second press of a double-tap landed on a pin (often the new one). */
+  function startPinHold(pointerId: number, pinId: string, start: Point) {
+    const pin = latest.current.pins.find((p) => p.id === pinId);
+    const page = pin && pagesRef.current.get(pin.pageKey);
+    if (!pin || !page) return;
+    const at = { x: pin.x, y: pin.y };
+    const origin = pageToScreen(currentTransform(), pagePointToDoc(page, at));
+    beginHold(pointerId, start, origin, page, at, "observation", pinId);
   }
 
   function fireHold() {
     const h = hold.current;
-    // Still pressed and unmoved (a scroll or second finger cancels it).
-    if (!h || tap.current?.id !== h.pointerId) return cancelHold();
+    if (!h) return;
+    // Still pressed and unmoved (a scroll, drag or second finger cancels it).
+    const drag = dragging.current;
+    const pressed = h.pinId
+      ? drag?.pointerId === h.pointerId && !drag.moved
+      : tap.current?.id === h.pointerId;
+    if (!pressed) return cancelHold();
     h.held = true;
     tap.current = null;
     lastTap.current = null;
@@ -758,6 +824,7 @@ export function DocumentViewer(props: Props) {
     const h = hold.current;
     if (!h) return;
     window.clearTimeout(h.timer);
+    window.clearTimeout(h.ringTimer);
     hold.current = null;
     showHold(null);
   }
@@ -775,7 +842,7 @@ export function DocumentViewer(props: Props) {
         y: (doc.y - h.page.top) / h.page.height,
       });
     }
-    const from = toContent(h.start);
+    const from = toContent(h.origin);
     const to = h.tip
       ? toContent(
           pageToScreen(currentTransform(), pagePointToDoc(h.page, h.tip)),
@@ -789,7 +856,7 @@ export function DocumentViewer(props: Props) {
     if (!h?.held) return;
     holdMove(p);
     cancelHold();
-    latest.current.onHoldPlace(h.page, h.at, h.tip);
+    latest.current.onHoldPlace(h.page, h.at, h.tip, h.kind, h.pinId);
   }
 
   // Native scrolling, touch pinch, Pencil and wheel zoom.
@@ -981,9 +1048,20 @@ export function DocumentViewer(props: Props) {
       moved: false,
       last: null,
     };
+    // Pressed again just after a tap: holding makes it an observation with
+    // an arrow (moving first still drags the pin).
+    if (!arrowId && nearLastTap(local(e), e.timeStamp))
+      startPinHold(e.pointerId, id, local(e));
   }
 
   function onPinPointerMove(e: React.PointerEvent, pin: DocPin) {
+    const h = hold.current;
+    if (h?.pointerId === e.pointerId) {
+      if (h.held) return holdMove(local(e));
+      const q = local(e);
+      if (Math.hypot(q.x - h.start.x, q.y - h.start.y) >= TAP_SLOP)
+        cancelHold();
+    }
     const drag = dragging.current;
     if (!drag || drag.pointerId !== e.pointerId) return;
     const p = local(e);
@@ -1000,6 +1078,16 @@ export function DocumentViewer(props: Props) {
   }
 
   function onPinPointerUp(e: React.PointerEvent) {
+    const h = hold.current;
+    if (h?.pointerId === e.pointerId) {
+      if (h.held) {
+        dragging.current = null;
+        if (e.type === "pointerup") holdEnd(local(e));
+        else cancelHold();
+        return;
+      }
+      cancelHold();
+    }
     const drag = dragging.current;
     if (drag?.pointerId !== e.pointerId) return;
     dragging.current = null;

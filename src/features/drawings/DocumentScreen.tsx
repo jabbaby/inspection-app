@@ -19,7 +19,7 @@ import { QuickPhotoButton } from "../photos/QuickPhotoButton";
 import { DrawingsSection } from "./DrawingsSection";
 import { kindName } from "../items/letters";
 import { ArrowsOverlay } from "./ArrowsOverlay";
-import type { Drawing, Item, ItemArrow } from "../../db/types";
+import type { Drawing, Item, ItemArrow, ItemKind } from "../../db/types";
 import { ItemSheet } from "../items/ItemSheet";
 import { ItemsPanel } from "../items/ItemsPanel";
 import {
@@ -33,6 +33,7 @@ import {
   type PageLayout,
 } from "./document/documentLayout";
 import { usePdfDocuments } from "./document/usePdfDocuments";
+import { DOUBLE_TAP_MS } from "./document/gestures";
 import { ObservationBoxOverlay } from "./ObservationBoxOverlay";
 import { boxHeader, boxLines, defaultBoxPosition } from "./observationBox";
 import type { Point } from "./viewer/viewTransform";
@@ -255,20 +256,35 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
     setSelectedArrow(arrow.id);
   }
 
-  async function placePin(page: PageLayout, at: Point, arrows?: ItemArrow[]) {
+  async function placePin(
+    page: PageLayout,
+    at: Point,
+    options: { arrows?: ItemArrow[]; kind?: ItemKind; openAt?: number } = {},
+  ) {
     setAddPinMode(false);
+    window.clearTimeout(pendingOpen.current);
     const item = await createItemWithUndo(
       {
         inspectionId,
         drawingId: page.drawingId,
         page: page.page,
         ...at,
-        arrows,
+        arrows: options.arrows,
+        kind: options.kind,
       },
       defaultBoxPosition(page.size),
     );
-    setJustPlaced(item.id);
-    select(item.id);
+    const open = () => {
+      pendingOpen.current = 0;
+      setJustPlaced(item.id);
+      select(item.id);
+    };
+    // A tapped pin opens once a double-tap is no longer possible: opening
+    // the editor resizes the drawing, which would move the pin from under
+    // the second tap.
+    const wait = (options.openAt ?? 0) - performance.now();
+    if (wait > 0) pendingOpen.current = window.setTimeout(open, wait);
+    else open();
     return item;
   }
 
@@ -276,12 +292,20 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
   const placedByTap = useRef<{ item: Promise<Item>; time: number } | null>(
     null,
   );
+  /** A tapped pin waiting to open (see placePin). */
+  const pendingOpen = useRef(0);
 
   function tapDrawing(hit: { page: PageLayout; at: Point } | null) {
     placedByTap.current = null;
     // Tapping the drawing closes what's open beside it: an item's editor
     // first (its text is saved), then the Items or Drawings panel. With
     // nothing open it places an instruction pin.
+    if (pendingOpen.current) {
+      // The pin just placed, about to open: count it as open.
+      window.clearTimeout(pendingOpen.current);
+      pendingOpen.current = 0;
+      return;
+    }
     if (selectedId) {
       setJustPlaced(null);
       select(null);
@@ -292,11 +316,67 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
       setDrawingsOpen(false);
       return;
     }
-    if (hit)
+    if (hit) {
+      const time = performance.now();
       placedByTap.current = {
-        item: placePin(hit.page, hit.at),
-        time: performance.now(),
+        item: placePin(hit.page, hit.at, { openAt: time + DOUBLE_TAP_MS }),
+        time,
       };
+    }
+  }
+
+  /**
+   * A tap and hold (then release). An instruction is a new pin, with its
+   * arrow if dragged. An observation (double-tap and hold) turns the pin
+   * the first tap placed into one, with the arrow, in the same Undo step;
+   * on an existing pin it switches the pin and adds the arrow; otherwise
+   * it places a new observation.
+   */
+  async function holdPlace(
+    page: PageLayout,
+    at: Point,
+    tip: Point | null,
+    kind: ItemKind,
+    pinId: string | null,
+  ) {
+    const arrows = tip ? [{ id: crypto.randomUUID(), ...tip }] : [];
+    const placing = placedByTap.current;
+    placedByTap.current = null;
+    if (kind === "instruction") {
+      await placePin(page, at, { arrows });
+      return;
+    }
+    const created =
+      placing && performance.now() - placing.time < 1500
+        ? await placing.item
+        : null;
+    const samePage = (item: Item) =>
+      item.drawingId === page.drawingId && item.page === page.page;
+    if (created && samePage(created) && (!pinId || pinId === created.id)) {
+      window.clearTimeout(pendingOpen.current);
+      pendingOpen.current = 0;
+      await switchNewItemKind(created, "observation", [
+        ...(created.arrows ?? []),
+        ...arrows,
+      ]);
+      setJustPlaced(created.id);
+      select(created.id);
+      return;
+    }
+    const existing = pinId ? items?.find((i) => i.id === pinId) : undefined;
+    if (existing) {
+      select(existing.id);
+      await setKindWithUndo(existing, "observation");
+      if (arrows.length) {
+        await setArrowsWithUndo(
+          existing,
+          [...(existing.arrows ?? []), ...arrows],
+          `Add arrow to observation ${existing.letter}`,
+        );
+      }
+      return;
+    }
+    await placePin(page, at, { arrows, kind: "observation" });
   }
 
   /**
@@ -420,14 +500,9 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
               onSelectPin={(itemId) => select(itemId)}
               onTapDrawing={tapDrawing}
               onDoubleTap={(target) => void doubleTap(target)}
-              onHoldPlace={(page, at, tip) => {
-                placedByTap.current = null;
-                void placePin(
-                  page,
-                  at,
-                  tip ? [{ id: crypto.randomUUID(), ...tip }] : [],
-                );
-              }}
+              onHoldPlace={(page, at, tip, kind, pinId) =>
+                void holdPlace(page, at, tip, kind, pinId)
+              }
               onSelectArrow={(itemId, arrowId) => {
                 select(itemId);
                 setSelectedArrow(arrowId);

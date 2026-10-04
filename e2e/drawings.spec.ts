@@ -709,6 +709,35 @@ test("hold then drag places a pin with an arrow; hold alone just the pin", async
   await expect(page.getByTestId("viewer-pin")).toHaveCount(0);
 });
 
+test("double-tap and hold places an observation with an arrow in one step", async ({
+  page,
+}) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openDrawing(page, "S-101 Level 3");
+  const box = await stageBox(page);
+  const from = { x: box.x + box.width * 0.3, y: box.y + box.height * 0.4 };
+  const to = { x: box.x + box.width * 0.6, y: box.y + box.height * 0.6 };
+
+  // Tap, then press again at once and hold, then drag.
+  await page.mouse.click(from.x, from.y);
+  await page.mouse.down();
+  await page.waitForTimeout(700);
+  await page.mouse.move(to.x, to.y, { steps: 10 });
+  await page.mouse.up();
+
+  await expect(page.getByTestId("viewer-pin")).toHaveCount(1);
+  await expect(pinByLetter(page, "A", "observation")).toBeVisible();
+  await expect(sheet(page)).toBeVisible();
+  const tip = await centre(page.getByTestId("arrow-handle"));
+  expect(Math.abs(tip.x - to.x)).toBeLessThan(3);
+  expect(Math.abs(tip.y - to.y)).toBeLessThan(3);
+  const undo = page.getByRole("button", { name: "Undo" });
+  await expect(undo).toHaveAttribute("title", "Undo: Add observation A");
+  await undo.click();
+  await expect(page.getByTestId("viewer-pin")).toHaveCount(0);
+});
+
 test("tapping the drawing closes the item editor and keeps the text", async ({
   page,
 }) => {

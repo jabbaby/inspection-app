@@ -44,8 +44,10 @@ const addEntries = new Map<string, UndoEntry>();
 export async function switchNewItemKind(
   created: Item,
   kind: ItemKind,
+  /** Replaces its arrows too (a double-tap and hold drags one out). */
+  arrows?: ItemArrow[],
 ): Promise<void> {
-  await updateItem(db, created.id, { kind });
+  await updateItem(db, created.id, arrows ? { kind, arrows } : { kind });
   const entry = addEntries.get(created.id);
   const item = await db.items.get(created.id);
   if (entry && item)

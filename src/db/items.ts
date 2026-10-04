@@ -18,6 +18,8 @@ export interface NewItem {
   y: number;
   /** Arrows placed with the pin (a hold and drag). */
   arrows?: ItemArrow[];
+  /** Instruction unless given (a double-tap and hold places an observation). */
+  kind?: ItemKind;
 }
 
 /** Fields the item sheet and pin dragging can change. */
@@ -64,7 +66,7 @@ export async function createItem(
         ...item,
         // Placeholder until re-lettered below.
         letter: letterForIndex(existing.length),
-        kind: "instruction" satisfies ItemKind,
+        kind: item.kind ?? ("instruction" satisfies ItemKind),
         text: "",
         requiresPhotoConfirmation: false,
         photoIds: [],
