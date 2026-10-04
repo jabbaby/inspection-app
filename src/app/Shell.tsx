@@ -1,9 +1,10 @@
 import { ClipboardList, LayoutGrid, Settings } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router";
 import { northrop } from "../brand/northrop";
 import { NetStatus } from "./AppBar";
 import { AppBarSlot } from "./appBarSlot";
+import { readPlace, writePlace } from "./sessionPlace";
 import { UpdatePrompt } from "./UpdatePrompt";
 
 /**
@@ -13,10 +14,19 @@ import { UpdatePrompt } from "./UpdatePrompt";
  * the screen itself.
  */
 export function Shell() {
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   const [slot, setSlot] = useState<HTMLElement | null>(null);
   const inInspections =
     pathname.startsWith("/inspections") || pathname.startsWith("/projects");
+  // Inspections remembers where you were in it (an inspection's step, a
+  // project): from another tab it goes back there; tapped while already
+  // in Inspections, it goes to the list.
+  useEffect(() => {
+    if (inInspections) writePlace("inspections-tab", pathname + search);
+  }, [inInspections, pathname, search]);
+  const inspectionsTo = inInspections
+    ? "/inspections"
+    : (readPlace("inspections-tab") ?? "/inspections");
   // The drawings fill the window edge to edge.
   const flush = /^\/inspections\/[^/]+\/(inspection|document)$/.test(pathname);
 
@@ -35,7 +45,7 @@ export function Shell() {
               <span className="rail-label">Dashboard</span>
             </NavLink>
             <Link
-              to="/inspections"
+              to={inspectionsTo}
               aria-current={inInspections ? "page" : undefined}
             >
               <ClipboardList aria-hidden="true" />

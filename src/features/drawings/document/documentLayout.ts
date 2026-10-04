@@ -1,6 +1,8 @@
 /**
  * Lays out every page of an inspection's drawings as one continuous
- * vertical document (GoodNotes style). Pure geometry, no rendering.
+ * vertical document (GoodNotes style), with no breaks between drawings:
+ * pages are numbered through the whole document. Pure geometry, no
+ * rendering.
  *
  * "Document units": every page is scaled to the same width (DOC_WIDTH), so
  * an A4 notes page and an A1 sheet both fill the screen width. A page's
@@ -12,8 +14,6 @@ import type { Point, Rect, Size } from "../viewer/viewTransform";
 export const DOC_WIDTH = 1000;
 /** Space between pages, in document units. */
 export const PAGE_GAP = 28;
-/** Space above each drawing's first page for its name. */
-export const LABEL_HEIGHT = 56;
 
 export interface DrawingInput {
   id: string;
@@ -28,6 +28,8 @@ export interface PageLayout {
   /** 1-based page number in the drawing. */
   page: number;
   pageCount: number;
+  /** 1-based page number in the whole document. */
+  number: number;
   /** Page size in points. */
   size: Size;
   /** Document units per point for this page. */
@@ -38,17 +40,10 @@ export interface PageLayout {
   height: number;
 }
 
-export interface LabelLayout {
-  drawingId: string;
-  name: string;
-  top: number;
-}
-
 export interface DocumentLayout {
   width: number;
   height: number;
   pages: PageLayout[];
-  labels: LabelLayout[];
 }
 
 export function pageKey(drawingId: string, page: number): string {
@@ -57,11 +52,8 @@ export function pageKey(drawingId: string, page: number): string {
 
 export function layoutDocument(drawings: DrawingInput[]): DocumentLayout {
   const pages: PageLayout[] = [];
-  const labels: LabelLayout[] = [];
   let y = 0;
   for (const drawing of drawings) {
-    labels.push({ drawingId: drawing.id, name: drawing.name, top: y });
-    y += LABEL_HEIGHT;
     drawing.pageSizes.forEach(([width, height], i) => {
       const scale = DOC_WIDTH / width;
       const docHeight = height * scale;
@@ -70,6 +62,7 @@ export function layoutDocument(drawings: DrawingInput[]): DocumentLayout {
         drawingId: drawing.id,
         page: i + 1,
         pageCount: drawing.pageSizes.length,
+        number: pages.length + 1,
         size: { width, height },
         scale,
         top: y,
@@ -78,7 +71,7 @@ export function layoutDocument(drawings: DrawingInput[]): DocumentLayout {
       y += docHeight + PAGE_GAP;
     });
   }
-  return { width: DOC_WIDTH, height: Math.max(0, y - PAGE_GAP), pages, labels };
+  return { width: DOC_WIDTH, height: Math.max(0, y - PAGE_GAP), pages };
 }
 
 /** The page at (or nearest to) a document y, e.g. the centre of the view. */

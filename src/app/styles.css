@@ -3321,3 +3321,82 @@ h1 {
   -webkit-user-drag: none;
   -webkit-touch-callout: none;
 }
+
+/* The page and Items: a charcoal pill on the right of the drawing, so
+   they read as controls and never blend into the drawing. */
+.viewer-side {
+  position: absolute;
+  z-index: 4;
+  /* Middle of the right edge: clear of the notes box (top right of a page). */
+  top: 50%;
+  transform: translateY(-50%);
+  right: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border-radius: 26px;
+  background: #1c1817;
+  box-shadow: var(--shadow-float);
+}
+
+.viewer-side .side-button {
+  flex-direction: column;
+  gap: 2px;
+  width: 76px;
+  min-height: 62px;
+  padding: 6px 4px;
+  border-radius: 20px;
+  background: #2e2726;
+  color: #e8e1dd;
+  font-size: 11px;
+  line-height: 1.15;
+}
+
+@media (hover: hover) {
+  .viewer-side .side-button:hover:not(:disabled) {
+    background: #3a312f;
+  }
+}
+
+.viewer-side .side-button.toggle-on {
+  background: #f4f2ef;
+  color: #1c1817;
+}
+
+.viewer-side .lucide {
+  width: 22px;
+  height: 22px;
+}
+
+.side-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+  white-space: normal;
+}
+
+.side-label:empty {
+  display: none;
+}
+
+.viewer-side .count-badge {
+  position: static;
+  background: var(--brand-red);
+  color: #fff;
+}
+
+/* Pre-inspection: the drawings, loaded before going to site. */
+.pre-drawings .drawings-section .page-heading {
+  flex-wrap: wrap;
+}
+
+.pre-drawings .list-panel {
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-lg);
+}
+
+.pre-drawings-next {
+  margin-top: var(--space-2);
+}

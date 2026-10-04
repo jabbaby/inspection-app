@@ -1,15 +1,8 @@
 import { useLiveQuery } from "dexie-react-hooks";
-import {
-  ChevronDown,
-  Files,
-  List,
-  MapPinPlus,
-  Maximize,
-  Redo2,
-  Undo2,
-} from "lucide-react";
+import { Files, List, MapPinPlus, Maximize, Redo2, Undo2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router";
+import { readPlace, writePlace } from "../../app/sessionPlace";
 import { NotFound } from "../../app/NotFound";
 import { redoLast, undoLast, useUndo } from "../../app/undo";
 import { db } from "../../db/db";
@@ -174,7 +167,12 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
 
   const selected = items?.find((item) => item.id === selectedId) ?? null;
 
-  // Initial scroll: to the selected item, else the requested drawing.
+  // The page this inspection's drawings were last open at (this session),
+  // read once before the viewer reports its first page.
+  const [savedPage] = useState(() => readPlace(`doc-page:${inspectionId}`));
+
+  // Initial scroll: to the selected item, else the requested drawing, else
+  // where the drawings were left.
   const initialScrollDone = useRef(false);
   useEffect(() => {
     if (initialScrollDone.current || layout.pages.length === 0 || !items)
@@ -190,8 +188,10 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
       });
     } else if (startDrawing) {
       setScrollTarget({ pageKey: pageKey(startDrawing, 1), token: Date.now() });
+    } else if (savedPage && layout.pages.some((p) => p.key === savedPage)) {
+      setScrollTarget({ pageKey: savedPage, token: Date.now() });
     }
-  }, [layout, items, selected, startDrawing]);
+  }, [layout, items, selected, startDrawing, savedPage]);
 
   /** An item as shown right now: a pin or arrow tip mid-drag included. */
   function live(item: Item) {
@@ -347,10 +347,16 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
               }}
               onSelectPin={(itemId) => select(itemId)}
               onTapDrawing={() => {
-                // Tapping away from the pin closes its editor (text is saved).
-                if (!selectedId) return;
-                setJustPlaced(null);
-                select(null);
+                // Tapping the drawing closes what's open beside it: an
+                // item's editor first (its text is saved), then the Items
+                // or Drawings panel.
+                if (selectedId) {
+                  setJustPlaced(null);
+                  select(null);
+                  return;
+                }
+                setItemsOpen(false);
+                setDrawingsOpen(false);
               }}
               onSelectArrow={(itemId, arrowId) => {
                 select(itemId);
@@ -371,7 +377,10 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
                   "Move arrow",
                 ).then(() => setDraggingArrow(null));
               }}
-              onCurrentPage={setCurrent}
+              onCurrentPage={(page) => {
+                setCurrent(page);
+                writePlace(`doc-page:${inspectionId}`, page.key);
+              }}
               onActiveDrawings={setNeeded}
               onVisiblePins={(ids) => setPinsInView(new Set(ids))}
               renderPageOverlay={renderPageOverlay}
@@ -379,13 +388,18 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
               fitRequest={fitRequest}
             />
             {/* Floating over the drawing: they never move it. */}
-            <div className="viewer-float viewer-float-top">
+            {/* The page and Items: a charcoal pill on the right. */}
+            <div className="viewer-side">
               <button
                 type="button"
-                className={`viewer-chip${drawingsOpen ? " toggle-on" : " quiet"}`}
+                className={`side-button${drawingsOpen ? " toggle-on" : ""}`}
                 aria-label="Drawings"
                 aria-pressed={drawingsOpen}
-                title="Drawings"
+                title={
+                  currentDrawing && current
+                    ? `${currentDrawing.name} · page ${current.page} of ${current.pageCount}`
+                    : "Drawings"
+                }
                 onClick={() => {
                   setDrawingsOpen((open) => !open);
                   setItemsOpen(false);
@@ -393,12 +407,42 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
                 }}
               >
                 <Files aria-hidden="true" />
-                <span className="drawing-name" data-testid="page-indicator">
-                  {currentDrawing && current
-                    ? `${currentDrawing.name} · page ${current.page} of ${current.pageCount}`
+                <span
+                  className="side-label"
+                  data-testid="page-indicator"
+                  // Which drawing and its own page, for tests and tooltips.
+                  data-label={
+                    currentDrawing && current
+                      ? `${currentDrawing.name} · page ${current.page} of ${current.pageCount}`
+                      : ""
+                  }
+                >
+                  {current
+                    ? `Page ${current.number} of ${layout.pages.length}`
                     : ""}
                 </span>
-                <ChevronDown aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                className={`side-button${itemsOpen ? " toggle-on" : ""}`}
+                aria-label="Items"
+                aria-pressed={itemsOpen}
+                title="Items"
+                onClick={() => {
+                  setItemsOpen((open) => !open);
+                  setDrawingsOpen(false);
+                  select(null);
+                }}
+              >
+                <List aria-hidden="true" />
+                <span className="side-label">
+                  Items
+                  {(items?.length ?? 0) > 0 && (
+                    <span className="count-badge" aria-hidden="true">
+                      {items?.length}
+                    </span>
+                  )}
+                </span>
               </button>
             </div>
             {/* Tools: a vertical pill on the left; Add pin first. */}
@@ -473,28 +517,6 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
                 Tap the drawing to place the pin
               </p>
             )}
-            <div className="viewer-float viewer-float-bottom">
-              <button
-                type="button"
-                className={`viewer-chip${itemsOpen ? " toggle-on" : " quiet"}`}
-                aria-label="Items"
-                aria-pressed={itemsOpen}
-                title="Items"
-                onClick={() => {
-                  setItemsOpen((open) => !open);
-                  setDrawingsOpen(false);
-                  select(null);
-                }}
-              >
-                <List aria-hidden="true" />
-                <span>Items</span>
-                {(items?.length ?? 0) > 0 && (
-                  <span className="count-badge" aria-hidden="true">
-                    {items?.length}
-                  </span>
-                )}
-              </button>
-            </div>
           </div>
         )}
 

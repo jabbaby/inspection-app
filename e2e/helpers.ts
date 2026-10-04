@@ -90,12 +90,16 @@ export async function touchTap(page: Page, at: { x: number; y: number }) {
   }, at);
 }
 
-/** The Inspections tab (Recent and Projects), from the rail. */
+/**
+ * The Inspections list (Recent and Projects), from the rail. The tab first
+ * returns to where you were in it; tapped again there, it shows the list.
+ */
 export async function openInspectionsList(page: Page) {
-  await page
+  const tab = page
     .getByRole("navigation", { name: "Main" })
-    .getByRole("link", { name: "Inspections" })
-    .click();
+    .getByRole("link", { name: "Inspections" });
+  await tab.click();
+  if (!/#\/inspections$/.test(page.url())) await tab.click();
   await expect(page).toHaveURL(/#\/inspections$/);
 }
 

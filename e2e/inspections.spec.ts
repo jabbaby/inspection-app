@@ -1,5 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 import {
+  TYPICAL_DRAWING,
+  buildSyntheticDrawing,
+} from "../src/features/drawings/fixtures/syntheticDrawing";
+import {
   openInspectionsList,
   openTab,
   startInspection,
@@ -245,3 +249,37 @@ test(
     await expect(field(page, "Job number")).toHaveValue("SY000001");
   },
 );
+
+test("the Inspections tab returns to where you left off", async ({ page }) => {
+  await newInspection(page);
+  await openTab(page, "Site memo");
+  const rail = page.getByRole("navigation", { name: "Main" });
+  await rail.getByRole("link", { name: "Settings" }).click();
+  await expect(page).toHaveURL(/#\/settings$/);
+  // Back to Inspections: the same inspection and step.
+  await rail.getByRole("link", { name: "Inspections" }).click();
+  await expect(page).toHaveURL(/\/memo$/);
+  // Tapped again while in Inspections: the list.
+  await rail.getByRole("link", { name: "Inspections" }).click();
+  await expect(page).toHaveURL(/#\/inspections$/);
+});
+
+test("drawings can be added on Pre-inspection, before going to site", async ({
+  page,
+}) => {
+  await newInspection(page);
+  await expect(page.getByRole("heading", { name: "Drawings" })).toBeVisible();
+  await page.getByTestId("drawing-file-input").setInputFiles({
+    name: "S-101 Level 3.pdf",
+    mimeType: "application/pdf",
+    buffer: Buffer.from(await buildSyntheticDrawing(TYPICAL_DRAWING)),
+  });
+  const list = page.getByRole("list", { name: "Drawings" });
+  await expect(list).toContainText("S-101 Level 3", { timeout: 20_000 });
+  // Tapping it opens the drawings at it.
+  await list.getByRole("button", { name: /^S-101 Level 3/ }).click();
+  await expect(page).toHaveURL(/\/inspection\?drawing=/);
+  await expect(
+    page.locator('[data-testid="drawing-viewer"][data-ready="true"]'),
+  ).toBeVisible({ timeout: 20_000 });
+});

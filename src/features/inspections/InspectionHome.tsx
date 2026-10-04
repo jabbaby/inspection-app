@@ -15,6 +15,7 @@ import {
   type JobPatch,
 } from "../../db/projects";
 import type { JobInspection } from "../../db/types";
+import { DrawingsSection } from "../drawings/DrawingsSection";
 import { ProjectAvatar } from "../projects/ProjectAvatar";
 import { ProjectPicker } from "../projects/ProjectPicker";
 import { DeleteInspectionDialog } from "./DeleteInspectionDialog";
@@ -208,22 +209,21 @@ function PreInspectionFor({ id }: { id: string }) {
             />
           </section>
 
-          {hasProject && (
-            <section className="card next-card" aria-label="Next step">
-              <div className="list-row-main">
-                <span className="list-row-title">Next: the drawings</span>
-                <span className="list-row-meta">
-                  Add the drawing PDFs and drop pins on site.
-                </span>
-              </div>
-              <Link
-                to={tabPath(id, "inspection")}
-                className="button-link primary"
-              >
-                Open drawings <ArrowRight aria-hidden="true" />
-              </Link>
-            </section>
-          )}
+          {/* Drawings are loaded here before going to site. */}
+          <section className="card detail-card pre-drawings">
+            <DrawingsSection
+              inspectionId={id}
+              onOpen={(drawingId) =>
+                navigate(`${tabPath(id, "inspection")}?drawing=${drawingId}`)
+              }
+            />
+            <Link
+              to={tabPath(id, "inspection")}
+              className="button-link emphasis pre-drawings-next"
+            >
+              Start the inspection <ArrowRight aria-hidden="true" />
+            </Link>
+          </section>
 
           <button
             type="button"

@@ -23,7 +23,6 @@ import { kindName } from "../../items/letters";
 import { DocPage, type SettledView } from "./DocPage";
 import {
   DOC_WIDTH,
-  LABEL_HEIGHT,
   hitPage,
   pageAtY,
   pagePointToDoc,
@@ -366,11 +365,10 @@ export function DocumentViewer(props: Props) {
     };
   }
 
-  /** Fit width with a drawing's name label at the top of the view. */
+  /** Fit width with the page's top at the top of the view. */
   function topOfPage(page: PageLayout): ViewTransform {
     const scale = fitWidthScale.current;
-    const labelTop = page.page === 1 ? page.top - LABEL_HEIGHT : page.top;
-    return { scale, x: PAD, y: PAD - labelTop * scale };
+    return { scale, x: PAD, y: PAD - page.top * scale };
   }
 
   function keepSelectedVisible(t: ViewTransform): ViewTransform {
@@ -878,15 +876,6 @@ export function DocumentViewer(props: Props) {
           className="doc-stage"
           style={{ width: DOC_WIDTH, height: layout.height }}
         >
-          {layout.labels.map((label) => (
-            <div
-              key={label.drawingId}
-              className="doc-label"
-              style={{ top: label.top, height: LABEL_HEIGHT }}
-            >
-              {label.name}
-            </div>
-          ))}
           {layout.pages.map((page) => (
             <DocPage
               key={page.key}

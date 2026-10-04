@@ -1,7 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
   DOC_WIDTH,
-  LABEL_HEIGHT,
   PAGE_GAP,
   hitPage,
   layoutDocument,
@@ -20,14 +19,13 @@ const layout = layoutDocument([
 ]);
 
 describe("layoutDocument", () => {
-  test("stacks every page at the same width, with a label per drawing", () => {
+  test("stacks every page at the same width, numbered through the document", () => {
     expect(layout.pages.map((p) => p.key)).toEqual(["d1:1", "d1:2", "d2:1"]);
-    expect(layout.labels.map((l) => [l.drawingId, l.top])).toEqual([
-      ["d1", 0],
-      ["d2", layout.pages[2].top - LABEL_HEIGHT],
-    ]);
+    expect(layout.pages.map((p) => p.number)).toEqual([1, 2, 3]);
     const [p1, p2, p3] = layout.pages;
-    expect(p1.top).toBe(LABEL_HEIGHT);
+    expect(p1.top).toBe(0);
+    // No break between drawings: the next drawing follows after one gap.
+    expect(p3.top).toBeCloseTo(p2.top + p2.height + PAGE_GAP);
     expect(p1.height).toBeCloseTo((A1[1] / A1[0]) * DOC_WIDTH);
     expect(p2.top).toBeCloseTo(p1.top + p1.height + PAGE_GAP);
     // The A4 page is as wide as the A1 sheets, so it is taller.
@@ -41,7 +39,6 @@ describe("layoutDocument", () => {
       width: DOC_WIDTH,
       height: 0,
       pages: [],
-      labels: [],
     });
   });
 });

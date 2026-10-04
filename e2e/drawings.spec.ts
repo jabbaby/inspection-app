@@ -70,8 +70,8 @@ async function openDrawing(page: Page, name: string) {
     timeout: 20_000,
   });
   const indicator = page.getByTestId("page-indicator");
-  await expect(indicator).not.toHaveText("");
-  if (pattern.test((await indicator.textContent()) ?? "")) return;
+  await expect(indicator).not.toHaveAttribute("data-label", "");
+  if (pattern.test((await indicator.getAttribute("data-label")) ?? "")) return;
   const toggle = page.getByRole("button", { name: "Drawings", exact: true });
   await toggle.click();
   await page
@@ -161,7 +161,8 @@ test("the Inspection step opens straight into the drawings", async ({
   await expect(
     tabs.getByRole("link", { name: "Inspection", exact: true }),
   ).toHaveAttribute("aria-current", "page");
-  await expect(page.getByTestId("page-indicator")).toHaveText(
+  await expect(page.getByTestId("page-indicator")).toHaveAttribute(
+    "data-label",
     "S-101 Level 3 · page 1 of 3",
   );
 
@@ -197,7 +198,8 @@ test("adds drawings from Files, rejects non-PDFs and opens them", async ({
   );
 
   await openDrawing(page, "S-101 Level 3");
-  await expect(page.getByTestId("page-indicator")).toHaveText(
+  await expect(page.getByTestId("page-indicator")).toHaveAttribute(
+    "data-label",
     "S-101 Level 3 · page 1 of 3",
   );
 });
@@ -511,7 +513,8 @@ test("pins on a later page are lettered per kind", async ({ page }) => {
   const viewer = (await page.getByTestId("drawing-viewer").boundingBox())!;
   const second = await stageBox(page, 1);
   await scrollDocument(page, second.y - viewer.y - 20);
-  await expect(page.getByTestId("page-indicator")).toHaveText(
+  await expect(page.getByTestId("page-indicator")).toHaveAttribute(
+    "data-label",
     "S-101 Level 3 · page 2 of 3",
   );
   await expect(
@@ -558,6 +561,27 @@ test("at fit width the document only scrolls up and down", async ({ page }) => {
   await expect
     .poll(() => viewer.evaluate((el) => el.scrollWidth - el.clientWidth))
     .toBeGreaterThan(0);
+});
+
+test("tapping the drawing closes the Items panel", async ({ page }) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openDrawing(page, "S-101 Level 3");
+  await addPinAt(page, 0.3, 0.5);
+  await sheet(page).getByRole("button", { name: "Done" }).first().click();
+  await page.getByRole("button", { name: "Items", exact: true }).click();
+  await expect(page.getByTestId("items-panel")).toBeVisible();
+
+  // Open the item from the list, then tap the drawing twice: the first tap
+  // closes the item, the second the Items panel.
+  await page.getByTestId("items-panel-row").first().getByRole("button").click();
+  await expect(sheet(page)).toBeVisible();
+  const box = await stageBox(page);
+  await page.mouse.click(box.x + box.width * 0.7, box.y + box.height * 0.6);
+  await expect(sheet(page)).toHaveCount(0);
+  await expect(page.getByTestId("items-panel")).toBeVisible();
+  await page.mouse.click(box.x + box.width * 0.7, box.y + box.height * 0.6);
+  await expect(page.getByTestId("items-panel")).toHaveCount(0);
 });
 
 test("tapping the drawing closes the item editor and keeps the text", async ({
@@ -664,16 +688,17 @@ test("all drawings scroll as one document", async ({ page }) => {
   ]);
   await openDrawing(page, "S-101 Level 3");
   await expect(page.getByTestId("doc-page")).toHaveCount(6);
-  await expect(page.locator(".doc-label")).toHaveText([
-    "S-101 Level 3",
-    "S-102 Level 4",
-  ]);
+  // One continuous document: no drawing names over the pages, and the
+  // page label counts through every drawing.
+  await expect(page.locator(".doc-label")).toHaveCount(0);
+  await expect(page.getByTestId("page-indicator")).toHaveText("Page 1 of 6");
 
   // Scroll to the second drawing's first page.
   const viewer = (await page.getByTestId("drawing-viewer").boundingBox())!;
   const fourth = await stageBox(page, 3);
   await scrollDocument(page, fourth.y - viewer.y - 20);
-  await expect(page.getByTestId("page-indicator")).toHaveText(
+  await expect(page.getByTestId("page-indicator")).toHaveAttribute(
+    "data-label",
     "S-102 Level 4 · page 1 of 3",
   );
   await addPinAt(page, 0.5, 0.5, 3);
@@ -682,7 +707,8 @@ test("all drawings scroll as one document", async ({ page }) => {
   // Opening a drawing from the Drawings panel scrolls straight to it.
   await page.goto(home);
   await openDrawing(page, "S-102 Level 4");
-  await expect(page.getByTestId("page-indicator")).toHaveText(
+  await expect(page.getByTestId("page-indicator")).toHaveAttribute(
+    "data-label",
     "S-102 Level 4 · page 1 of 3",
   );
 });
@@ -701,7 +727,8 @@ test("the Items tab lists items and jumps to them", async ({ page }) => {
   const viewer = (await page.getByTestId("drawing-viewer").boundingBox())!;
   const fourth = await stageBox(page, 3);
   await scrollDocument(page, fourth.y - viewer.y - 20);
-  await expect(page.getByTestId("page-indicator")).toHaveText(
+  await expect(page.getByTestId("page-indicator")).toHaveAttribute(
+    "data-label",
     "S-102 Level 4 · page 1 of 3",
   );
   await addPinAt(page, 0.5, 0.5, 3);
@@ -717,14 +744,15 @@ test("the Items tab lists items and jumps to them", async ({ page }) => {
   // Observations first, each under its page.
   await expect(rows).toHaveCount(2);
   await expect(panel.getByRole("heading", { level: 4 })).toHaveText([
-    "S-102 Level 4 · page 1",
-    "S-101 Level 3 · page 1",
+    "Page 4",
+    "Page 1",
   ]);
   await expect(rows.nth(0)).not.toContainText("S-102");
 
   // Jump back up to instruction A on the first drawing.
   await rows.nth(1).getByRole("button").click();
-  await expect(page.getByTestId("page-indicator")).toHaveText(
+  await expect(page.getByTestId("page-indicator")).toHaveAttribute(
+    "data-label",
     "S-101 Level 3 · page 1 of 3",
   );
   await expect(sheet(page).getByRole("heading")).toHaveText("Instruction A");
@@ -732,7 +760,8 @@ test("the Items tab lists items and jumps to them", async ({ page }) => {
   await expect(panel).toBeVisible();
 
   await rows.nth(0).getByRole("button").click();
-  await expect(page.getByTestId("page-indicator")).toHaveText(
+  await expect(page.getByTestId("page-indicator")).toHaveAttribute(
+    "data-label",
     "S-102 Level 4 · page 1 of 3",
   );
   await expect(sheet(page).getByRole("heading")).toHaveText("Observation A");

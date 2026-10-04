@@ -86,7 +86,13 @@ export function ItemsPanel({
   onSelect,
   onClose,
 }: Props) {
-  const names = new Map(drawings.map((d) => [d.id, d.name]));
+  // Pages are numbered through the whole document (drawings in order).
+  const firstPage = new Map<string, number>();
+  let next = 1;
+  for (const d of drawings) {
+    firstPage.set(d.id, next);
+    next += d.pageCount;
+  }
   const sorted = [...items].sort(compareItems);
   const rowEls = useRef(new Map<string, HTMLElement>());
   const [openId, setOpenId] = useState<string | null>(null);
@@ -362,7 +368,7 @@ export function ItemsPanel({
             <section key={group.kind} aria-label={group.heading}>
               <h3 className="item-group-heading">{group.heading}</h3>
               {pageGroups(group.items).map((pageGroup) => {
-                const title = `${names.get(pageGroup.drawingId) ?? "Drawing"} · page ${pageGroup.page}`;
+                const title = `Page ${(firstPage.get(pageGroup.drawingId) ?? 1) + pageGroup.page - 1}`;
                 return (
                   <div key={pageGroup.key} className="item-page-group">
                     <h4 className="item-page-heading">{title}</h4>
