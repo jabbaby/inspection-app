@@ -1,17 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Plus } from "lucide-react";
 import { db } from "../../db/db";
-import { drawingNameFromFile } from "../../db/drawings";
+import { drawingNameFromFile, moveDrawing } from "../../db/drawings";
 import {
   countUnmarked,
   duplicatePage,
   hideUnmarkedPages,
+  movePage,
+  pageMoveTarget,
   setPagesHidden,
 } from "../../db/pages";
 import type { Drawing, Item } from "../../db/types";
 import { drawingPages, pageKey } from "./document/documentLayout";
 import { usePdfDocuments } from "./document/usePdfDocuments";
 import { storePdf } from "./drawingFiles";
+import { ReorderDrawingsDialog } from "./ReorderDrawingsDialog";
 import type { PDFDocumentProxy } from "./pdf/pdfjs";
 
 interface Props {
@@ -86,6 +89,9 @@ export function PagesSheet({
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [menu, setMenu] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  const [reordering, setReordering] = useState(false);
+  // Opens upward when the page is in the lower half of the sheet.
+  const [menuUp, setMenuUp] = useState(false);
 
   useEffect(() => {
     const dialog = ref.current;
@@ -191,263 +197,347 @@ export function PagesSheet({
 
   const chosen = visible.filter((e) => selected.has(e.key));
 
+  /** Moves a page within its drawing; the menu follows it. */
+  async function movePageOf(entry: PageEntry, direction: -1 | 1) {
+    const to = await movePage(db, entry.drawing.id, entry.position, direction);
+    setMenu(pageKey(entry.drawing.id, to));
+  }
+
   return (
-    <dialog
-      ref={ref}
-      className="pages-sheet"
-      aria-label="Pages"
-      onCancel={(e) => {
-        e.preventDefault();
-        close();
-      }}
-      onClick={() => setMenu(null)}
-    >
-      <div className="pages-sheet-head">
-        {selecting ? (
+    <>
+      <dialog
+        ref={ref}
+        className="pages-sheet"
+        aria-label="Pages"
+        onCancel={(e) => {
+          e.preventDefault();
+          close();
+        }}
+        onClick={() => setMenu(null)}
+      >
+        <div className="pages-sheet-head">
+          {selecting ? (
+            <button
+              type="button"
+              className="quiet"
+              onClick={() =>
+                setSelected(
+                  chosen.length === visible.length
+                    ? new Set()
+                    : new Set(visible.map((e) => e.key)),
+                )
+              }
+            >
+              {chosen.length === visible.length ? "Select none" : "Select all"}
+            </button>
+          ) : (
+            <button type="button" className="quiet" onClick={close}>
+              Close
+            </button>
+          )}
+          <h2 className="pages-sheet-title">
+            {selecting
+              ? `${chosen.length} selected`
+              : `Pages · ${visible.length}`}
+          </h2>
           <button
             type="button"
             className="quiet"
-            onClick={() =>
-              setSelected(
-                chosen.length === visible.length
-                  ? new Set()
-                  : new Set(visible.map((e) => e.key)),
-              )
-            }
+            aria-pressed={selecting}
+            onClick={() => {
+              setSelecting((on) => !on);
+              setSelected(new Set());
+              setMenu(null);
+            }}
           >
-            {chosen.length === visible.length ? "Select none" : "Select all"}
-          </button>
-        ) : (
-          <button type="button" className="quiet" onClick={close}>
-            Close
-          </button>
-        )}
-        <h2 className="pages-sheet-title">
-          {selecting
-            ? `${chosen.length} selected`
-            : `Pages · ${visible.length}`}
-        </h2>
-        <button
-          type="button"
-          className="quiet"
-          aria-pressed={selecting}
-          onClick={() => {
-            setSelecting((on) => !on);
-            setSelected(new Set());
-            setMenu(null);
-          }}
-        >
-          {selecting ? "Done" : "Select"}
-        </button>
-      </div>
-
-      <div className="pages-sheet-body">
-        {status && (
-          <p className="pages-status" role="status">
-            {status}
-          </p>
-        )}
-        <ul className="pages-grid" aria-label="Document pages">
-          {visible.map((entry) => (
-            <li key={entry.key} className="pages-cell">
-              <button
-                type="button"
-                className={[
-                  "page-thumb",
-                  entry.key === currentKey ? "page-thumb-current" : "",
-                  selected.has(entry.key) ? "page-thumb-selected" : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-                data-testid="page-thumb"
-                aria-label={`Page ${entry.number}: ${entry.drawing.name} page ${entry.source}`}
-                aria-pressed={selecting ? selected.has(entry.key) : undefined}
-                onClick={() => {
-                  if (selecting) return toggle(entry.key);
-                  close();
-                  onGoTo(entry.key);
-                }}
-              >
-                <Thumb
-                  doc={docs.get(entry.drawing.id)}
-                  source={entry.source}
-                  active={open}
-                />
-                {entry.pins > 0 && (
-                  <span className="page-thumb-pins">
-                    {entry.pins} {entry.pins === 1 ? "pin" : "pins"}
-                  </span>
-                )}
-                {selecting && (
-                  <span
-                    className={`page-thumb-check${selected.has(entry.key) ? " on" : ""}`}
-                    aria-hidden="true"
-                  />
-                )}
-              </button>
-              <div className="page-thumb-caption">
-                <span>
-                  {entry.number}
-                  {firstOfDrawing.has(entry.key) && (
-                    <span className="page-thumb-drawing">
-                      {" "}
-                      {entry.drawing.name}
-                    </span>
-                  )}
-                </span>
-                {!selecting && (
-                  <button
-                    type="button"
-                    className="icon-button quiet page-thumb-menu-button"
-                    aria-label={`Page ${entry.number} options`}
-                    aria-expanded={menu === entry.key}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setMenu(menu === entry.key ? null : entry.key);
-                    }}
-                  >
-                    <ChevronDown aria-hidden="true" />
-                  </button>
-                )}
-              </div>
-              {menu === entry.key && (
-                <div
-                  className="page-thumb-menu"
-                  role="menu"
-                  aria-label={`Page ${entry.number}`}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      close();
-                      onGoTo(entry.key);
-                    }}
-                  >
-                    Go to page
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      setMenu(null);
-                      void duplicate([entry]);
-                    }}
-                  >
-                    Duplicate
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    disabled={entry.pins > 0}
-                    onClick={() => {
-                      setMenu(null);
-                      void hide([entry]);
-                    }}
-                  >
-                    {entry.pins > 0 ? "Hide (has pins)" : "Hide"}
-                  </button>
-                </div>
-              )}
-            </li>
-          ))}
-          {!selecting && (
-            <li className="pages-cell">
-              <button
-                type="button"
-                className="page-add"
-                onClick={() => fileInput.current?.click()}
-              >
-                <Plus aria-hidden="true" />
-                <span>Add drawings</span>
-              </button>
-            </li>
-          )}
-        </ul>
-        <input
-          ref={fileInput}
-          type="file"
-          accept="application/pdf,.pdf"
-          multiple
-          hidden
-          data-testid="pages-file-input"
-          onChange={(e) => {
-            const files = [...(e.target.files ?? [])];
-            e.target.value = "";
-            if (files.length) void addFiles(files);
-          }}
-        />
-
-        {hidden.length > 0 && (
-          <section aria-label="Hidden pages">
-            <h3 className="pages-section-title">
-              Hidden pages ({hidden.length})
-            </h3>
-            <ul className="pages-grid" aria-label="Hidden pages">
-              {hidden.map((entry) => (
-                <li key={entry.key} className="pages-cell page-hidden">
-                  <div className="page-thumb">
-                    <Thumb
-                      doc={docs.get(entry.drawing.id)}
-                      source={entry.source}
-                      active={open}
-                    />
-                  </div>
-                  <div className="page-thumb-caption">
-                    <span className="page-thumb-drawing">
-                      {entry.drawing.name} p{entry.source}
-                    </span>
-                    <button
-                      type="button"
-                      className="quiet"
-                      aria-label={`Restore ${entry.drawing.name} page ${entry.source}`}
-                      onClick={() =>
-                        void setPagesHidden(
-                          db,
-                          entry.drawing.id,
-                          [entry.position],
-                          false,
-                        )
-                      }
-                    >
-                      Restore
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-      </div>
-
-      {selecting && (
-        <div className="pages-actions">
-          <button
-            type="button"
-            className="emphasis"
-            disabled={chosen.length === 0}
-            onClick={() => void hide(chosen)}
-          >
-            Hide {chosen.length || ""} {chosen.length === 1 ? "page" : "pages"}
-          </button>
-          <button
-            type="button"
-            disabled={chosen.length === 0}
-            onClick={() => void duplicate(chosen)}
-          >
-            Duplicate
-          </button>
-          <button
-            type="button"
-            disabled={unmarked === 0}
-            onClick={() => void hideUnmarked()}
-          >
-            Hide unmarked pages ({unmarked})
+            {selecting ? "Done" : "Select"}
           </button>
         </div>
-      )}
-    </dialog>
+
+        <div className="pages-sheet-body">
+          {status && (
+            <p className="pages-status" role="status">
+              {status}
+            </p>
+          )}
+          <ul className="pages-grid" aria-label="Document pages">
+            {visible.map((entry) => (
+              <li key={entry.key} className="pages-cell">
+                <button
+                  type="button"
+                  className={[
+                    "page-thumb",
+                    entry.key === currentKey ? "page-thumb-current" : "",
+                    selected.has(entry.key) ? "page-thumb-selected" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                  data-testid="page-thumb"
+                  aria-label={`Page ${entry.number}: ${entry.drawing.name} page ${entry.source}`}
+                  aria-pressed={selecting ? selected.has(entry.key) : undefined}
+                  onClick={() => {
+                    if (selecting) return toggle(entry.key);
+                    close();
+                    onGoTo(entry.key);
+                  }}
+                >
+                  <Thumb
+                    doc={docs.get(entry.drawing.id)}
+                    source={entry.source}
+                    active={open}
+                  />
+                  {entry.pins > 0 && (
+                    <span className="page-thumb-pins">
+                      {entry.pins} {entry.pins === 1 ? "pin" : "pins"}
+                    </span>
+                  )}
+                  {selecting && (
+                    <span
+                      className={`page-thumb-check${selected.has(entry.key) ? " on" : ""}`}
+                      aria-hidden="true"
+                    />
+                  )}
+                </button>
+                <div className="page-thumb-caption">
+                  <span>
+                    {entry.number}
+                    {firstOfDrawing.has(entry.key) && (
+                      <span className="page-thumb-drawing">
+                        {" "}
+                        {entry.drawing.name}
+                      </span>
+                    )}
+                  </span>
+                  {!selecting && (
+                    <button
+                      type="button"
+                      className="icon-button quiet page-thumb-menu-button"
+                      aria-label={`Page ${entry.number} options`}
+                      aria-expanded={menu === entry.key}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const at = e.currentTarget.getBoundingClientRect();
+                        const sheet = ref.current?.getBoundingClientRect();
+                        setMenuUp(
+                          sheet ? at.top > sheet.top + sheet.height / 2 : false,
+                        );
+                        setMenu(menu === entry.key ? null : entry.key);
+                      }}
+                    >
+                      <ChevronDown aria-hidden="true" />
+                    </button>
+                  )}
+                </div>
+                {menu === entry.key && (
+                  <div
+                    className={`page-thumb-menu${menuUp ? " page-thumb-menu-up" : ""}`}
+                    role="menu"
+                    aria-label={`Page ${entry.number}`}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        close();
+                        onGoTo(entry.key);
+                      }}
+                    >
+                      Go to page
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setMenu(null);
+                        void duplicate([entry]);
+                      }}
+                    >
+                      Duplicate
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      disabled={entry.pins > 0}
+                      onClick={() => {
+                        setMenu(null);
+                        void hide([entry]);
+                      }}
+                    >
+                      {entry.pins > 0 ? "Hide (has pins)" : "Hide"}
+                    </button>
+                    <hr className="page-thumb-menu-rule" />
+                    <button
+                      type="button"
+                      role="menuitem"
+                      disabled={
+                        pageMoveTarget(
+                          drawingPages(entry.drawing),
+                          entry.position,
+                          -1,
+                        ) === null
+                      }
+                      onClick={() => void movePageOf(entry, -1)}
+                    >
+                      Move page earlier
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      disabled={
+                        pageMoveTarget(
+                          drawingPages(entry.drawing),
+                          entry.position,
+                          1,
+                        ) === null
+                      }
+                      onClick={() => void movePageOf(entry, 1)}
+                    >
+                      Move page later
+                    </button>
+                    {drawings.length > 1 && (
+                      <>
+                        <hr className="page-thumb-menu-rule" />
+                        <button
+                          type="button"
+                          role="menuitem"
+                          disabled={drawings[0].id === entry.drawing.id}
+                          onClick={() =>
+                            void moveDrawing(db, entry.drawing.id, -1)
+                          }
+                        >
+                          Move drawing earlier
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          disabled={drawings.at(-1)!.id === entry.drawing.id}
+                          onClick={() =>
+                            void moveDrawing(db, entry.drawing.id, 1)
+                          }
+                        >
+                          Move drawing later
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setMenu(null);
+                            setReordering(true);
+                          }}
+                        >
+                          Reorder drawings…
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </li>
+            ))}
+            {!selecting && (
+              <li className="pages-cell">
+                <button
+                  type="button"
+                  className="page-add"
+                  onClick={() => fileInput.current?.click()}
+                >
+                  <Plus aria-hidden="true" />
+                  <span>Add drawings</span>
+                </button>
+              </li>
+            )}
+          </ul>
+          <input
+            ref={fileInput}
+            type="file"
+            accept="application/pdf,.pdf"
+            multiple
+            hidden
+            data-testid="pages-file-input"
+            onChange={(e) => {
+              const files = [...(e.target.files ?? [])];
+              e.target.value = "";
+              if (files.length) void addFiles(files);
+            }}
+          />
+
+          {hidden.length > 0 && (
+            <section aria-label="Hidden pages">
+              <h3 className="pages-section-title">
+                Hidden pages ({hidden.length})
+              </h3>
+              <ul className="pages-grid" aria-label="Hidden pages">
+                {hidden.map((entry) => (
+                  <li key={entry.key} className="pages-cell page-hidden">
+                    <div className="page-thumb">
+                      <Thumb
+                        doc={docs.get(entry.drawing.id)}
+                        source={entry.source}
+                        active={open}
+                      />
+                    </div>
+                    <div className="page-thumb-caption">
+                      <span className="page-thumb-drawing">
+                        {entry.drawing.name} p{entry.source}
+                      </span>
+                      <button
+                        type="button"
+                        className="quiet"
+                        aria-label={`Restore ${entry.drawing.name} page ${entry.source}`}
+                        onClick={() =>
+                          void setPagesHidden(
+                            db,
+                            entry.drawing.id,
+                            [entry.position],
+                            false,
+                          )
+                        }
+                      >
+                        Restore
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </div>
+
+        {selecting && (
+          <div className="pages-actions">
+            <button
+              type="button"
+              className="emphasis"
+              disabled={chosen.length === 0}
+              onClick={() => void hide(chosen)}
+            >
+              Hide {chosen.length || ""}{" "}
+              {chosen.length === 1 ? "page" : "pages"}
+            </button>
+            <button
+              type="button"
+              disabled={chosen.length === 0}
+              onClick={() => void duplicate(chosen)}
+            >
+              Duplicate
+            </button>
+            <button
+              type="button"
+              disabled={unmarked === 0}
+              onClick={() => void hideUnmarked()}
+            >
+              Hide unmarked pages ({unmarked})
+            </button>
+          </div>
+        )}
+      </dialog>
+      <ReorderDrawingsDialog
+        open={open && reordering}
+        inspectionId={inspectionId}
+        drawings={drawings}
+        onClose={() => setReordering(false)}
+      />
+    </>
   );
 }
 

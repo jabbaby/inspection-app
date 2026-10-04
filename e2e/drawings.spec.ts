@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
   TYPICAL_DRAWING,
   buildSyntheticDrawing,
@@ -1664,4 +1664,118 @@ test("general photos on the Site memo step save as General and delete with a con
     .getByRole("button", { name: "Delete" })
     .click();
   await expect(general).toContainText("General photos (1)");
+});
+
+/** Drags a ≡ handle to the top of a row, with the mouse in small steps. */
+async function dragHandle(page: Page, handle: Locator, toRow: Locator) {
+  const at = await centre(handle);
+  const row = (await toRow.boundingBox())!;
+  await mouseDrag(page, at, { x: at.x, y: row.y + 4 });
+}
+
+test("pages: move a page within its drawing and reorder drawings", async ({
+  page,
+}) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [
+    await typicalPdf("S-101 Level 3.pdf"),
+    await typicalPdf("S-102 Level 4.pdf"),
+  ]);
+  await openDrawing(page, "S-101 Level 3");
+  await addPinAt(page, 0.3, 0.3);
+  await sheet(page).getByRole("button", { name: "Done" }).first().click();
+
+  await openPages(page);
+  const pages = page.getByRole("dialog", { name: "Pages" });
+
+  // Page 1 (with its pin) moves after page 2; the menu follows it.
+  await pages.getByRole("button", { name: "Page 1 options" }).click();
+  await expect(
+    pages.getByRole("menuitem", { name: "Move page earlier" }),
+  ).toBeDisabled();
+  await pages.getByRole("menuitem", { name: "Move page later" }).click();
+  await expect(
+    pages.getByRole("button", { name: "Page 2: S-101 Level 3 page 1" }),
+  ).toContainText("1 pin");
+  await expect(
+    pages.getByRole("button", { name: "Page 1: S-101 Level 3 page 2" }),
+  ).toBeVisible();
+  await expect(pages.getByRole("menu", { name: "Page 2" })).toBeVisible();
+  // The last page of a drawing can't move into the next drawing.
+  await pages.getByRole("heading", { name: "Pages" }).click();
+  await pages.getByRole("button", { name: "Page 3 options" }).click();
+  await expect(
+    pages.getByRole("menuitem", { name: "Move page later" }),
+  ).toBeDisabled();
+
+  // Move the second drawing to the front.
+  await pages.getByRole("heading", { name: "Pages" }).click();
+  await pages.getByRole("button", { name: "Page 4 options" }).click();
+  await pages.getByRole("menuitem", { name: "Move drawing earlier" }).click();
+  await expect(
+    pages.getByRole("button", { name: "Page 1: S-102 Level 4 page 1" }),
+  ).toBeVisible();
+  // The menu stays open for another move; now it's first.
+  await expect(
+    pages.getByRole("menuitem", { name: "Move drawing earlier" }),
+  ).toBeDisabled();
+
+  // Reorder drawings… puts it back by dragging.
+  await pages.getByRole("menuitem", { name: "Reorder drawings…" }).click();
+  const dialog = page.getByRole("dialog", { name: "Reorder drawings" });
+  const rows = dialog
+    .getByRole("list", { name: "Drawing order" })
+    .getByRole("listitem");
+  await expect(rows.first()).toContainText("S-102 Level 4");
+  await dragHandle(
+    page,
+    dialog.getByRole("button", { name: "Reorder S-101 Level 3" }),
+    rows.first(),
+  );
+  await expect(rows.first()).toContainText("S-101 Level 3");
+  await dialog.getByRole("button", { name: "Done" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(
+    pages.getByRole("button", { name: "Page 1: S-101 Level 3 page 2" }),
+  ).toBeVisible();
+});
+
+test("pre-inspection: drag a drawing to reorder; letters follow", async ({
+  page,
+}) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [
+    await typicalPdf("S-101 Level 3.pdf"),
+    await typicalPdf("S-102 Level 4.pdf"),
+  ]);
+  await openDrawing(page, "S-101 Level 3");
+  await addPinAt(page, 0.3, 0.3);
+  await typeItem(page, "On S-101");
+  await sheet(page).getByRole("button", { name: "Done" }).first().click();
+  await openDrawing(page, "S-102 Level 4");
+  await addPinAt(page, 0.6, 0.3, 3);
+  await typeItem(page, "On S-102");
+  await sheet(page).getByRole("button", { name: "Done" }).first().click();
+  await expect(pinByLetter(page, "B")).toHaveCount(1);
+
+  await openTab(page, "Pre-inspection");
+  const rows = page
+    .getByRole("list", { name: "Drawings" })
+    .getByRole("listitem");
+  await expect(rows.first()).toContainText("S-101 Level 3");
+  await dragHandle(
+    page,
+    page.getByRole("button", { name: "Reorder S-102 Level 4" }),
+    rows.first(),
+  );
+  await expect(rows.first()).toContainText("S-102 Level 4");
+
+  // S-102's pin is first in the document now, so it is instruction A.
+  await openTab(page, "Inspection");
+  await openDrawing(page, "S-102 Level 4");
+  await expect(page.getByTestId("page-indicator")).toHaveText("Page 1 of 6");
+  await page.getByRole("button", { name: "Items" }).click();
+  const itemRows = page.getByTestId("items-panel-row");
+  await expect(itemRows.first()).toContainText("A. On S-102");
+  await expect(itemRows.nth(1)).toContainText("B. On S-101");
 });

@@ -2,12 +2,14 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { useRef, useState } from "react";
 import { FilePlus, FlaskConical, Files, Pencil, Trash2 } from "lucide-react";
 import { ConfirmDialog } from "../../app/ConfirmDialog";
+import { useRowDrag } from "../../app/useRowDrag";
 import { db } from "../../db/db";
 import {
   listDrawings,
   deleteDrawing,
   drawingNameFromFile,
   renameDrawing,
+  reorderDrawings,
 } from "../../db/drawings";
 import type { Drawing } from "../../db/types";
 import { formatBytes } from "../../db/storage";
@@ -26,6 +28,7 @@ function pageSummary(drawing: Drawing) {
  * An inspection's drawings: add (PDFs from Files, or a synthetic test
  * drawing), rename and delete. In the viewer's Drawings panel, tapping a
  * drawing scrolls to it (`onOpen`); with no drawings yet it fills the view.
+ * Drag a drawing's ≡ handle to reorder the document (letters follow).
  */
 export function DrawingsSection({
   inspectionId,
@@ -58,6 +61,10 @@ export function DrawingsSection({
   const [renaming, setRenaming] = useState<Drawing | null>(null);
   const [newName, setNewName] = useState("");
   const [deleting, setDeleting] = useState<Drawing | null>(null);
+  const reorder = useRowDrag(
+    (drawings ?? []).map((d) => d.id),
+    (order) => void reorderDrawings(db, inspectionId, order),
+  );
 
   async function addFiles(files: File[]) {
     onActivity?.({ busy: true, failed: false });
@@ -151,7 +158,30 @@ export function DrawingsSection({
           {drawings.map((drawing) => {
             const count = counts?.get(drawing.id) ?? 0;
             return (
-              <li key={drawing.id} className="list-row">
+              <li
+                key={drawing.id}
+                ref={reorder.rowRef(drawing.id)}
+                className={`list-row reorder-row${reorder.draggingId === drawing.id ? " reorder-row-dragged" : ""}`}
+                style={{
+                  transform: `translateY(${reorder.shift(drawing.id)}px)`,
+                  transition:
+                    reorder.draggingId === null ||
+                    reorder.draggingId === drawing.id
+                      ? "none"
+                      : undefined,
+                }}
+              >
+                {drawings.length > 1 && (
+                  <button
+                    type="button"
+                    className="drag-handle"
+                    aria-label={`Reorder ${drawing.name}`}
+                    title="Drag to reorder"
+                    {...reorder.handleProps(drawing.id)}
+                  >
+                    ≡
+                  </button>
+                )}
                 <button
                   type="button"
                   className="list-row-main link-like"

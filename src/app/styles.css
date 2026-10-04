@@ -3783,7 +3783,7 @@ h1 {
   top: 100%;
   display: flex;
   flex-direction: column;
-  min-width: 170px;
+  min-width: 210px;
   padding: 6px;
   border-radius: var(--radius);
   background: var(--surface);
@@ -3792,8 +3792,15 @@ h1 {
 
 .page-thumb-menu button {
   justify-content: flex-start;
+  text-align: left;
+  white-space: nowrap;
   border-radius: var(--radius-sm);
   background-color: transparent;
+}
+
+.page-thumb-menu-up {
+  top: auto;
+  bottom: 100%;
 }
 
 .page-add {
@@ -3925,4 +3932,27 @@ h1 {
   font-weight: 600;
   text-align: center;
   box-shadow: var(--shadow-float);
+}
+
+/* Rows reordered by dragging their ≡ handle (drawings). */
+.reorder-row {
+  position: relative;
+  background-color: var(--surface);
+  transition: transform 150ms ease;
+}
+
+.reorder-row-dragged {
+  z-index: 1;
+  box-shadow: var(--shadow-float);
+}
+
+.reorder-row .drag-handle {
+  margin-left: calc(-1 * var(--space-2));
+}
+
+.page-thumb-menu-rule {
+  width: calc(100% - 12px);
+  margin: 4px 6px;
+  border: 0;
+  border-top: 1px solid var(--line-soft);
 }
