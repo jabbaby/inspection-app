@@ -8,3 +8,6 @@ docs
 outputs
 fixtures
 *.md
+
+# Local performance recordings (never committed)
+perf-recordings/
