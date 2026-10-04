@@ -108,10 +108,14 @@ export async function openTab(
   page: Page,
   name: "Pre-inspection" | "Inspection" | "Site memo",
 ) {
-  await page
+  const link = page
     .getByRole("navigation", { name: "Inspection sections" })
-    .getByRole("link", { name, exact: true })
-    .click();
+    .getByRole("link", { name, exact: true });
+  await link.click();
+  // Wait for the step itself to render (the URL changes first: navigation
+  // renders as a transition). Pre-inspection and Inspection both have a
+  // drawings file input, and a file given to the old, detached one is lost.
+  await expect(link).toHaveAttribute("aria-current", "page");
 }
 
 /**
