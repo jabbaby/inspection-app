@@ -54,6 +54,11 @@ async function backfillPageSizes(drawing: Drawing) {
   }
 }
 
+/** Milliseconds until a performance.now() time (event handlers only). */
+function msUntil(time: number) {
+  return time - performance.now();
+}
+
 export function DocumentScreen() {
   const { id = "" } = useParams();
   return <InspectionDocument key={id} inspectionId={id} />;
@@ -262,7 +267,8 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
     options: { arrows?: ItemArrow[]; kind?: ItemKind; openAt?: number } = {},
   ) {
     setAddPinMode(false);
-    window.clearTimeout(pendingOpen.current);
+    cancelPendingOpen();
+    const token = openToken.current;
     const item = await createItemWithUndo(
       {
         inspectionId,
@@ -276,13 +282,15 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
     );
     const open = () => {
       pendingOpen.current = 0;
+      // Cancelled meanwhile (a double-tap's second press, or another pin).
+      if (openToken.current !== token) return;
       setJustPlaced(item.id);
       select(item.id);
     };
-    // A tapped pin opens once a double-tap is no longer possible: opening
-    // the editor resizes the drawing, which would move the pin from under
-    // the second tap.
-    const wait = (options.openAt ?? 0) - performance.now();
+    // A tapped pin opens once a double-tap is no longer possible: the
+    // editor could cover the spot of the second tap, and a double-tap and
+    // hold opens it only when the finger lifts.
+    const wait = msUntil(options.openAt ?? 0);
     if (wait > 0) pendingOpen.current = window.setTimeout(open, wait);
     else open();
     return item;
@@ -294,6 +302,55 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
   );
   /** A tapped pin waiting to open (see placePin). */
   const pendingOpen = useRef(0);
+  /** Changes when a pending open is cancelled (even before it is timed). */
+  const openToken = useRef(0);
+
+  function cancelPendingOpen() {
+    window.clearTimeout(pendingOpen.current);
+    pendingOpen.current = 0;
+    openToken.current++;
+  }
+  /**
+   * The pin a double-tap's second press turned into an observation (or
+   * null: it pressed something else), resolved once saved.
+   */
+  const secondPressed = useRef<Promise<Item | null> | null>(null);
+
+  function openItem(id: string) {
+    setJustPlaced(id);
+    select(id);
+  }
+
+  /**
+   * The second press of a double-tap went down. When the first tap placed
+   * a pin, it turns into an observation now (same Undo step); its editor
+   * waits until the finger lifts, which may be after a hold and an arrow.
+   */
+  function secondPress(
+    target: { pinId: string } | { hit: { page: PageLayout; at: Point } | null },
+  ) {
+    cancelPendingOpen();
+    const placing = placedByTap.current;
+    placedByTap.current = null;
+    const pinId = "pinId" in target ? target.pinId : null;
+    secondPressed.current = (async () => {
+      // Only a pin placed by the first tap of this double-tap counts.
+      const created =
+        placing && performance.now() - placing.time < 1000
+          ? await placing.item
+          : null;
+      if (!created || (pinId !== null && pinId !== created.id)) return null;
+      await switchNewItemKind(created, "observation");
+      return created;
+    })();
+  }
+
+  /** What the second press turned (and forgets it). */
+  async function takeSecondPressed() {
+    const pending = secondPressed.current;
+    secondPressed.current = null;
+    return pending ? await pending : null;
+  }
 
   function tapDrawing(hit: { page: PageLayout; at: Point } | null) {
     placedByTap.current = null;
@@ -302,8 +359,7 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
     // nothing open it places an instruction pin.
     if (pendingOpen.current) {
       // The pin just placed, about to open: count it as open.
-      window.clearTimeout(pendingOpen.current);
-      pendingOpen.current = 0;
+      cancelPendingOpen();
       return;
     }
     if (selectedId) {
@@ -340,27 +396,23 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
     pinId: string | null,
   ) {
     const arrows = tip ? [{ id: crypto.randomUUID(), ...tip }] : [];
-    const placing = placedByTap.current;
     placedByTap.current = null;
     if (kind === "instruction") {
       await placePin(page, at, { arrows });
       return;
     }
-    const created =
-      placing && performance.now() - placing.time < 1500
-        ? await placing.item
-        : null;
-    const samePage = (item: Item) =>
-      item.drawingId === page.drawingId && item.page === page.page;
-    if (created && samePage(created) && (!pinId || pinId === created.id)) {
-      window.clearTimeout(pendingOpen.current);
-      pendingOpen.current = 0;
-      await switchNewItemKind(created, "observation", [
-        ...(created.arrows ?? []),
-        ...arrows,
-      ]);
-      setJustPlaced(created.id);
-      select(created.id);
+    // Double-tap and hold: the pin the second press turned gets the arrow.
+    const turned = await takeSecondPressed();
+    if (turned) {
+      const samePage =
+        turned.drawingId === page.drawingId && turned.page === page.page;
+      if (arrows.length && samePage) {
+        await switchNewItemKind(turned, "observation", [
+          ...(turned.arrows ?? []),
+          ...arrows,
+        ]);
+      }
+      openItem(turned.id);
       return;
     }
     const existing = pinId ? items?.find((i) => i.id === pinId) : undefined;
@@ -380,22 +432,17 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
   }
 
   /**
-   * A double-tap: when the first tap placed a pin, that pin becomes an
-   * observation (still one Undo step); on an existing pin it switches kind.
+   * A double-tap lifted: the pin its second press turned into an
+   * observation opens; on an existing pin it switches kind.
    */
   async function doubleTap(
     target: { pinId: string } | { hit: { page: PageLayout; at: Point } | null },
   ) {
-    const placing = placedByTap.current;
     placedByTap.current = null;
-    // Only a pin placed by the first tap of this double-tap counts.
-    const created =
-      placing && performance.now() - placing.time < 1000
-        ? await placing.item
-        : null;
+    const turned = await takeSecondPressed();
     const pinId = "pinId" in target ? target.pinId : null;
-    if (created && (pinId === null || pinId === created.id)) {
-      await switchNewItemKind(created, "observation");
+    if (turned) {
+      openItem(turned.id);
       return;
     }
     if (pinId === null) {
@@ -499,6 +546,7 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
               }}
               onSelectPin={(itemId) => select(itemId)}
               onTapDrawing={tapDrawing}
+              onSecondPress={secondPress}
               onDoubleTap={(target) => void doubleTap(target)}
               onHoldPlace={(page, at, tip, kind, pinId) =>
                 void holdPlace(page, at, tip, kind, pinId)
@@ -565,9 +613,15 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
                         : ""
                     }
                   >
-                    {current
-                      ? `Page ${current.number} of ${layout.pages.length}`
-                      : ""}
+                    {/* "Page" above "N of M" in the narrow pill. */}
+                    {current && (
+                      <>
+                        Page{" "}
+                        <span className="side-label-line">
+                          {current.number} of {layout.pages.length}
+                        </span>
+                      </>
+                    )}
                   </span>
                 </button>
                 <button

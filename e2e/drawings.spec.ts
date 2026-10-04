@@ -719,11 +719,14 @@ test("double-tap and hold places an observation with an arrow in one step", asyn
   const from = { x: box.x + box.width * 0.3, y: box.y + box.height * 0.4 };
   const to = { x: box.x + box.width * 0.6, y: box.y + box.height * 0.6 };
 
-  // Tap, then press again at once and hold, then drag.
+  // Tap, then press again at once: the pin turns blue straight away; hold
+  // and drag the arrow; the editor waits until the finger lifts.
   await page.mouse.click(from.x, from.y);
   await page.mouse.down();
+  await expect(pinByLetter(page, "A", "observation")).toBeVisible();
   await page.waitForTimeout(700);
   await page.mouse.move(to.x, to.y, { steps: 10 });
+  await expect(sheet(page)).toHaveCount(0);
   await page.mouse.up();
 
   await expect(page.getByTestId("viewer-pin")).toHaveCount(1);

@@ -1921,6 +1921,7 @@ button.list-row-main:hover:not(:disabled) {
 }
 
 .drawing-body {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: grid;
@@ -1928,19 +1929,33 @@ button.list-row-main:hover:not(:disabled) {
   grid-template-rows: minmax(0, 1fr);
 }
 
-.drawing-body.with-sheet {
-  grid-template-rows: minmax(0, 1fr) auto;
+/* Panels (an item, Items, Drawings) float over the drawing, so it never
+   resizes and pins stay under the finger (a double-tap). At the bottom in
+   portrait; on the left in landscape, away from the controls on the right. */
+.drawing-body > .item-sheet {
+  position: absolute;
+  z-index: 5;
+  left: calc(var(--space-3) + 12px);
+  right: calc(env(safe-area-inset-right) + var(--space-3) + 12px);
+  bottom: calc(env(safe-area-inset-bottom) + var(--space-3) + 12px);
+}
+
+/* In portrait the controls move up, clear of the panel. */
+.drawing-body.with-sheet .viewer-controls {
+  top: 12px;
+  transform: none;
 }
 
 @media (min-width: 900px) and (orientation: landscape) {
-  /* The panel opens on the left, away from the controls on the right. */
-  .drawing-body.with-sheet {
-    grid-template-columns: 360px minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr);
+  .drawing-body > .item-sheet {
+    top: 12px;
+    right: auto;
+    width: 360px;
   }
 
-  .drawing-body.with-sheet > .viewer-wrap {
-    order: 1;
+  .drawing-body.with-sheet .viewer-controls {
+    top: 50%;
+    transform: translateY(-50%);
   }
 }
 
@@ -3334,7 +3349,6 @@ a.list-row {
 @media (min-width: 900px) and (orientation: landscape) {
   .item-sheet {
     border: 0;
-    box-shadow: none;
   }
 }
 
@@ -3440,16 +3454,19 @@ h1 {
   box-shadow: var(--shadow-float);
 }
 
+/* As wide as the tools pill below it. */
 .viewer-side .side-button {
+  position: relative;
   flex-direction: column;
   gap: 2px;
-  width: 76px;
+  width: 48px;
+  min-width: 48px;
   min-height: 62px;
-  padding: 6px 4px;
-  border-radius: 20px;
+  padding: 6px 2px;
+  border-radius: 24px;
   background: #2e2726;
   color: #e8e1dd;
-  font-size: 11px;
+  font-size: 10px;
   line-height: 1.15;
 }
 
@@ -3477,12 +3494,22 @@ h1 {
   white-space: normal;
 }
 
+.side-label:has(.side-label-line) {
+  flex-direction: column;
+  gap: 0;
+}
+
+.side-label-line {
+  white-space: nowrap;
+}
+
 .side-label:empty {
   display: none;
 }
 
 .viewer-side .count-badge {
-  position: static;
+  top: 2px;
+  right: 0;
   background: var(--brand-red);
   color: #fff;
 }

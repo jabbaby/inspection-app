@@ -78,6 +78,14 @@ interface Props {
     pinId: string | null,
   ) => void;
   /**
+   * The second press of a double-tap has gone down (before it lifts or
+   * becomes a hold): on a pin (often the one the first tap just placed),
+   * or on the drawing.
+   */
+  onSecondPress: (
+    target: { pinId: string } | { hit: { page: PageLayout; at: Point } | null },
+  ) => void;
+  /**
    * The second tap of a double-tap: on a pin (often the one the first tap
    * just placed), or on the drawing (with the spot, null between pages).
    */
@@ -627,8 +635,15 @@ export function DocumentViewer(props: Props) {
       tap.current &&
       !latest.current.addPinMode &&
       stopTouch.current !== e.pointerId
-    )
-      startHold(e.pointerId, p, nearLastTap(p, e.timeStamp));
+    ) {
+      const second = nearLastTap(p, e.timeStamp);
+      if (second) {
+        latest.current.onSecondPress({
+          hit: hitPage(currentLayout(), screenToPage(currentTransform(), p)),
+        });
+      }
+      startHold(e.pointerId, p, second);
+    }
   }
 
   function onPointerMove(e: React.PointerEvent) {
@@ -1050,8 +1065,10 @@ export function DocumentViewer(props: Props) {
     };
     // Pressed again just after a tap: holding makes it an observation with
     // an arrow (moving first still drags the pin).
-    if (!arrowId && nearLastTap(local(e), e.timeStamp))
+    if (!arrowId && nearLastTap(local(e), e.timeStamp)) {
+      latest.current.onSecondPress({ pinId: id });
       startPinHold(e.pointerId, id, local(e));
+    }
   }
 
   function onPinPointerMove(e: React.PointerEvent, pin: DocPin) {
