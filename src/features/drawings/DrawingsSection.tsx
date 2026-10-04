@@ -4,7 +4,6 @@ import { FilePlus, FlaskConical, Files, Pencil, Trash2 } from "lucide-react";
 import { ConfirmDialog } from "../../app/ConfirmDialog";
 import { db } from "../../db/db";
 import {
-  addDrawing,
   listDrawings,
   deleteDrawing,
   drawingNameFromFile,
@@ -12,22 +11,15 @@ import {
 } from "../../db/drawings";
 import type { Drawing } from "../../db/types";
 import { formatBytes } from "../../db/storage";
+import { drawingPages } from "./document/documentLayout";
+import { storePdf } from "./drawingFiles";
 
-/** Opens the PDF to check it and count its pages, then stores it. */
-async function storePdf(inspectionId: string, name: string, bytes: Uint8Array) {
-  const { loadPdf } = await import("./pdf/pdfjs");
-  // pdf.js takes ownership of the buffer it is given, so pass a copy.
-  const pdf = await loadPdf(bytes.slice());
-  const pageCount = pdf.numPages;
-  const { measurePageSizes } = await import("./pdf/pageSizes");
-  const pageSizes = await measurePageSizes(pdf);
-  await pdf.loadingTask.destroy();
-  await addDrawing(db, inspectionId, {
-    name,
-    pdf: bytes,
-    pageCount,
-    pageSizes,
-  });
+/** "3 pages", or "3 pages (2 hidden)" once pages are hidden. */
+function pageSummary(drawing: Drawing) {
+  const pages = drawingPages(drawing);
+  const hidden = pages.filter((p) => p.hidden).length;
+  const shown = pages.length - hidden;
+  return `${shown} ${shown === 1 ? "page" : "pages"}${hidden ? ` (${hidden} hidden)` : ""}`;
 }
 
 /**
@@ -167,8 +159,7 @@ export function DrawingsSection({
                 >
                   <span className="list-row-title">{drawing.name}</span>
                   <span className="list-row-meta">
-                    {drawing.pageCount}{" "}
-                    {drawing.pageCount === 1 ? "page" : "pages"} · {count}{" "}
+                    {pageSummary(drawing)} · {count}{" "}
                     {count === 1 ? "item" : "items"}
                     {drawing.fileSize
                       ? ` · ${formatBytes(drawing.fileSize)}`

@@ -56,7 +56,8 @@ async function typicalPdf(name = "S-101 Level 3.pdf") {
 
 /**
  * Shows a drawing in the Inspection step: from the drawings list if it is
- * showing (e.g. after a failed upload), else from the Drawings panel.
+ * showing (e.g. after a failed upload), else from the Pages view (its first
+ * page).
  */
 async function openDrawing(page: Page, name: string) {
   const pattern = new RegExp(`^${name}`);
@@ -72,14 +73,20 @@ async function openDrawing(page: Page, name: string) {
   const indicator = page.getByTestId("page-indicator");
   await expect(indicator).not.toHaveAttribute("data-label", "");
   if (pattern.test((await indicator.getAttribute("data-label")) ?? "")) return;
-  const toggle = page.getByRole("button", { name: "Drawings", exact: true });
-  await toggle.click();
+  await openPages(page);
   await page
-    .getByRole("complementary", { name: "Drawings" })
-    .getByRole("button", { name: pattern })
+    .getByRole("dialog", { name: "Pages" })
+    .getByRole("button", {
+      name: new RegExp(`^Page \\d+: ${name} page 1$`),
+    })
     .click();
-  await toggle.click();
-  await expect(indicator).toHaveText(pattern);
+  await expect(indicator).toHaveAttribute("data-label", pattern);
+}
+
+/** Opens the Pages view from the page button. */
+async function openPages(page: Page) {
+  await page.getByRole("button", { name: "Pages", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Pages" })).toBeVisible();
 }
 
 /** Add pin, then tap at a fraction of a page. Returns the tap point. */
@@ -174,13 +181,9 @@ test("the Inspection step opens straight into the drawings", async ({
     page.locator('[data-testid="drawing-viewer"][data-ready="true"]'),
   ).toBeVisible({ timeout: 20_000 });
 
-  // Drawings are managed from the Drawings panel.
-  await page.getByRole("button", { name: "Drawings", exact: true }).click();
-  await expect(
-    page
-      .getByRole("complementary", { name: "Drawings" })
-      .getByRole("button", { name: "Rename S-101 Level 3" }),
-  ).toBeVisible();
+  // The page button opens the Pages view: every page as a thumbnail.
+  await openPages(page);
+  await expect(page.getByTestId("page-thumb")).toHaveCount(3);
 });
 
 test("adds drawings from Files, rejects non-PDFs and opens them", async ({
@@ -1204,14 +1207,137 @@ test("an arrow must point to a spot on its pin's page", async ({ page }) => {
   await scrollDocument(page, second.y - viewer.y - 20);
   const two = await stageBox(page, 1);
   await page.mouse.click(two.x + two.width / 2, two.y + two.height / 2);
-  await expect(sheet(page)).toContainText(
-    "Tap on page 1 of this drawing, where the pin is.",
-  );
+  await expect(sheet(page)).toContainText("Tap on page 1, where the pin is.");
   await expect(page.getByTestId("arrow")).toHaveCount(0);
   await sheet(page).getByRole("button", { name: "Cancel" }).click();
   await expect(
     sheet(page).getByRole("button", { name: "Add arrow" }),
   ).toBeVisible();
+});
+
+test("pages: duplicate, hide, restore, select and hide unmarked", async ({
+  page,
+}) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openDrawing(page, "S-101 Level 3");
+  await addPinAt(page, 0.3, 0.3);
+  await sheet(page).getByRole("button", { name: "Done" }).first().click();
+  const indicator = page.getByTestId("page-indicator");
+  await expect(indicator).toHaveText("Page 1 of 3");
+
+  await openPages(page);
+  const pages = page.getByRole("dialog", { name: "Pages" });
+  const thumbs = pages.getByTestId("page-thumb");
+  await expect(thumbs).toHaveCount(3);
+  await expect(thumbs.first()).toContainText("1 pin");
+  await expect(thumbs.first()).toHaveClass(/page-thumb-current/);
+
+  // A page with pins can't be hidden; any page can be duplicated.
+  await pages.getByRole("button", { name: "Page 1 options" }).click();
+  await expect(
+    pages.getByRole("menuitem", { name: "Hide (has pins)" }),
+  ).toBeDisabled();
+  await pages.getByRole("menuitem", { name: "Duplicate" }).click();
+  await expect(thumbs).toHaveCount(4);
+  // The copy (page 2) shows the same sheet, without the pin.
+  await expect(
+    pages.getByRole("button", { name: "Page 2: S-101 Level 3 page 1" }),
+  ).not.toContainText("pin");
+
+  // Hide page 3, then restore it from Hidden pages.
+  await pages.getByRole("button", { name: "Page 3 options" }).click();
+  await pages.getByRole("menuitem", { name: "Hide", exact: true }).click();
+  await expect(thumbs).toHaveCount(3);
+  await pages
+    .getByRole("button", { name: "Restore S-101 Level 3 page 2" })
+    .click();
+  await expect(thumbs).toHaveCount(4);
+
+  // Select mode: hide two pages at once.
+  await pages.getByRole("button", { name: "Select" }).click();
+  await thumbs.nth(1).click();
+  await thumbs.nth(2).click();
+  await expect(
+    pages.getByRole("heading", { name: "2 selected" }),
+  ).toBeVisible();
+  await pages.getByRole("button", { name: "Hide 2 pages" }).click();
+  await expect(thumbs).toHaveCount(2);
+
+  // Hide unmarked pages leaves only the page with the pin.
+  await pages.getByRole("button", { name: "Hide unmarked pages (1)" }).click();
+  await expect(thumbs).toHaveCount(1);
+  await pages.getByRole("button", { name: "Done" }).click();
+
+  // The document follows: one page left.
+  await thumbs.first().click();
+  await expect(pages).toBeHidden();
+  await expect(indicator).toHaveText("Page 1 of 1");
+  await expect(page.getByTestId("doc-page")).toHaveCount(1);
+});
+
+test("items: select several to switch kind, set photo confirmation or delete", async ({
+  page,
+}) => {
+  await threeItemsInPanel(page);
+  const panel = page.getByTestId("items-panel");
+  const undo = page.getByRole("button", { name: "Undo" });
+
+  await panel.getByRole("button", { name: "Select", exact: true }).click();
+  await panelRows(page).nth(0).getByRole("button").click();
+  await panelRows(page).nth(2).getByRole("button").click();
+  await expect(
+    panel.getByRole("heading", { name: "2 selected" }),
+  ).toBeVisible();
+
+  // Photo confirmation for both instructions at once.
+  await panel.getByRole("button", { name: "Photo confirmation on" }).click();
+  await expect(undo).toHaveAttribute(
+    "title",
+    "Undo: Photo confirmation on for 2 items",
+  );
+  await expect(
+    panel.getByRole("button", { name: "Photo confirmation off" }),
+  ).toBeEnabled();
+
+  // Both become observations (lettered A and B); one Undo switches back.
+  await panel.getByRole("button", { name: "Make observations" }).click();
+  await expect(
+    page.locator('[data-testid="viewer-pin"][data-kind="observation"]'),
+  ).toHaveCount(2);
+  await expect(undo).toHaveAttribute(
+    "title",
+    "Undo: Make 2 items observations",
+  );
+  await undo.click();
+  await expect(
+    page.locator('[data-testid="viewer-pin"][data-kind="observation"]'),
+  ).toHaveCount(0);
+
+  // Still selecting: swap the third row for the second, then delete both;
+  // one Undo brings both back.
+  await panelRows(page).nth(2).getByRole("button").click();
+  await panelRows(page).nth(1).getByRole("button").click();
+  await panel.getByRole("button", { name: "Delete 2" }).click();
+  await expect(page.getByTestId("viewer-pin")).toHaveCount(1);
+  await expect(pinByLetter(page, "A")).toBeVisible();
+  await undo.click();
+  await expect(page.getByTestId("viewer-pin")).toHaveCount(3);
+});
+
+test("the Drawings card on Pre-inspection opens the Pages view", async ({
+  page,
+}) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openTab(page, "Pre-inspection");
+  await page.getByRole("link", { name: "Pages", exact: true }).click();
+  const pages = page.getByRole("dialog", { name: "Pages" });
+  await expect(pages).toBeVisible();
+  await expect(pages.getByTestId("page-thumb")).toHaveCount(3);
+  await pages.getByRole("button", { name: "Close" }).click();
+  await expect(pages).toBeHidden();
+  await expect(page).toHaveURL(/\/inspection$/);
 });
 
 test("deleting a drawing removes its items", async ({ page }) => {
@@ -1221,7 +1347,8 @@ test("deleting a drawing removes its items", async ({ page }) => {
   await openDrawing(page, "S-101 Level 3");
   await addPinAt(page, 0.3, 0.3);
   await page.goto(home);
-  await page.getByRole("button", { name: "Drawings", exact: true }).click();
+  // Drawings are renamed and deleted on Pre-inspection.
+  await openTab(page, "Pre-inspection");
 
   await page.getByRole("button", { name: "Delete S-101 Level 3" }).click();
   const dialog = page.getByRole("dialog", { name: "Delete drawing?" });

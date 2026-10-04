@@ -217,12 +217,20 @@ function PreInspectionFor({ id }: { id: string }) {
                 navigate(`${tabPath(id, "inspection")}?drawing=${drawingId}`)
               }
             />
-            <Link
-              to={tabPath(id, "inspection")}
-              className="button-link emphasis pre-drawings-next"
-            >
-              Start the inspection <ArrowRight aria-hidden="true" />
-            </Link>
+            <div className="pre-drawings-actions">
+              <Link
+                to={`${tabPath(id, "inspection")}?pages=1`}
+                className="button-link"
+              >
+                Pages
+              </Link>
+              <Link
+                to={tabPath(id, "inspection")}
+                className="button-link emphasis pre-drawings-next"
+              >
+                Start the inspection <ArrowRight aria-hidden="true" />
+              </Link>
+            </div>
           </section>
 
           <button

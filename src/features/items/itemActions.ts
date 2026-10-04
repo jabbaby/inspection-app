@@ -122,3 +122,74 @@ export async function reorderItemsWithUndo(
     },
   });
 }
+
+/** "3 items", for undo labels. */
+const count = (n: number) => `${n} ${n === 1 ? "item" : "items"}`;
+
+/** Deletes several items at once; one Undo brings them all back. */
+export async function deleteItemsWithUndo(items: Item[]): Promise<void> {
+  if (items.length === 0) return;
+  let deleted: DeletedItem[] = [];
+  for (const item of items) {
+    const gone = await deleteItem(db, item.id);
+    if (gone) deleted.push(gone);
+  }
+  if (deleted.length === 0) return;
+  pushUndo(items[0].inspectionId, {
+    label: `Delete ${count(deleted.length)}`,
+    undo: async () => {
+      for (const gone of deleted) await restoreItem(db, gone);
+    },
+    redo: async () => {
+      const again: DeletedItem[] = [];
+      for (const gone of deleted) {
+        const removed = await deleteItem(db, gone.item.id);
+        if (removed) again.push(removed);
+      }
+      deleted = again;
+    },
+  });
+}
+
+/**
+ * Changes a field on several items at once (kind, photo confirmation);
+ * one Undo puts every item's old value back.
+ */
+async function updateItemsWithUndo<
+  K extends "kind" | "requiresPhotoConfirmation",
+>(items: Item[], field: K, value: Item[K], label: string): Promise<void> {
+  const changed = items.filter((item) => item[field] !== value);
+  if (changed.length === 0) return;
+  const apply = (pick: (item: Item) => Item[K]) => async () => {
+    for (const item of changed)
+      if (await db.items.get(item.id))
+        await updateItem(db, item.id, { [field]: pick(item) });
+  };
+  await apply(() => value)();
+  pushUndo(changed[0].inspectionId, {
+    label,
+    undo: apply((item) => item[field]),
+    redo: apply(() => value),
+  });
+}
+
+/** Makes several items instructions or observations (one Undo step). */
+export function setKindsWithUndo(items: Item[], kind: ItemKind) {
+  return updateItemsWithUndo(
+    items,
+    "kind",
+    kind,
+    `Make ${count(items.filter((i) => i.kind !== kind).length)} ${kindName(kind).toLowerCase()}s`,
+  );
+}
+
+/** Turns photo confirmation on or off for several instructions (one Undo step). */
+export function setPhotoConfirmationWithUndo(items: Item[], on: boolean) {
+  const instructions = items.filter((i) => i.kind === "instruction");
+  return updateItemsWithUndo(
+    instructions,
+    "requiresPhotoConfirmation",
+    on,
+    `Photo confirmation ${on ? "on" : "off"} for ${count(instructions.filter((i) => i.requiresPhotoConfirmation !== on).length)}`,
+  );
+}

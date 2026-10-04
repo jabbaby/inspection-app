@@ -17,6 +17,7 @@ import {
 import { InspectionHeader } from "../inspections/InspectionTabs";
 import { QuickPhotoButton } from "../photos/QuickPhotoButton";
 import { DrawingsSection } from "./DrawingsSection";
+import { PagesSheet } from "./PagesSheet";
 import { kindName } from "../items/letters";
 import { ArrowsOverlay } from "./ArrowsOverlay";
 import type { Drawing, Item, ItemArrow, ItemKind } from "../../db/types";
@@ -110,7 +111,8 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
   const history = useUndo(inspectionId);
   const [addPinMode, setAddPinMode] = useState(false);
   const [itemsOpen, setItemsOpen] = useState(false);
-  const [drawingsOpen, setDrawingsOpen] = useState(false);
+  // Opened with ?pages=1 from the Drawings card on Pre-inspection.
+  const [pagesOpen, setPagesOpen] = useState(() => params.get("pages") === "1");
   // While drawings are being added (or one failed), the list stays in view
   // so its progress and errors can be read.
   const [adding, setAdding] = useState({ busy: false, failed: false });
@@ -165,7 +167,12 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
       layoutDocument(
         (drawings ?? [])
           .filter((d) => d.pageSizes)
-          .map((d) => ({ id: d.id, name: d.name, pageSizes: d.pageSizes! })),
+          .map((d) => ({
+            id: d.id,
+            name: d.name,
+            pageSizes: d.pageSizes!,
+            pages: d.pages,
+          })),
       ),
     [drawings],
   );
@@ -198,7 +205,9 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
         token: Date.now(),
       });
     } else if (startDrawing) {
-      setScrollTarget({ pageKey: pageKey(startDrawing, 1), token: Date.now() });
+      // Its first visible page (page 1 may be hidden).
+      const first = layout.pages.find((p) => p.drawingId === startDrawing);
+      if (first) setScrollTarget({ pageKey: first.key, token: Date.now() });
     } else if (savedPage && layout.pages.some((p) => p.key === savedPage)) {
       setScrollTarget({ pageKey: savedPage, token: Date.now() });
     }
@@ -245,9 +254,10 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
     if (!item) return setPlacingArrow(null);
     if (page.drawingId !== item.drawingId || page.page !== item.page) {
       // Arrows stay on the pin's page; keep waiting for a tap there.
-      setArrowMessage(
-        `Tap on page ${item.page} of this drawing, where the pin is.`,
-      );
+      const number = layout.pages.find(
+        (p) => p.drawingId === item.drawingId && p.page === item.page,
+      )?.number;
+      setArrowMessage(`Tap on page ${number ?? item.page}, where the pin is.`);
       return;
     }
     const arrow = { id: crypto.randomUUID(), ...at };
@@ -367,9 +377,8 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
       select(null);
       return;
     }
-    if (itemsOpen || drawingsOpen) {
+    if (itemsOpen) {
       setItemsOpen(false);
-      setDrawingsOpen(false);
       return;
     }
     if (hit) {
@@ -506,7 +515,7 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
       )}
 
       <div
-        className={`drawing-body${selected || itemsOpen || drawingsOpen ? " with-sheet" : ""}`}
+        className={`drawing-body${selected || itemsOpen ? " with-sheet" : ""}`}
       >
         {showList ? (
           <div className="drawings-empty">
@@ -516,6 +525,7 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
               onOpen={(drawingId) => {
                 setAdding({ busy: false, failed: false });
                 setScrollTarget({
+                  // A new drawing shows every page: page 1 is its first.
                   pageKey: pageKey(drawingId, 1),
                   token: Date.now(),
                 });
@@ -591,16 +601,16 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
               <div className="viewer-side">
                 <button
                   type="button"
-                  className={`side-button${drawingsOpen ? " toggle-on" : ""}`}
-                  aria-label="Drawings"
-                  aria-pressed={drawingsOpen}
+                  className="side-button"
+                  aria-label="Pages"
+                  aria-haspopup="dialog"
                   title={
                     currentDrawing && current
-                      ? `${currentDrawing.name} · page ${current.page} of ${current.pageCount}`
-                      : "Drawings"
+                      ? `${currentDrawing.name} · page ${current.source} of ${current.pageCount}`
+                      : "Pages"
                   }
                   onClick={() => {
-                    setDrawingsOpen((open) => !open);
+                    setPagesOpen(true);
                     setItemsOpen(false);
                     select(null);
                   }}
@@ -612,7 +622,7 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
                     // Which drawing and its own page, for tests and tooltips.
                     data-label={
                       currentDrawing && current
-                        ? `${currentDrawing.name} · page ${current.page} of ${current.pageCount}`
+                        ? `${currentDrawing.name} · page ${current.source} of ${current.pageCount}`
                         : ""
                     }
                   >
@@ -635,7 +645,6 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
                   title="Items"
                   onClick={() => {
                     setItemsOpen((open) => !open);
-                    setDrawingsOpen(false);
                     select(null);
                   }}
                 >
@@ -759,18 +768,6 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
               },
             }}
           />
-        ) : drawingsOpen && drawings.length > 0 ? (
-          <aside className="item-sheet drawings-panel" aria-label="Drawings">
-            <DrawingsSection
-              inspectionId={inspectionId}
-              onOpen={(drawingId) =>
-                setScrollTarget({
-                  pageKey: pageKey(drawingId, 1),
-                  token: Date.now(),
-                })
-              }
-            />
-          </aside>
         ) : (
           itemsOpen && (
             <ItemsPanel
@@ -790,6 +787,18 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
           )
         )}
       </div>
+      <PagesSheet
+        open={pagesOpen}
+        inspectionId={inspectionId}
+        drawings={drawings}
+        items={items ?? []}
+        currentKey={current?.key ?? null}
+        onGoTo={(key) => setScrollTarget({ pageKey: key, token: Date.now() })}
+        onClose={() => {
+          setPagesOpen(false);
+          if (params.has("pages")) setParams({}, { replace: true });
+        }}
+      />
     </section>
   );
 }

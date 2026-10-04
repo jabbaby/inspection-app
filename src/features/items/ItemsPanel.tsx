@@ -1,7 +1,17 @@
 import { useRef, useState } from "react";
 import type { Drawing, Item } from "../../db/types";
-import { deleteItemWithUndo, reorderItemsWithUndo } from "./itemActions";
+import {
+  deleteItemWithUndo,
+  deleteItemsWithUndo,
+  reorderItemsWithUndo,
+  setKindsWithUndo,
+  setPhotoConfirmationWithUndo,
+} from "./itemActions";
 import { compareItems, groupItems, kindName } from "./letters";
+import {
+  documentPageNumbers,
+  pageKey,
+} from "../drawings/document/documentLayout";
 
 interface Props {
   items: Item[];
@@ -78,6 +88,8 @@ function dropIndex(drag: Drag): number {
  * Every item in the inspection (observations, then instructions), inside the
  * drawings view. Swipe a row left for Delete (undoable); drag the handle to
  * reorder items of the same kind on the same page, which re-letters them.
+ * Select mode ticks several items to delete them, switch their kind or set
+ * photo confirmation at once (each one Undo step).
  */
 export function ItemsPanel({
   items,
@@ -87,12 +99,7 @@ export function ItemsPanel({
   onClose,
 }: Props) {
   // Pages are numbered through the whole document (drawings in order).
-  const firstPage = new Map<string, number>();
-  let next = 1;
-  for (const d of drawings) {
-    firstPage.set(d.id, next);
-    next += d.pageCount;
-  }
+  const pageNumbers = documentPageNumbers(drawings);
   const sorted = [...items].sort(compareItems);
   const rowEls = useRef(new Map<string, HTMLElement>());
   const [openId, setOpenId] = useState<string | null>(null);
@@ -110,6 +117,19 @@ export function ItemsPanel({
   /** A swipe just ended: swallow the click that follows it. */
   const swiped = useRef(false);
   const [drag, setDragState] = useState<Drag | null>(null);
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const chosen = sorted.filter((item) => selected.has(item.id));
+  const chosenInstructions = chosen.filter((i) => i.kind === "instruction");
+
+  function toggle(id: string) {
+    setSelected((old) => {
+      const next = new Set(old);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
   // Handlers read the ref: state can lag behind the last pointer move.
   const dragRef = useRef<Drag | null>(null);
   function setDrag(next: Drag | null) {
@@ -250,7 +270,46 @@ export function ItemsPanel({
     return 0;
   }
 
+  function renderSelectRow(item: Item) {
+    const on = selected.has(item.id);
+    return (
+      <li
+        key={item.id}
+        className="swipe-row"
+        data-testid="items-panel-row"
+        data-in-view={inView.has(item.id)}
+      >
+        <div className="swipe-content">
+          <button
+            type="button"
+            className="item-row"
+            aria-pressed={on}
+            onClick={() => toggle(item.id)}
+          >
+            <span
+              className={`checkbox-mark${on ? " on" : ""}`}
+              aria-hidden="true"
+            />
+            <span
+              className={`item-badge${item.kind === "observation" ? " item-badge-observation" : ""}`}
+              aria-hidden="true"
+            >
+              {item.letter}
+            </span>
+            <span className="item-row-text">
+              <span>
+                <strong>{item.letter}.</strong>{" "}
+                {item.text.trim() || <span className="muted">No text yet</span>}
+              </span>
+            </span>
+          </button>
+        </div>
+      </li>
+    );
+  }
+
   function renderRow(item: Item) {
+    if (selecting) return renderSelectRow(item);
     const offset = offsetOf(item.id);
     const canReorder = pageSiblings(sorted, item).length > 1;
     const dragged = drag?.id === item.id;
@@ -352,23 +411,60 @@ export function ItemsPanel({
   return (
     <aside className="item-sheet" aria-label="Items" data-testid="items-panel">
       <div className="item-sheet-head">
-        <h2>Items</h2>
-        <button type="button" className="quiet" onClick={onClose}>
-          Close
+        <h2>{selecting ? `${chosen.length} selected` : "Items"}</h2>
+        {sorted.length > 0 &&
+          (selecting ? (
+            <button
+              type="button"
+              className="quiet"
+              onClick={() =>
+                setSelected(
+                  chosen.length === sorted.length
+                    ? new Set()
+                    : new Set(sorted.map((i) => i.id)),
+                )
+              }
+            >
+              {chosen.length === sorted.length ? "Select none" : "Select all"}
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="quiet"
+              onClick={() => {
+                setOpenId(null);
+                setSelecting(true);
+              }}
+            >
+              Select
+            </button>
+          ))}
+        <button
+          type="button"
+          className="quiet"
+          onClick={() => {
+            if (!selecting) return onClose();
+            setSelecting(false);
+            setSelected(new Set());
+          }}
+        >
+          {selecting ? "Done" : "Close"}
         </button>
       </div>
       {sorted.length === 0 ? (
         <p className="muted">No items yet. Use Add pin.</p>
       ) : (
         <div className="item-groups">
-          <p className="muted item-panel-hint">
-            Swipe left to delete. Drag ≡ to reorder within a page.
-          </p>
+          {!selecting && (
+            <p className="muted item-panel-hint">
+              Swipe left to delete. Drag ≡ to reorder within a page.
+            </p>
+          )}
           {groupItems(sorted).map((group) => (
             <section key={group.kind} aria-label={group.heading}>
               <h3 className="item-group-heading">{group.heading}</h3>
               {pageGroups(group.items).map((pageGroup) => {
-                const title = `Page ${(firstPage.get(pageGroup.drawingId) ?? 1) + pageGroup.page - 1}`;
+                const title = `Page ${pageNumbers.get(pageKey(pageGroup.drawingId, pageGroup.page)) ?? pageGroup.page}`;
                 return (
                   <div key={pageGroup.key} className="item-page-group">
                     <h4 className="item-page-heading">{title}</h4>
@@ -383,6 +479,53 @@ export function ItemsPanel({
               })}
             </section>
           ))}
+        </div>
+      )}
+      {selecting && (
+        <div className="item-select-actions">
+          <button
+            type="button"
+            className="danger-outline"
+            disabled={chosen.length === 0}
+            onClick={() => {
+              void deleteItemsWithUndo(chosen);
+              setSelected(new Set());
+            }}
+          >
+            Delete {chosen.length || ""}
+          </button>
+          <button
+            type="button"
+            disabled={!chosen.some((i) => i.kind !== "observation")}
+            onClick={() => void setKindsWithUndo(chosen, "observation")}
+          >
+            Make observations
+          </button>
+          <button
+            type="button"
+            disabled={!chosen.some((i) => i.kind !== "instruction")}
+            onClick={() => void setKindsWithUndo(chosen, "instruction")}
+          >
+            Make instructions
+          </button>
+          <button
+            type="button"
+            disabled={
+              !chosenInstructions.some((i) => !i.requiresPhotoConfirmation)
+            }
+            onClick={() => void setPhotoConfirmationWithUndo(chosen, true)}
+          >
+            Photo confirmation on
+          </button>
+          <button
+            type="button"
+            disabled={
+              !chosenInstructions.some((i) => i.requiresPhotoConfirmation)
+            }
+            onClick={() => void setPhotoConfirmationWithUndo(chosen, false)}
+          >
+            Photo confirmation off
+          </button>
         </div>
       )}
     </aside>
