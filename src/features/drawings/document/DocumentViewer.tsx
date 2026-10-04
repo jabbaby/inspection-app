@@ -948,7 +948,14 @@ export function DocumentViewer(props: Props) {
       // no page drawing in progress (it redraws after the fingers lift).
       window.clearTimeout(settleTimer.current);
       for (const cancel of renderCancels.current) cancel();
-      sizerRef.current!.style.willChange = "transform";
+      // From fit (or near it) the content is small: one GPU picture,
+      // scaled, is smoothest. Zoomed in, the content is laid out huge and
+      // Safari would keep that picture at full detail, so zooming out would
+      // draw far more pixels than the screen shows; without the hint (and
+      // the page shadows) it redraws at screen resolution instead.
+      if (base.scale <= fitWidthScale.current * 1.5)
+        sizerRef.current!.style.willChange = "transform";
+      else container.classList.add("viewer-pinch-zoomed");
     };
     const endPinch = () => {
       const p = pinch.current;
@@ -959,6 +966,7 @@ export function DocumentViewer(props: Props) {
         transform: "",
         willChange: "",
       });
+      container.classList.remove("viewer-pinch-zoomed");
       setTransform(p.target);
     };
     const onTouchStart = (e: TouchEvent) => {

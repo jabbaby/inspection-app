@@ -443,6 +443,58 @@ test("a pinch previews as a picture and lays out once, around the fingers", asyn
   expect(Math.abs(now.y - at.y)).toBeLessThan(3);
 });
 
+test("a pinch that starts zoomed in isn't held as one GPU picture", async ({
+  page,
+}) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openDrawing(page, "S-101 Level 3");
+  const viewer = page.getByTestId("drawing-viewer");
+  const at = await centre(viewer);
+  const startPinch = (from: number, to: number) =>
+    page.evaluate(
+      ({ at, from, to }) => {
+        const el = document.querySelector('[data-testid="drawing-viewer"]')!;
+        const fire = (type: string, d: number) => {
+          const event = new Event(type, { bubbles: true, cancelable: true });
+          Object.defineProperty(event, "touches", {
+            value: [
+              { clientX: at.x - d / 2, clientY: at.y },
+              { clientX: at.x + d / 2, clientY: at.y },
+            ],
+          });
+          el.dispatchEvent(event);
+        };
+        fire("touchstart", from);
+        fire("touchmove", to);
+        const sizer = el.querySelector<HTMLElement>(".doc-sizer")!;
+        return {
+          willChange: sizer.style.willChange,
+          zoomed: el.classList.contains("viewer-pinch-zoomed"),
+        };
+      },
+      { at, from, to },
+    );
+  const lift = () =>
+    page.evaluate(() => {
+      const el = document.querySelector('[data-testid="drawing-viewer"]')!;
+      const event = new Event("touchend", { bubbles: true, cancelable: true });
+      Object.defineProperty(event, "touches", { value: [] });
+      el.dispatchEvent(event);
+    });
+
+  // From fit: the content is promoted to one picture for the pinch.
+  expect(await startPinch(100, 300)).toEqual({
+    willChange: "transform",
+    zoomed: false,
+  });
+  await lift();
+  // Now zoomed in (3x): the next pinch (out) redraws at screen resolution.
+  expect(await startPinch(300, 100)).toEqual({ willChange: "", zoomed: true });
+  await lift();
+  await expect(viewer).not.toHaveClass(/viewer-pinch-zoomed/);
+});
+
 test("pins stay on their spot through a pinch zoom", async ({ page }) => {
   await setupInspection(page);
   await uploadDrawings(page, [await typicalPdf()]);

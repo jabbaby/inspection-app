@@ -1070,6 +1070,11 @@ dl.facts dd {
   overflow: hidden;
 }
 
+/* A pinch that started zoomed in: no shadows to redraw every frame. */
+.viewer-pinch-zoomed .doc-page {
+  box-shadow: none;
+}
+
 .doc-page-inner {
   position: absolute;
   left: 0;
