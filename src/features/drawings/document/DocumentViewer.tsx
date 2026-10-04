@@ -57,14 +57,17 @@ interface Props {
   layout: DocumentLayout;
   docs: Map<string, PDFDocumentProxy>;
   pins: DocPin[];
-  /** While true, the next tap (finger, Pencil or mouse) places a pin. */
+  /** While true, every tap (finger, Pencil or mouse) places a pin. */
   addPinMode: boolean;
   onPlacePin: (page: PageLayout, at: Point) => void;
   onMovePin: (id: string, to: Point) => void;
   onMovePinEnd: (id: string, to: Point) => void;
   onSelectPin: (id: string) => void;
-  /** A tap on the drawing away from pins, outside Add pin / Add arrow. */
-  onTapDrawing: () => void;
+  /**
+   * A tap on the drawing away from pins, outside Add pin / Add arrow, with
+   * the page spot it landed on (null between pages).
+   */
+  onTapDrawing: (hit: { page: PageLayout; at: Point } | null) => void;
   /** Arrow tip handles (the selected item's): tap selects, drag moves. */
   onSelectArrow: (itemId: string, arrowId: string) => void;
   onMoveArrow: (itemId: string, arrowId: string, to: Point) => void;
@@ -113,8 +116,8 @@ function capture(e: React.PointerEvent) {
  * Safari's 120 Hz scrolling with iOS momentum and bounce). Two fingers
  * pinch-zoom; mouse drags pan, the wheel scrolls and ctrl+wheel zooms. At
  * fit width the document is exactly as wide as the view, so it can't move
- * sideways. Apple Pencil never scrolls (reserved for markup); it only acts
- * while placing a pin. Only pages on or near the screen are rendered.
+ * sideways. Apple Pencil never scrolls; its taps act like a finger's. Only
+ * pages on or near the screen are rendered.
  *
  * The scroll container's content is the document at the current zoom: a
  * point at document units (x, y) sits at (padX + x * scale, PAD + y * scale)
@@ -550,11 +553,6 @@ export function DocumentViewer(props: Props) {
     // pointer whose "up" was lost, or every later tap would look like part
     // of a two-finger gesture and Add pin would stop working.
     if (e.isPrimary) pointers.current.clear();
-    // Pencil is reserved for markup; it only acts while placing a pin.
-    if (e.pointerType === "pen" && !latest.current.addPinMode) {
-      pointers.current.set(e.pointerId, { ...local(e), type: "pen" });
-      return;
-    }
     if (e.pointerType === "mouse" && e.button !== 0) return;
     // Stop a mouse drag from selecting text around the viewer.
     if (e.pointerType === "mouse") {
@@ -609,16 +607,16 @@ export function DocumentViewer(props: Props) {
       pending?.id === e.pointerId &&
       e.timeStamp - pending.time < TAP_MS;
     if (!tapped) return;
+    const hit = hitPage(
+      currentLayout(),
+      screenToPage(currentTransform(), local(e)),
+    );
     if (latest.current.addPinMode) {
-      const hit = hitPage(
-        currentLayout(),
-        screenToPage(currentTransform(), local(e)),
-      );
       if (hit) latest.current.onPlacePin(hit.page, hit.at);
     } else {
       // A tap on the drawing itself (pins, arrow tips and the notes box
       // handle their own taps).
-      latest.current.onTapDrawing();
+      latest.current.onTapDrawing(hit);
     }
   }
 

@@ -346,17 +346,22 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
                 );
               }}
               onSelectPin={(itemId) => select(itemId)}
-              onTapDrawing={() => {
+              onTapDrawing={(hit) => {
                 // Tapping the drawing closes what's open beside it: an
                 // item's editor first (its text is saved), then the Items
-                // or Drawings panel.
+                // or Drawings panel. With nothing open it places an
+                // instruction pin.
                 if (selectedId) {
                   setJustPlaced(null);
                   select(null);
                   return;
                 }
-                setItemsOpen(false);
-                setDrawingsOpen(false);
+                if (itemsOpen || drawingsOpen) {
+                  setItemsOpen(false);
+                  setDrawingsOpen(false);
+                  return;
+                }
+                if (hit) void placePin(hit.page, hit.at);
               }}
               onSelectArrow={(itemId, arrowId) => {
                 select(itemId);

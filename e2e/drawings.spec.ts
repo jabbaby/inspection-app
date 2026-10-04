@@ -584,6 +584,29 @@ test("tapping the drawing closes the Items panel", async ({ page }) => {
   await expect(page.getByTestId("items-panel")).toHaveCount(0);
 });
 
+test("a tap on the drawing with nothing open places an instruction pin", async ({
+  page,
+}) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openDrawing(page, "S-101 Level 3");
+  const box = await stageBox(page);
+
+  // No Add pin: the tap places an instruction and opens it, ready to type.
+  await page.mouse.click(box.x + box.width * 0.4, box.y + box.height * 0.5);
+  await expect(pinByLetter(page, "A")).toBeVisible();
+  await expect(sheet(page).getByRole("textbox")).toBeFocused();
+  await typeItem(page, "Placed by a tap");
+
+  // A tap away only closes the open item; the next one places another pin.
+  await page.mouse.click(box.x + box.width * 0.7, box.y + box.height * 0.6);
+  await expect(sheet(page)).toHaveCount(0);
+  await expect(page.getByTestId("viewer-pin")).toHaveCount(1);
+  await page.mouse.click(box.x + box.width * 0.7, box.y + box.height * 0.6);
+  await expect(page.getByTestId("viewer-pin")).toHaveCount(2);
+  await expect(pinByLetter(page, "B")).toBeVisible();
+});
+
 test("tapping the drawing closes the item editor and keeps the text", async ({
   page,
 }) => {
