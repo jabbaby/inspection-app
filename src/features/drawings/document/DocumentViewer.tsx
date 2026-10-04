@@ -64,6 +64,11 @@ interface Props {
   onMovePinEnd: (id: string, to: Point) => void;
   onSelectPin: (id: string) => void;
   /**
+   * Tap, hold, (drag,) release on the drawing: a pin at the press point,
+   * with an arrow to the release point when dragged (on the same page).
+   */
+  onHoldPlace: (page: PageLayout, at: Point, tip: Point | null) => void;
+  /**
    * The second tap of a double-tap: on a pin (often the one the first tap
    * just placed), or on the drawing (with the spot, null between pages).
    */
@@ -100,6 +105,10 @@ const SCROLL_STOP_MS = 120;
 /** Two taps this close in time and space are a double-tap. */
 const DOUBLE_TAP_MS = 300;
 const DOUBLE_TAP_SLOP = 30;
+/** Holding this long without moving starts a pin with an arrow. */
+const HOLD_MS = 500;
+/** Released closer to the pin than this, the hold places just the pin. */
+const ARROW_MIN = 24;
 
 interface Tracked extends Point {
   type: string;
@@ -509,6 +518,20 @@ export function DocumentViewer(props: Props) {
 
   const pointers = useRef(new Map<number, Tracked>());
   const tap = useRef<{ id: number; start: Point; time: number } | null>(null);
+  /**
+   * A press that may become a hold: `held` once it has lasted HOLD_MS.
+   * Then the viewer owns the touch (no scrolling) until it lifts.
+   */
+  const hold = useRef<{
+    pointerId: number;
+    start: Point;
+    page: PageLayout;
+    at: Point;
+    timer: number;
+    held: boolean;
+    tip: Point | null;
+  } | null>(null);
+  const holdRef = useRef<HTMLDivElement>(null);
   /** The last tap (drawing or pin), to spot a double-tap. */
   const lastTap = useRef<{ at: Point; time: number } | null>(null);
   /** A touch that stopped a scroll: it never counts as a tap. */
@@ -577,9 +600,23 @@ export function DocumentViewer(props: Props) {
       pointers.current.size === 1
         ? { id: e.pointerId, start: p, time: e.timeStamp }
         : null;
+    cancelHold();
+    if (
+      tap.current &&
+      !latest.current.addPinMode &&
+      stopTouch.current !== e.pointerId
+    )
+      startHold(e.pointerId, p);
   }
 
   function onPointerMove(e: React.PointerEvent) {
+    const h = hold.current;
+    if (h?.pointerId === e.pointerId) {
+      if (h.held) return holdMove(local(e));
+      const q = local(e);
+      if (Math.hypot(q.x - h.start.x, q.y - h.start.y) >= TAP_SLOP)
+        cancelHold();
+    }
     const prev = pointers.current.get(e.pointerId);
     if (!prev) return;
     const p = local(e);
@@ -607,6 +644,20 @@ export function DocumentViewer(props: Props) {
   }
 
   function onPointerUp(e: React.PointerEvent) {
+    const h = hold.current;
+    if (h?.pointerId === e.pointerId) {
+      if (!h.held) {
+        cancelHold();
+      } else {
+        pointers.current.delete(e.pointerId);
+        tap.current = null;
+        if (e.type === "pointerup") holdEnd(local(e));
+        // A cancelled touch carries on: Safari may cancel the pointer
+        // while touch events (which hold the scroll off) keep coming.
+        else if (e.pointerType !== "touch") cancelHold();
+        return;
+      }
+    }
     if (!pointers.current.has(e.pointerId)) return;
     pointers.current.delete(e.pointerId);
     const pending = tap.current;
@@ -647,11 +698,106 @@ export function DocumentViewer(props: Props) {
     return second;
   }
 
+  // --- hold: a pin, then drag out an arrow --------------------------------
+
+  /** A point on the screen, in the scrolled content (where the layer is). */
+  function toContent(p: Point): Point {
+    const c = containerRef.current!;
+    return { x: p.x + c.scrollLeft, y: p.y + c.scrollTop };
+  }
+
+  function holdLine(from: Point, to: Point) {
+    const line = holdRef.current?.querySelector("line");
+    if (!line) return;
+    line.setAttribute("x1", String(from.x));
+    line.setAttribute("y1", String(from.y));
+    line.setAttribute("x2", String(to.x));
+    line.setAttribute("y2", String(to.y));
+  }
+
+  function showHold(state: "pending" | "held" | null) {
+    const layer = holdRef.current;
+    if (!layer) return;
+    if (state) layer.dataset.state = state;
+    else delete layer.dataset.state;
+  }
+
+  function startHold(pointerId: number, start: Point) {
+    const hit = hitPage(
+      currentLayout(),
+      screenToPage(currentTransform(), start),
+    );
+    if (!hit) return;
+    hold.current = {
+      pointerId,
+      start,
+      page: hit.page,
+      at: hit.at,
+      timer: window.setTimeout(fireHold, HOLD_MS),
+      held: false,
+      tip: null,
+    };
+    const c = toContent(start);
+    holdRef.current?.style.setProperty("--hold-x", `${c.x}px`);
+    holdRef.current?.style.setProperty("--hold-y", `${c.y}px`);
+    holdLine(c, c);
+    showHold("pending");
+  }
+
+  function fireHold() {
+    const h = hold.current;
+    // Still pressed and unmoved (a scroll or second finger cancels it).
+    if (!h || tap.current?.id !== h.pointerId) return cancelHold();
+    h.held = true;
+    tap.current = null;
+    lastTap.current = null;
+    showHold("held");
+  }
+
+  function cancelHold() {
+    const h = hold.current;
+    if (!h) return;
+    window.clearTimeout(h.timer);
+    hold.current = null;
+    showHold(null);
+  }
+
+  function holdMove(p: Point) {
+    const h = hold.current;
+    if (!h?.held) return;
+    if (Math.hypot(p.x - h.start.x, p.y - h.start.y) < ARROW_MIN) {
+      h.tip = null;
+    } else {
+      // The tip stays on the pin's page.
+      const doc = screenToPage(currentTransform(), p);
+      h.tip = clampNormalised({
+        x: doc.x / DOC_WIDTH,
+        y: (doc.y - h.page.top) / h.page.height,
+      });
+    }
+    const from = toContent(h.start);
+    const to = h.tip
+      ? toContent(
+          pageToScreen(currentTransform(), pagePointToDoc(h.page, h.tip)),
+        )
+      : from;
+    holdLine(from, to);
+  }
+
+  function holdEnd(p: Point) {
+    const h = hold.current;
+    if (!h?.held) return;
+    holdMove(p);
+    cancelHold();
+    latest.current.onHoldPlace(h.page, h.at, h.tip);
+  }
+
   // Native scrolling, touch pinch, Pencil and wheel zoom.
   useEffect(() => {
     const container = containerRef.current!;
     const onScroll = () => {
       lastScroll.current = performance.now();
+      if (hold.current && !hold.current.held) cancelHold();
       readScroll();
     };
 
@@ -711,9 +857,18 @@ export function DocumentViewer(props: Props) {
       // Two fingers: our pinch, not the browser's scroll or zoom.
       e.preventDefault();
       tap.current = null;
+      cancelHold();
       if (!pinch.current) startPinch(list);
     };
     const onTouchMove = (e: TouchEvent) => {
+      // After a hold the viewer owns the touch: the arrow follows it and
+      // the document stays still.
+      if (hold.current?.held) {
+        if (e.cancelable) e.preventDefault();
+        const t = e.touches[0];
+        if (t) holdMove(local(t));
+        return;
+      }
       // Pencil never scrolls (iPad marks it "stylus"; elsewhere a pen
       // pointer is down).
       if (hasStylus(e.touches) || penDown()) {
@@ -746,6 +901,12 @@ export function DocumentViewer(props: Props) {
       if (tap.current?.id === e.pointerId) tap.current = null;
     };
     const onTouchEnd = (e: TouchEvent) => {
+      // A hold whose pointer was cancelled ends with its touch.
+      const t = e.changedTouches?.[0];
+      if (hold.current?.held && e.touches.length === 0 && t) {
+        if (e.type === "touchend") holdEnd(local(t));
+        else cancelHold();
+      }
       const list = fingers(e.touches);
       if (!pinch.current) return;
       endPinch();
@@ -920,6 +1081,26 @@ export function DocumentViewer(props: Props) {
               registerRender={registerRender}
             />
           ))}
+        </div>
+        <div ref={holdRef} className="hold-layer" aria-hidden="true">
+          <svg className="hold-arrow">
+            <defs>
+              <marker
+                id="hold-arrow-head"
+                viewBox="0 0 10 10"
+                refX="8"
+                refY="5"
+                markerWidth="4"
+                markerHeight="4"
+                orient="auto"
+              >
+                <path d="M0 0L10 5L0 10z" />
+              </marker>
+            </defs>
+            <line markerEnd="url(#hold-arrow-head)" />
+          </svg>
+          <div className="hold-ring" />
+          <div className="hold-pin" />
         </div>
         <div className="viewer-pins">
           {pins.map((pin) => (

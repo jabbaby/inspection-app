@@ -745,6 +745,91 @@ dl.facts dd {
   pointer-events: none;
 }
 
+/* Tap and hold: a ring fills under the finger, then a pin appears and an
+   arrow follows the drag. Positioned in content pixels by the viewer. */
+.hold-layer {
+  position: absolute;
+  inset: 0;
+  display: none;
+  pointer-events: none;
+}
+
+.hold-layer[data-state] {
+  display: block;
+}
+
+.hold-arrow {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.hold-arrow line {
+  stroke: var(--brand-red);
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.hold-arrow path {
+  fill: var(--brand-red);
+}
+
+.hold-layer[data-state="pending"] .hold-arrow {
+  display: none;
+}
+
+.hold-ring,
+.hold-pin {
+  position: absolute;
+  left: var(--hold-x);
+  top: var(--hold-y);
+  border-radius: 50%;
+}
+
+.hold-ring {
+  width: 64px;
+  height: 64px;
+  margin: -32px 0 0 -32px;
+  border: 4px solid var(--brand-red);
+  opacity: 0;
+}
+
+.hold-layer[data-state="pending"] .hold-ring {
+  animation: hold-ring 500ms linear forwards;
+}
+
+.hold-layer[data-state="held"] .hold-ring {
+  opacity: 0.3;
+}
+
+@keyframes hold-ring {
+  0%,
+  30% {
+    opacity: 0;
+    transform: scale(1.5);
+  }
+  100% {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+}
+
+.hold-pin {
+  display: none;
+  width: 32px;
+  height: 32px;
+  margin: -16px 0 0 -16px;
+  border: 2px solid #fff;
+  background: var(--brand-red);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.35);
+}
+
+.hold-layer[data-state="held"] .hold-pin {
+  display: block;
+}
+
 .viewer-pin {
   position: absolute;
   left: 0;

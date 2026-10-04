@@ -657,6 +657,58 @@ test("a double-tap on a pin switches its kind; Undo switches it back", async ({
   await expect(pinByLetter(page, "A", "instruction")).toBeVisible();
 });
 
+test("hold then drag places a pin with an arrow; hold alone just the pin", async ({
+  page,
+}) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openDrawing(page, "S-101 Level 3");
+  const box = await stageBox(page);
+  const from = { x: box.x + box.width * 0.3, y: box.y + box.height * 0.4 };
+  const to = { x: box.x + box.width * 0.6, y: box.y + box.height * 0.6 };
+
+  // Hold, then drag: the pin stays where pressed, the arrow tip follows.
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.waitForTimeout(700);
+  await page.mouse.move(to.x, to.y, { steps: 10 });
+  await page.mouse.up();
+  await expect(pinByLetter(page, "A")).toBeVisible();
+  await expect(sheet(page)).toBeVisible();
+  const pin = await centre(pinByLetter(page, "A"));
+  expect(Math.abs(pin.x - from.x)).toBeLessThan(3);
+  expect(Math.abs(pin.y - from.y)).toBeLessThan(3);
+  const tip = await centre(page.getByTestId("arrow-handle"));
+  expect(Math.abs(tip.x - to.x)).toBeLessThan(3);
+  expect(Math.abs(tip.y - to.y)).toBeLessThan(3);
+  // One step: Undo removes the pin and its arrow.
+  const undo = page.getByRole("button", { name: "Undo" });
+  await expect(undo).toHaveAttribute("title", "Undo: Add instruction A");
+  await sheet(page).getByRole("button", { name: "Done" }).first().click();
+
+  // Hold without moving: just a pin.
+  const still = { x: box.x + box.width * 0.7, y: box.y + box.height * 0.3 };
+  await page.mouse.move(still.x, still.y);
+  await page.mouse.down();
+  await page.waitForTimeout(700);
+  await page.mouse.up();
+  await expect(page.getByTestId("viewer-pin")).toHaveCount(2);
+  await expect(page.getByTestId("arrow-handle")).toHaveCount(0);
+
+  // A quick drag (no hold) still pans; it places nothing.
+  await sheet(page).getByRole("button", { name: "Done" }).first().click();
+  await mouseDrag(
+    page,
+    { x: box.x + box.width * 0.5, y: box.y + box.height * 0.7 },
+    { x: box.x + box.width * 0.5, y: box.y + box.height * 0.5 },
+  );
+  await expect(page.getByTestId("viewer-pin")).toHaveCount(2);
+
+  await undo.click();
+  await undo.click();
+  await expect(page.getByTestId("viewer-pin")).toHaveCount(0);
+});
+
 test("tapping the drawing closes the item editor and keeps the text", async ({
   page,
 }) => {

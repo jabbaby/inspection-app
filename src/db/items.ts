@@ -3,6 +3,7 @@ import type { InspectionDb } from "./schema";
 import { photoBlobIds } from "./types";
 import type {
   Item,
+  ItemArrow,
   ItemKind,
   ObservationBox,
   Photo,
@@ -15,6 +16,8 @@ export interface NewItem {
   page: number;
   x: number;
   y: number;
+  /** Arrows placed with the pin (a hold and drag). */
+  arrows?: ItemArrow[];
 }
 
 /** Fields the item sheet and pin dragging can change. */
@@ -71,7 +74,7 @@ export async function createItem(
           ...existing.map((other) => other.createdAt + 1),
         ),
         sequence: 0,
-        arrows: [],
+        arrows: item.arrows ?? [],
       };
       // Placed last on its page.
       created.sequence = created.createdAt;

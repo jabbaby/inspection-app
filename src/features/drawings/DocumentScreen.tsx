@@ -19,7 +19,7 @@ import { QuickPhotoButton } from "../photos/QuickPhotoButton";
 import { DrawingsSection } from "./DrawingsSection";
 import { kindName } from "../items/letters";
 import { ArrowsOverlay } from "./ArrowsOverlay";
-import type { Drawing, Item } from "../../db/types";
+import type { Drawing, Item, ItemArrow } from "../../db/types";
 import { ItemSheet } from "../items/ItemSheet";
 import { ItemsPanel } from "../items/ItemsPanel";
 import {
@@ -255,10 +255,16 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
     setSelectedArrow(arrow.id);
   }
 
-  async function placePin(page: PageLayout, at: Point) {
+  async function placePin(page: PageLayout, at: Point, arrows?: ItemArrow[]) {
     setAddPinMode(false);
     const item = await createItemWithUndo(
-      { inspectionId, drawingId: page.drawingId, page: page.page, ...at },
+      {
+        inspectionId,
+        drawingId: page.drawingId,
+        page: page.page,
+        ...at,
+        arrows,
+      },
       defaultBoxPosition(page.size),
     );
     setJustPlaced(item.id);
@@ -414,6 +420,14 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
               onSelectPin={(itemId) => select(itemId)}
               onTapDrawing={tapDrawing}
               onDoubleTap={(target) => void doubleTap(target)}
+              onHoldPlace={(page, at, tip) => {
+                placedByTap.current = null;
+                void placePin(
+                  page,
+                  at,
+                  tip ? [{ id: crypto.randomUUID(), ...tip }] : [],
+                );
+              }}
               onSelectArrow={(itemId, arrowId) => {
                 select(itemId);
                 setSelectedArrow(arrowId);
