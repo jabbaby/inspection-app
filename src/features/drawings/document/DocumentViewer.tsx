@@ -12,7 +12,6 @@ import {
   clampNormalised,
   panBy,
   pageToScreen,
-  previewTransform,
   screenToPage,
   zoomAt,
   type Point,
@@ -22,6 +21,7 @@ import {
 import { kindName } from "../../items/letters";
 import { DocPage, type SettledView } from "./DocPage";
 import { DOUBLE_TAP_MS, DOUBLE_TAP_SLOP } from "./gestures";
+import { PinchSnapshot } from "./pinchSnapshot";
 import {
   DOC_WIDTH,
   hitPage,
@@ -175,6 +175,12 @@ export function DocumentViewer(props: Props) {
 
   const containerRef = useRef<HTMLDivElement>(null);
   const sizerRef = useRef<HTMLDivElement>(null);
+  /** The picture a pinch moves (see pinchSnapshot.ts), and its host. */
+  const snapshotHostRef = useRef<HTMLDivElement>(null);
+  const snapshot = useRef<PinchSnapshot | null>(null);
+  const snapshotRelease = useRef(0);
+  /** Pages on or near the screen (rendered), as last laid out. */
+  const activeRef = useRef<Set<string>>(new Set());
   const stageRef = useRef<HTMLDivElement>(null);
   const pinEls = useRef(new Map<string, HTMLElement>());
   const transform = useRef<ViewTransform>({ scale: 1, x: PAD, y: PAD });
@@ -283,12 +289,13 @@ export function DocumentViewer(props: Props) {
     const { top, bottom } = visibleDocRange(t);
     const span = bottom.y - top.y;
     const active = pagesInRange(currentLayout(), top.y, bottom.y, span);
-    setActiveKeys((old) => {
-      const next = new Set(active.map((p) => p.key));
-      return next.size === old.size && [...next].every((k) => old.has(k))
+    const nextActive = new Set(active.map((p) => p.key));
+    activeRef.current = nextActive;
+    setActiveKeys((old) =>
+      nextActive.size === old.size && [...nextActive].every((k) => old.has(k))
         ? old
-        : next;
-    });
+        : nextActive,
+    );
     // The current page is the one a third of the way down the view, where
     // the eye reads: with two short pages on screen (portrait), the centre
     // can fall on the next page while this one fills the top.
@@ -469,6 +476,7 @@ export function DocumentViewer(props: Props) {
   // Scroll requests (opening at a drawing or an item).
   useEffect(() => {
     if (!scrollTarget) return;
+    hideSnapshot();
     const page = pagesRef.current.get(scrollTarget.pageKey);
     if (!page) return;
     if (scrollTarget.at) {
@@ -499,6 +507,7 @@ export function DocumentViewer(props: Props) {
 
   useEffect(() => {
     if (!fitRequest) return;
+    hideSnapshot();
     const page = currentKey.current && pagesRef.current.get(currentKey.current);
     if (page) setTransform(fitPage(page));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -529,6 +538,7 @@ export function DocumentViewer(props: Props) {
   useEffect(() => {
     const container = containerRef.current!;
     const observer = new ResizeObserver(() => {
+      hideSnapshot();
       const old = viewSize.current;
       const { clientWidth: width, clientHeight: height } = container;
       if (width === old.width && height === old.height) return;
@@ -562,6 +572,65 @@ export function DocumentViewer(props: Props) {
     },
     [],
   );
+
+  // --- pinch snapshot -----------------------------------------------------
+
+  useEffect(() => {
+    const s = new PinchSnapshot(snapshotHostRef.current!);
+    snapshot.current = s;
+    return () => {
+      window.clearTimeout(snapshotRelease.current);
+      s.dispose();
+      snapshot.current = null;
+    };
+  }, []);
+
+  /** Shows a snapshot of the view, in place of the document, for a pinch. */
+  function captureSnapshot(base: ViewTransform) {
+    window.clearTimeout(snapshotRelease.current);
+    snapshot.current?.capture({
+      view: viewSize.current,
+      transform: base,
+      pages: currentLayout().pages,
+      pins: latest.current.pins,
+      container: containerRef.current!,
+    });
+  }
+
+  function hideSnapshot() {
+    window.clearTimeout(snapshotRelease.current);
+    snapshot.current?.hide();
+  }
+
+  /** Whether the pages on screen have drawn (and none is still sharpening). */
+  function pagesReady() {
+    if (renderCancels.current.size > 0) return false;
+    const container = containerRef.current!;
+    return [...activeRef.current].every(
+      (key) =>
+        container
+          .querySelector(`.doc-page[data-key="${CSS.escape(key)}"]`)
+          ?.getAttribute("data-rendered") === "true",
+    );
+  }
+
+  /**
+   * After a pinch the document is laid out at the new zoom under the
+   * snapshot (which already shows that zoom); the snapshot goes once the
+   * pages have redrawn and sharpened, so that work happens while nothing
+   * on screen moves.
+   */
+  function releaseSnapshotWhenReady() {
+    const start = msSince(0);
+    const check = () => {
+      const elapsed = msSince(start);
+      if ((elapsed > SETTLE_MS + 60 && pagesReady()) || elapsed > 1500)
+        return hideSnapshot();
+      snapshotRelease.current = window.setTimeout(check, 50);
+    };
+    window.clearTimeout(snapshotRelease.current);
+    snapshotRelease.current = window.setTimeout(check, SETTLE_MS + 60);
+  }
 
   // --- input --------------------------------------------------------------
 
@@ -600,7 +669,6 @@ export function DocumentViewer(props: Props) {
     frame: number;
     /** The view when the pinch started (what the content is laid out for). */
     base: ViewTransform;
-    scroll: Point;
     /** The view the fingers are asking for; laid out when they lift. */
     target: ViewTransform;
   } | null>(null);
@@ -646,6 +714,8 @@ export function DocumentViewer(props: Props) {
     // pointer whose "up" was lost, or every later tap would look like part
     // of a two-finger gesture and Add pin would stop working.
     if (e.isPrimary) pointers.current.clear();
+    // A touch already hid it (touchstart comes first).
+    if (e.pointerType !== "touch") hideSnapshot();
     if (e.pointerType === "mouse" && e.button !== 0) return;
     // Stop a mouse drag from selecting text around the viewer.
     if (e.pointerType === "mouse") {
@@ -940,7 +1010,6 @@ export function DocumentViewer(props: Props) {
         startMid: start.mid,
         origin,
         base,
-        scroll: { x: container.scrollLeft, y: container.scrollTop },
         target: base,
         frame: 0,
       };
@@ -948,30 +1017,25 @@ export function DocumentViewer(props: Props) {
       // no page drawing in progress (it redraws after the fingers lift).
       window.clearTimeout(settleTimer.current);
       for (const cancel of renderCancels.current) cancel();
-      // From fit (or near it) the content is small: one GPU picture,
-      // scaled, is smoothest. Zoomed in, the content is laid out huge and
-      // Safari would keep that picture at full detail, so zooming out would
-      // draw far more pixels than the screen shows; without the hint (and
-      // the page shadows) it redraws at screen resolution instead.
-      if (base.scale <= fitWidthScale.current * 1.5)
-        sizerRef.current!.style.willChange = "transform";
-      else container.classList.add("viewer-pinch-zoomed");
+      // The pinch moves a screen-sized snapshot; the document stays still.
+      captureSnapshot(base);
     };
     const endPinch = () => {
       const p = pinch.current;
       if (!p) return;
       pinch.current = null;
       cancelAnimationFrame(p.frame);
-      Object.assign(sizerRef.current!.style, {
-        transform: "",
-        willChange: "",
-      });
-      container.classList.remove("viewer-pinch-zoomed");
+      // Laid out at the new zoom under the snapshot, which shows it already.
       setTransform(p.target);
+      releaseSnapshotWhenReady();
     };
     const onTouchStart = (e: TouchEvent) => {
       const list = fingers(e.touches);
-      if (list.length < 2) return;
+      if (list.length < 2) {
+        // A new touch works on the real document (a scroll, a tap): show it.
+        if (!pinch.current) hideSnapshot();
+        return;
+      }
       // Two fingers: our pinch, not the browser's scroll or zoom.
       e.preventDefault();
       tap.current = null;
@@ -1008,8 +1072,7 @@ export function DocumentViewer(props: Props) {
       if (!p.frame) {
         p.frame = requestAnimationFrame(() => {
           p.frame = 0;
-          const t = previewTransform(p.base, p.target, p.scroll);
-          sizerRef.current!.style.transform = `translate(${t.x}px, ${t.y}px) scale(${t.k})`;
+          snapshot.current?.move(p.target);
         });
       }
     };
@@ -1036,6 +1099,7 @@ export function DocumentViewer(props: Props) {
     const onWheel = (e: WheelEvent) => {
       if (!e.ctrlKey && !e.metaKey) return;
       e.preventDefault();
+      hideSnapshot();
       setTransform(
         zoomAt(
           currentTransform(),
@@ -1190,124 +1254,135 @@ export function DocumentViewer(props: Props) {
   const ready = currentPageKey !== null && renderedKeys.has(currentPageKey);
 
   return (
-    <div
-      ref={containerRef}
-      className={`viewer${addPinMode ? " viewer-add-pin" : ""}`}
-      data-testid="drawing-viewer"
-      data-ready={ready}
-      onPointerDownCapture={onPointerDownCapture}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
-    >
-      <div ref={sizerRef} className="doc-sizer">
-        <div
-          ref={stageRef}
-          className="doc-stage"
-          style={{ width: DOC_WIDTH, height: layout.height }}
-        >
-          {layout.pages.map((page) => (
-            <DocPage
-              key={page.key}
-              page={page}
-              doc={docs.get(page.drawingId)}
-              active={activeKeys.has(page.key)}
-              view={settled}
-              overlay={
-                activeKeys.has(page.key) ? props.renderPageOverlay(page) : null
-              }
-              clientToNormalised={coordFns.get(page.key)!}
-              onRendered={onRendered}
-              registerRender={registerRender}
-            />
-          ))}
-        </div>
-        <div ref={holdRef} className="hold-layer" aria-hidden="true">
-          <svg className="hold-arrow">
-            <defs>
-              <marker
-                id="hold-arrow-head"
-                viewBox="0 0 10 10"
-                refX="8"
-                refY="5"
-                markerWidth="4"
-                markerHeight="4"
-                orient="auto"
+    <>
+      <div
+        ref={containerRef}
+        className={`viewer${addPinMode ? " viewer-add-pin" : ""}`}
+        data-testid="drawing-viewer"
+        data-ready={ready}
+        onPointerDownCapture={onPointerDownCapture}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+      >
+        <div ref={sizerRef} className="doc-sizer">
+          <div
+            ref={stageRef}
+            className="doc-stage"
+            style={{ width: DOC_WIDTH, height: layout.height }}
+          >
+            {layout.pages.map((page) => (
+              <DocPage
+                key={page.key}
+                page={page}
+                doc={docs.get(page.drawingId)}
+                active={activeKeys.has(page.key)}
+                view={settled}
+                overlay={
+                  activeKeys.has(page.key)
+                    ? props.renderPageOverlay(page)
+                    : null
+                }
+                clientToNormalised={coordFns.get(page.key)!}
+                onRendered={onRendered}
+                registerRender={registerRender}
+              />
+            ))}
+          </div>
+          <div ref={holdRef} className="hold-layer" aria-hidden="true">
+            <svg className="hold-arrow">
+              <defs>
+                <marker
+                  id="hold-arrow-head"
+                  viewBox="0 0 10 10"
+                  refX="8"
+                  refY="5"
+                  markerWidth="4"
+                  markerHeight="4"
+                  orient="auto"
+                >
+                  <path d="M0 0L10 5L0 10z" />
+                </marker>
+              </defs>
+              <line markerEnd="url(#hold-arrow-head)" />
+            </svg>
+            <div className="hold-ring" />
+            <div className="hold-pin" />
+          </div>
+          <div className="viewer-pins">
+            {pins.map((pin) => (
+              <button
+                key={pin.id}
+                type="button"
+                className={[
+                  "viewer-pin",
+                  pin.kind === "observation" ? "viewer-pin-observation" : "",
+                  pin.selected ? "viewer-pin-selected" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                data-testid="viewer-pin"
+                data-kind={pin.kind}
+                data-letter={pin.letter}
+                data-page={pin.pageKey}
+                data-x={pin.x.toFixed(4)}
+                data-y={pin.y.toFixed(4)}
+                aria-label={`${kindName(pin.kind)} pin ${pin.letter}`}
+                ref={(el) => {
+                  if (el) pinEls.current.set(pin.id, el);
+                  else pinEls.current.delete(pin.id);
+                }}
+                onPointerDown={(e) => onPinPointerDown(e, pin.id)}
+                onPointerMove={(e) => onPinPointerMove(e, pin)}
+                onPointerUp={onPinPointerUp}
+                onPointerCancel={onPinPointerUp}
               >
-                <path d="M0 0L10 5L0 10z" />
-              </marker>
-            </defs>
-            <line markerEnd="url(#hold-arrow-head)" />
-          </svg>
-          <div className="hold-ring" />
-          <div className="hold-pin" />
-        </div>
-        <div className="viewer-pins">
-          {pins.map((pin) => (
-            <button
-              key={pin.id}
-              type="button"
-              className={[
-                "viewer-pin",
-                pin.kind === "observation" ? "viewer-pin-observation" : "",
-                pin.selected ? "viewer-pin-selected" : "",
-              ]
-                .filter(Boolean)
-                .join(" ")}
-              data-testid="viewer-pin"
-              data-kind={pin.kind}
-              data-letter={pin.letter}
-              data-page={pin.pageKey}
-              data-x={pin.x.toFixed(4)}
-              data-y={pin.y.toFixed(4)}
-              aria-label={`${kindName(pin.kind)} pin ${pin.letter}`}
-              ref={(el) => {
-                if (el) pinEls.current.set(pin.id, el);
-                else pinEls.current.delete(pin.id);
-              }}
-              onPointerDown={(e) => onPinPointerDown(e, pin.id)}
-              onPointerMove={(e) => onPinPointerMove(e, pin)}
-              onPointerUp={onPinPointerUp}
-              onPointerCancel={onPinPointerUp}
-            >
-              {pin.letter}
-            </button>
-          ))}
-          {pins
-            .filter((pin) => pin.selected)
-            .flatMap((pin) =>
-              pin.arrows.map((arrow, i) => (
-                <button
-                  key={`${pin.id}:${arrow.id}`}
-                  type="button"
-                  className={[
-                    "arrow-handle",
-                    arrow.id === pin.selectedArrowId
-                      ? "arrow-handle-selected"
-                      : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                  data-testid="arrow-handle"
-                  data-x={arrow.x.toFixed(4)}
-                  data-y={arrow.y.toFixed(4)}
-                  aria-label={`Arrow ${i + 1} of ${kindName(pin.kind).toLowerCase()} ${pin.letter}`}
-                  aria-pressed={arrow.id === pin.selectedArrowId}
-                  ref={(el) => {
-                    const key = `${pin.id}:${arrow.id}`;
-                    if (el) pinEls.current.set(key, el);
-                    else pinEls.current.delete(key);
-                  }}
-                  onPointerDown={(e) => onPinPointerDown(e, pin.id, arrow.id)}
-                  onPointerMove={(e) => onPinPointerMove(e, pin)}
-                  onPointerUp={onPinPointerUp}
-                  onPointerCancel={onPinPointerUp}
-                />
-              )),
-            )}
+                {pin.letter}
+              </button>
+            ))}
+            {pins
+              .filter((pin) => pin.selected)
+              .flatMap((pin) =>
+                pin.arrows.map((arrow, i) => (
+                  <button
+                    key={`${pin.id}:${arrow.id}`}
+                    type="button"
+                    className={[
+                      "arrow-handle",
+                      arrow.id === pin.selectedArrowId
+                        ? "arrow-handle-selected"
+                        : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                    data-testid="arrow-handle"
+                    data-x={arrow.x.toFixed(4)}
+                    data-y={arrow.y.toFixed(4)}
+                    aria-label={`Arrow ${i + 1} of ${kindName(pin.kind).toLowerCase()} ${pin.letter}`}
+                    aria-pressed={arrow.id === pin.selectedArrowId}
+                    ref={(el) => {
+                      const key = `${pin.id}:${arrow.id}`;
+                      if (el) pinEls.current.set(key, el);
+                      else pinEls.current.delete(key);
+                    }}
+                    onPointerDown={(e) => onPinPointerDown(e, pin.id, arrow.id)}
+                    onPointerMove={(e) => onPinPointerMove(e, pin)}
+                    onPointerUp={onPinPointerUp}
+                    onPointerCancel={onPinPointerUp}
+                  />
+                )),
+              )}
+          </div>
         </div>
       </div>
-    </div>
+      {/* The pinch snapshot, over the viewer (pinchSnapshot.ts). */}
+      <div
+        ref={snapshotHostRef}
+        className="viewer-snapshot"
+        data-testid="pinch-snapshot"
+        aria-hidden="true"
+      />
+    </>
   );
 }

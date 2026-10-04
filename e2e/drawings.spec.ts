@@ -381,7 +381,7 @@ test("dragged pins and boxes keep their new positions", async ({ page }) => {
   expect(Number(await obsBox.getAttribute("data-y"))).toBeGreaterThan(0.7);
 });
 
-test("a pinch previews as a picture and lays out once, around the fingers", async ({
+test("a pinch moves a snapshot and lays out once, around the fingers", async ({
   page,
 }) => {
   await setupInspection(page);
@@ -391,8 +391,10 @@ test("a pinch previews as a picture and lays out once, around the fingers", asyn
   await sheet(page).getByRole("button", { name: "Done" }).first().click();
   const pin = pinByLetter(page, "A");
   const at = await centre(pin);
+  const snapshot = page.getByTestId("pinch-snapshot");
 
-  // Fingers down and apart, but not lifted yet.
+  // Fingers down and apart, but not lifted yet: only the snapshot moves;
+  // the document isn't scrolled, laid out or transformed.
   const mid = await page.evaluate(async (at) => {
     const el = document.querySelector<HTMLElement>(
       '[data-testid="drawing-viewer"]',
@@ -408,72 +410,90 @@ test("a pinch previews as a picture and lays out once, around the fingers", asyn
       el.dispatchEvent(event);
     };
     const stage = el.querySelector<HTMLElement>(".doc-stage")!;
+    const sizer = el.querySelector<HTMLElement>(".doc-sizer")!;
     const before = { scrollTop: el.scrollTop, stage: stage.style.transform };
     fire("touchstart", 100);
     for (let d = 110; d <= 200; d += 10) fire("touchmove", d);
     // The preview updates once per frame.
     await new Promise((r) => requestAnimationFrame(() => r(null)));
-    const sizer = el.querySelector<HTMLElement>(".doc-sizer")!;
+    const layer = document.querySelector<HTMLElement>(
+      ".viewer-snapshot-layer",
+    )!;
     return {
       unchanged:
         el.scrollTop === before.scrollTop &&
-        stage.style.transform === before.stage,
-      previewing: sizer.style.transform.includes("scale(2)"),
+        stage.style.transform === before.stage &&
+        !sizer.style.transform,
+      previewing: layer.style.transform.includes("scale(2)"),
     };
   }, at);
   expect(mid).toEqual({ unchanged: true, previewing: true });
-  // The point between the fingers stays put while previewing...
-  let now = await centre(pin);
-  expect(Math.abs(now.x - at.x)).toBeLessThan(3);
-  expect(Math.abs(now.y - at.y)).toBeLessThan(3);
+  await expect(snapshot).toHaveAttribute("data-on", "");
 
-  // ...and after the fingers lift and the zoom is laid out.
+  // Lifted: laid out at the new zoom around the fingers, and the snapshot
+  // goes once the pages have redrawn.
   await page.evaluate(() => {
     const el = document.querySelector('[data-testid="drawing-viewer"]')!;
     const event = new Event("touchend", { bubbles: true, cancelable: true });
     Object.defineProperty(event, "touches", { value: [] });
     el.dispatchEvent(event);
   });
-  await expect(page.locator(".doc-sizer")).not.toHaveAttribute(
-    "style",
-    /scale/,
-  );
-  now = await centre(pin);
+  await expect(snapshot).not.toHaveAttribute("data-on");
+  const now = await centre(pin);
   expect(Math.abs(now.x - at.x)).toBeLessThan(3);
   expect(Math.abs(now.y - at.y)).toBeLessThan(3);
 });
 
-test("a pinch that starts zoomed in isn't held as one GPU picture", async ({
+test("the pinch snapshot shows the page and its pins, zoomed in too", async ({
   page,
 }) => {
   await setupInspection(page);
   await uploadDrawings(page, [await typicalPdf()]);
   await openDrawing(page, "S-101 Level 3");
+  await addPinAt(page, 0.4, 0.4);
+  await sheet(page).getByRole("button", { name: "Done" }).first().click();
   const viewer = page.getByTestId("drawing-viewer");
-  const at = await centre(viewer);
-  const startPinch = (from: number, to: number) =>
+  const snapshot = page.getByTestId("pinch-snapshot");
+
+  /** Fingers down at `at` (d px apart, no zoom yet); colours under the pin. */
+  const press = (
+    at: { x: number; y: number },
+    pinAt: { x: number; y: number },
+  ) =>
     page.evaluate(
-      ({ at, from, to }) => {
+      ({ at, pinAt }) => {
         const el = document.querySelector('[data-testid="drawing-viewer"]')!;
-        const fire = (type: string, d: number) => {
-          const event = new Event(type, { bubbles: true, cancelable: true });
-          Object.defineProperty(event, "touches", {
-            value: [
-              { clientX: at.x - d / 2, clientY: at.y },
-              { clientX: at.x + d / 2, clientY: at.y },
-            ],
-          });
-          el.dispatchEvent(event);
-        };
-        fire("touchstart", from);
-        fire("touchmove", to);
-        const sizer = el.querySelector<HTMLElement>(".doc-sizer")!;
-        return {
-          willChange: sizer.style.willChange,
-          zoomed: el.classList.contains("viewer-pinch-zoomed"),
-        };
+        const event = new Event("touchstart", {
+          bubbles: true,
+          cancelable: true,
+        });
+        Object.defineProperty(event, "touches", {
+          value: [
+            { clientX: at.x - 50, clientY: at.y },
+            { clientX: at.x + 50, clientY: at.y },
+          ],
+        });
+        el.dispatchEvent(event);
+        const host = document.querySelector<HTMLElement>(
+          '[data-testid="pinch-snapshot"]',
+        )!;
+        const canvas = host.querySelectorAll("canvas")[1];
+        const box = host.getBoundingClientRect();
+        const k = canvas.width / box.width;
+        const pixel = (x: number, y: number) => [
+          ...canvas
+            .getContext("2d")!
+            .getImageData(
+              Math.round((x - box.left) * k),
+              Math.round((y - box.top) * k),
+              1,
+              1,
+            ).data,
+        ];
+        // Beside the pin's letter, inside its red disc.
+        return { pin: pixel(pinAt.x + 10, pinAt.y) };
       },
-      { at, from, to },
+      { at, pinAt },
     );
   const lift = () =>
     page.evaluate(() => {
@@ -482,17 +502,23 @@ test("a pinch that starts zoomed in isn't held as one GPU picture", async ({
       Object.defineProperty(event, "touches", { value: [] });
       el.dispatchEvent(event);
     });
+  const isRed = ([r, g, b]: number[]) => r > 170 && g < 90 && b < 100;
 
-  // From fit: the content is promoted to one picture for the pinch.
-  expect(await startPinch(100, 300)).toEqual({
-    willChange: "transform",
-    zoomed: false,
-  });
+  // At fit width.
+  let pinAt = await centre(pinByLetter(page, "A"));
+  let seen = await press(await centre(viewer), pinAt);
+  expect(isRed(seen.pin)).toBe(true);
   await lift();
-  // Now zoomed in (3x): the next pinch (out) redraws at screen resolution.
-  expect(await startPinch(300, 100)).toEqual({ willChange: "", zoomed: true });
+  await expect(snapshot).not.toHaveAttribute("data-on");
+
+  // Zoom in around the pin, then press again: still drawn, now larger.
+  await pinch(page, pinAt, 100, 300);
+  await expect(snapshot).not.toHaveAttribute("data-on");
+  pinAt = await centre(pinByLetter(page, "A"));
+  seen = await press(pinAt, pinAt);
+  expect(isRed(seen.pin)).toBe(true);
   await lift();
-  await expect(viewer).not.toHaveClass(/viewer-pinch-zoomed/);
+  await expect(snapshot).not.toHaveAttribute("data-on");
 });
 
 test("pins stay on their spot through a pinch zoom", async ({ page }) => {

@@ -1070,9 +1070,31 @@ dl.facts dd {
   overflow: hidden;
 }
 
-/* A pinch that started zoomed in: no shadows to redraw every frame. */
-.viewer-pinch-zoomed .doc-page {
-  box-shadow: none;
+/* The picture a pinch moves, over the still document (pinchSnapshot.ts). */
+.viewer-snapshot {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: none;
+  overflow: hidden;
+  pointer-events: none;
+  background: var(--viewer-bg);
+}
+
+.viewer-snapshot[data-on] {
+  display: block;
+}
+
+.viewer-snapshot-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.viewer-snapshot-layer canvas {
+  position: absolute;
 }
 
 .doc-page-inner {
