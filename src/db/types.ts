@@ -117,6 +117,23 @@ export interface Item {
   sequence: number;
   /** Arrows from the pin to the spots it refers to, on the same page. */
   arrows: ItemArrow[];
+  /**
+   * More spots the same item is pinned at (Copy pin): same letter, text and
+   * photos. The original position above decides the letter; copies never
+   * re-letter anything. Each copy has its own arrows.
+   */
+  copies?: PinCopy[];
+}
+
+/** Another spot an item is pinned at (any drawing and page). */
+export interface PinCopy {
+  id: string;
+  drawingId: string;
+  /** 1-based position in that drawing's pages. */
+  page: number;
+  x: number;
+  y: number;
+  arrows: ItemArrow[];
 }
 
 /** An arrow's tip, in normalised coordinates (0..1) of the item's page. */

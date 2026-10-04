@@ -1,4 +1,5 @@
 import { indexForLetter, letterForIndex } from "../features/items/letters";
+import { isOnPage, itemSpots } from "../features/items/spots";
 import type { InspectionDb } from "./schema";
 import { photoBlobIds } from "./types";
 import type {
@@ -7,6 +8,7 @@ import type {
   ItemKind,
   ObservationBox,
   Photo,
+  PinCopy,
   StoredBlob,
 } from "./types";
 
@@ -191,8 +193,8 @@ export interface DeletedItem {
   item: Item;
   photos: Photo[];
   blobs: StoredBlob[];
-  /** The page's notes box, if the item was its last pin. */
-  box: ObservationBox | null;
+  /** Notes boxes of pages where it (or a copy) was the last pin. */
+  boxes: ObservationBox[];
 }
 
 /**
@@ -225,22 +227,19 @@ export async function deleteItem(
         await db.blobs.bulkGet(photos.flatMap(photoBlobIds))
       ).filter((b) => b !== undefined);
       await deleteItemRecords(db, [item]);
-      const remaining = await db.items
-        .where("drawingId")
-        .equals(item.drawingId)
-        .filter((other) => other.page === item.page)
-        .count();
-      let box: ObservationBox | null = null;
-      if (remaining === 0) {
-        const pageBox = db.observationBoxes
-          .where("[drawingId+page]")
-          .equals([item.drawingId, item.page]);
-        box = (await pageBox.first()) ?? null;
-        await pageBox.delete();
+      const boxes: ObservationBox[] = [];
+      for (const spot of itemSpots(item)) {
+        const box = await removeBoxIfEmpty(
+          db,
+          item.inspectionId,
+          spot.drawingId,
+          spot.page,
+        );
+        if (box) boxes.push(box);
       }
       await reletterInspection(db, item.inspectionId);
       await touchInspection(db, item.inspectionId, now);
-      return { item, photos, blobs, box };
+      return { item, photos, blobs, boxes };
     },
   );
 }
@@ -269,12 +268,25 @@ export async function restoreItem(
       if (!(await db.drawings.get(item.drawingId))) return;
       await db.blobs.bulkPut(deleted.blobs);
       await db.photos.bulkPut(deleted.photos);
-      await db.items.put(item);
-      const box = await db.observationBoxes
-        .where("[drawingId+page]")
-        .equals([item.drawingId, item.page])
-        .first();
-      if (!box && deleted.box) await db.observationBoxes.put(deleted.box);
+      // Copies on drawings deleted since are left out.
+      const drawingIds = new Set(
+        (await db.drawings
+          .where("inspectionId")
+          .equals(item.inspectionId)
+          .primaryKeys()) as string[],
+      );
+      await db.items.put({
+        ...item,
+        copies: item.copies?.filter((c) => drawingIds.has(c.drawingId)),
+      });
+      for (const box of deleted.boxes) {
+        if (!drawingIds.has(box.drawingId)) continue;
+        const existing = await db.observationBoxes
+          .where("[drawingId+page]")
+          .equals([box.drawingId, box.page])
+          .first();
+        if (!existing) await db.observationBoxes.put(box);
+      }
       await reletterInspection(db, item.inspectionId);
       await touchInspection(db, item.inspectionId, now);
     },
@@ -336,4 +348,272 @@ export async function moveObservationBox(
       await touchInspection(db, inspectionId, now);
     },
   );
+}
+
+/** Whether any item of the inspection has a pin (or copy) on a page. */
+export async function pageHasPins(
+  db: InspectionDb,
+  inspectionId: string,
+  drawingId: string,
+  page: number,
+): Promise<boolean> {
+  const items = await db.items
+    .where("inspectionId")
+    .equals(inspectionId)
+    .toArray();
+  return items.some((item) => isOnPage(item, drawingId, page));
+}
+
+/** Removes a page's notes box once it has no pins; returns it (for undo). */
+async function removeBoxIfEmpty(
+  db: InspectionDb,
+  inspectionId: string,
+  drawingId: string,
+  page: number,
+): Promise<ObservationBox | null> {
+  if (await pageHasPins(db, inspectionId, drawingId, page)) return null;
+  const pageBox = db.observationBoxes
+    .where("[drawingId+page]")
+    .equals([drawingId, page]);
+  const box = (await pageBox.first()) ?? null;
+  await pageBox.delete();
+  return box;
+}
+
+/** Gives a page a notes box (at `position`) if it has none. */
+async function ensureBox(
+  db: InspectionDb,
+  drawingId: string,
+  page: number,
+  position: { x: number; y: number },
+): Promise<void> {
+  const box = await db.observationBoxes
+    .where("[drawingId+page]")
+    .equals([drawingId, page])
+    .first();
+  if (!box)
+    await db.observationBoxes.add({
+      id: crypto.randomUUID(),
+      drawingId,
+      page,
+      ...position,
+    });
+}
+
+const COPY_TABLES = (db: InspectionDb) => [
+  db.inspections,
+  db.drawings,
+  db.items,
+  db.observationBoxes,
+];
+
+/**
+ * Pins the item at another spot (Copy pin): same letter, text and photos.
+ * Copies never re-letter anything. The first pin on a page also creates
+ * its notes box at `boxPosition`.
+ */
+export async function addCopy(
+  db: InspectionDb,
+  itemId: string,
+  spot: { drawingId: string; page: number; x: number; y: number },
+  boxPosition: { x: number; y: number },
+  now = Date.now(),
+): Promise<PinCopy> {
+  return db.transaction("rw", COPY_TABLES(db), async () => {
+    const item = await db.items.get(itemId);
+    if (!item) throw new Error(`Item ${itemId} not found`);
+    const copy: PinCopy = { id: crypto.randomUUID(), ...spot, arrows: [] };
+    await db.items.update(itemId, { copies: [...(item.copies ?? []), copy] });
+    await ensureBox(db, spot.drawingId, spot.page, boxPosition);
+    await touchInspection(db, item.inspectionId, now);
+    return copy;
+  });
+}
+
+/** What removeCopy took away, so restoreCopy can put it back. */
+export interface RemovedCopy {
+  itemId: string;
+  copy: PinCopy;
+  /** Its place in the item's copies. */
+  index: number;
+  /** The page's notes box, if the copy was its last pin. */
+  box: ObservationBox | null;
+}
+
+/** Removes one copy (the item and its other spots stay). */
+export async function removeCopy(
+  db: InspectionDb,
+  itemId: string,
+  copyId: string,
+  now = Date.now(),
+): Promise<RemovedCopy | null> {
+  return db.transaction("rw", COPY_TABLES(db), async () => {
+    const item = await db.items.get(itemId);
+    const copies = item?.copies ?? [];
+    const index = copies.findIndex((c) => c.id === copyId);
+    if (!item || index < 0) return null;
+    const copy = copies[index];
+    await db.items.update(itemId, {
+      copies: copies.filter((c) => c.id !== copyId),
+    });
+    const box = await removeBoxIfEmpty(
+      db,
+      item.inspectionId,
+      copy.drawingId,
+      copy.page,
+    );
+    await touchInspection(db, item.inspectionId, now);
+    return { itemId, copy, index, box };
+  });
+}
+
+/** Puts a removed copy back (undo), unless its item or drawing has gone. */
+export async function restoreCopy(
+  db: InspectionDb,
+  removed: RemovedCopy,
+  now = Date.now(),
+): Promise<void> {
+  await db.transaction("rw", COPY_TABLES(db), async () => {
+    const item = await db.items.get(removed.itemId);
+    if (!item || !(await db.drawings.get(removed.copy.drawingId))) return;
+    const copies = [...(item.copies ?? [])].filter(
+      (c) => c.id !== removed.copy.id,
+    );
+    copies.splice(removed.index, 0, removed.copy);
+    await db.items.update(item.id, { copies });
+    const { drawingId, page } = removed.copy;
+    if (removed.box) await ensureBox(db, drawingId, page, removed.box);
+    await touchInspection(db, item.inspectionId, now);
+  });
+}
+
+/** Moves a copy or changes its arrows. */
+export async function updateCopy(
+  db: InspectionDb,
+  itemId: string,
+  copyId: string,
+  patch: Partial<Pick<PinCopy, "x" | "y" | "arrows">>,
+  now = Date.now(),
+): Promise<void> {
+  await db.transaction("rw", [db.inspections, db.items], async () => {
+    const item = await db.items.get(itemId);
+    if (!item) return;
+    await db.items.update(itemId, {
+      copies: (item.copies ?? []).map((c) =>
+        c.id === copyId ? { ...c, ...patch } : c,
+      ),
+    });
+    await touchInspection(db, item.inspectionId, now);
+  });
+}
+
+/**
+ * The item with its first copy in document order (drawing order, then
+ * page, then placement) made the original pin, leaving out copies on
+ * `skipDrawingId`. Null when there is no copy to promote.
+ */
+export function promoteCopy(
+  item: Item,
+  drawingOrder: string[],
+  skipDrawingId?: string,
+): Item | null {
+  const rank = (id: string) => {
+    const i = drawingOrder.indexOf(id);
+    return i < 0 ? Infinity : i;
+  };
+  const candidates = (item.copies ?? []).filter(
+    (c) => c.drawingId !== skipDrawingId,
+  );
+  if (candidates.length === 0) return null;
+  const first = [...candidates].sort(
+    (a, b) => rank(a.drawingId) - rank(b.drawingId) || a.page - b.page,
+  )[0];
+  return {
+    ...item,
+    drawingId: first.drawingId,
+    page: first.page,
+    x: first.x,
+    y: first.y,
+    arrows: first.arrows,
+    // Last on its new page, like a new pin.
+    sequence: Date.now(),
+    copies: candidates.filter((c) => c.id !== first.id),
+  };
+}
+
+/** An inspection's drawing ids in document order. */
+async function drawingOrder(
+  db: InspectionDb,
+  inspectionId: string,
+): Promise<string[]> {
+  const drawings = await db.drawings
+    .where("inspectionId")
+    .equals(inspectionId)
+    .toArray();
+  return drawings.sort((a, b) => a.createdAt - b.createdAt).map((d) => d.id);
+}
+
+/** What removeOriginalSpot changed, for undo. */
+export interface RemovedOriginal {
+  before: Item;
+  box: ObservationBox | null;
+}
+
+/**
+ * Removes an item's original pin when it has copies: the first copy in
+ * document order becomes the original (its place decides the letter, so
+ * letters may change). Null when there's no copy to promote.
+ */
+export async function removeOriginalSpot(
+  db: InspectionDb,
+  itemId: string,
+  now = Date.now(),
+): Promise<RemovedOriginal | null> {
+  return db.transaction("rw", COPY_TABLES(db), async () => {
+    const item = await db.items.get(itemId);
+    if (!item) return null;
+    const promoted = promoteCopy(
+      item,
+      await drawingOrder(db, item.inspectionId),
+    );
+    if (!promoted) return null;
+    await db.items.put(promoted);
+    const box = await removeBoxIfEmpty(
+      db,
+      item.inspectionId,
+      item.drawingId,
+      item.page,
+    );
+    await reletterInspection(db, item.inspectionId);
+    await touchInspection(db, item.inspectionId, now);
+    return { before: item, box };
+  });
+}
+
+/** Undoes removeOriginalSpot. */
+export async function restoreOriginalSpot(
+  db: InspectionDb,
+  removed: RemovedOriginal,
+  now = Date.now(),
+): Promise<void> {
+  await db.transaction("rw", COPY_TABLES(db), async () => {
+    const { before } = removed;
+    const current = await db.items.get(before.id);
+    if (!current || !(await db.drawings.get(before.drawingId))) return;
+    // Keep text, kind and photos as they are now; put the spots back.
+    await db.items.put({
+      ...current,
+      drawingId: before.drawingId,
+      page: before.page,
+      x: before.x,
+      y: before.y,
+      arrows: before.arrows,
+      sequence: before.sequence,
+      copies: before.copies,
+    });
+    if (removed.box)
+      await ensureBox(db, before.drawingId, before.page, removed.box);
+    await reletterInspection(db, before.inspectionId);
+    await touchInspection(db, before.inspectionId, now);
+  });
 }

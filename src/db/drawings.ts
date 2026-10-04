@@ -1,10 +1,11 @@
 import {
   deleteItemRecords,
+  promoteCopy,
   reletterInspection,
   touchInspection,
 } from "./items";
 import type { InspectionDb } from "./schema";
-import type { Drawing } from "./types";
+import type { Drawing, Item } from "./types";
 
 export interface NewDrawing {
   name: string;
@@ -122,8 +123,27 @@ export async function deleteDrawing(
     async () => {
       const drawing = await db.drawings.get(id);
       if (!drawing) return;
-      const items = await db.items.where("drawingId").equals(id).toArray();
-      await deleteItemRecords(db, items);
+      const order = (await listDrawings(db, drawing.inspectionId)).map(
+        (d) => d.id,
+      );
+      const all = await db.items
+        .where("inspectionId")
+        .equals(drawing.inspectionId)
+        .toArray();
+      const doomed: Item[] = [];
+      for (const item of all) {
+        if (item.drawingId === id) {
+          // Pinned elsewhere too: a copy on another drawing takes over.
+          const promoted = promoteCopy(item, order, id);
+          if (promoted) await db.items.put(promoted);
+          else doomed.push(item);
+        } else if ((item.copies ?? []).some((c) => c.drawingId === id)) {
+          await db.items.update(item.id, {
+            copies: item.copies!.filter((c) => c.drawingId !== id),
+          });
+        }
+      }
+      await deleteItemRecords(db, doomed);
       await db.observationBoxes.filter((box) => box.drawingId === id).delete();
       await db.blobs.delete(drawing.pdfBlobId);
       await db.drawings.delete(id);

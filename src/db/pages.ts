@@ -5,6 +5,7 @@
  * hidden. Items and notes boxes refer to positions, so hiding moves
  * nothing, and duplicating moves the pins and boxes of later pages along.
  */
+import { itemSpots } from "../features/items/spots";
 import { reletterInspection, touchInspection } from "./items";
 import type { InspectionDb } from "./schema";
 import type { Drawing, DrawingPage, Item } from "./types";
@@ -16,11 +17,37 @@ function pagesOf(drawing: Drawing): DrawingPage[] {
   );
 }
 
-/** Positions (1-based) on a drawing that have pins. */
+/** Positions (1-based) on a drawing that have pins (copies included). */
 export function markedPositions(drawingId: string, items: Item[]): Set<number> {
   return new Set(
-    items.filter((item) => item.drawingId === drawingId).map((i) => i.page),
+    items
+      .flatMap(itemSpots)
+      .filter((spot) => spot.drawingId === drawingId)
+      .map((spot) => spot.page),
   );
+}
+
+/**
+ * Renumbers a drawing's pages in its items' copies (the originals are
+ * updated through the drawingId index by the callers).
+ */
+async function remapCopies(
+  db: InspectionDb,
+  inspectionId: string,
+  drawingId: string,
+  newPosition: (page: number) => number,
+): Promise<void> {
+  await db.items
+    .where("inspectionId")
+    .equals(inspectionId)
+    .filter((item) =>
+      (item.copies ?? []).some((c) => c.drawingId === drawingId),
+    )
+    .modify((item) => {
+      item.copies = item.copies!.map((c) =>
+        c.drawingId === drawingId ? { ...c, page: newPosition(c.page) } : c,
+      );
+    });
 }
 
 /**
@@ -40,9 +67,10 @@ export async function setPagesHidden(
     async () => {
       const drawing = await db.drawings.get(drawingId);
       if (!drawing) return 0;
+      // Every item of the inspection: a copy may be on this drawing.
       const items = await db.items
-        .where("drawingId")
-        .equals(drawingId)
+        .where("inspectionId")
+        .equals(drawing.inspectionId)
         .toArray();
       const marked = markedPositions(drawingId, items);
       const pages = pagesOf(drawing).map((page) => ({ ...page }));
@@ -102,6 +130,9 @@ export async function duplicatePage(
         .modify((box) => {
           box.page += 1;
         });
+      await remapCopies(db, drawing.inspectionId, drawingId, (page) =>
+        page > position ? page + 1 : page,
+      );
       await reletterInspection(db, drawing.inspectionId);
       await touchInspection(db, drawing.inspectionId, now);
       return position + 1;
@@ -168,6 +199,12 @@ export async function movePage(
         .modify((box) => {
           box.page = newPosition.get(box.page) ?? box.page;
         });
+      await remapCopies(
+        db,
+        drawing.inspectionId,
+        drawingId,
+        (page) => newPosition.get(page) ?? page,
+      );
       await reletterInspection(db, drawing.inspectionId);
       await touchInspection(db, drawing.inspectionId, now);
       return target;
