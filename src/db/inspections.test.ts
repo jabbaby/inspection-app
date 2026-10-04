@@ -100,6 +100,7 @@ describe("deleteInspection", () => {
         name: "S-101",
         pdfBlobId: `pdf-${tag}`,
         pageCount: 1,
+        pages: [{ source: 1 }],
         fileSize: 3,
         createdAt: 0,
       });

@@ -84,7 +84,7 @@ export function DocPage({
     if (!active || !doc) return;
     let current = true;
     let fetched: PDFPageProxy | null = null;
-    void doc.getPage(page.page).then((p) => {
+    void doc.getPage(page.source).then((p) => {
       fetched = p;
       if (current) setProxy(p);
     });
@@ -93,7 +93,7 @@ export function DocPage({
       setProxy(null);
       fetched?.cleanup();
     };
-  }, [active, doc, page.page]);
+  }, [active, doc, page.source]);
 
   const fitQuality = view?.fitDevicePxPerDocUnit ?? 0;
 

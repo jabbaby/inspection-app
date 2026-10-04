@@ -8,6 +8,8 @@ import type { ItemKind } from "../../db/types";
 interface Target {
   pdfBlobId: string;
   page: number;
+  /** The PDF page that position shows (pages can be duplicated). */
+  source: number;
   /** Pins on that page, normalised 0..1. */
   pins: { id: string; kind: ItemKind; letter: string; x: number; y: number }[];
 }
@@ -77,6 +79,7 @@ export function DrawingThumb({ inspectionId }: { inspectionId: string }) {
     return {
       pdfBlobId: drawing.pdfBlobId,
       page: best.page,
+      source: drawing.pages?.[best.page - 1]?.source ?? best.page,
       pins: items
         .filter((i) => i.drawingId === drawing.id && i.page === best.page)
         .map((i) => ({
@@ -98,7 +101,7 @@ export function DrawingThumb({ inspectionId }: { inspectionId: string }) {
     ? pins.reduce((sum, p) => sum + p.y, 0) / pins.length
     : 0.4;
   const blobId = target?.pdfBlobId;
-  const pageNumber = target?.page;
+  const pageNumber = target?.source;
 
   useEffect(() => {
     if (!blobId || !pageNumber || !size) return;

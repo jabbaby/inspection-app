@@ -54,12 +54,28 @@ export interface Inspection {
 export type JobInspection = Inspection &
   Pick<Project, "jobNumber" | "jobName" | "client">;
 
+/** One page of a drawing as it appears in the document (SPEC section 5). */
+export interface DrawingPage {
+  /** 1-based page of the PDF it shows (a duplicate repeats its original's). */
+  source: number;
+  /** Left out of the document, its numbering and the PDF pack; restorable. */
+  hidden?: boolean;
+}
+
 export interface Drawing {
   id: string;
   inspectionId: string;
   name: string;
   pdfBlobId: string;
+  /** Pages in the PDF file. */
   pageCount: number;
+  /**
+   * The drawing's pages in document order: the PDF's pages to start with,
+   * then duplicated (a copy right after its original) or hidden in the
+   * Pages view. Items and notes boxes refer to a page by its 1-based
+   * position here, hidden pages included, so hiding never moves them.
+   */
+  pages: DrawingPage[];
   /** PDF size in bytes (kept here so listing drawings never loads the file). */
   fileSize: number;
   /**
@@ -84,7 +100,7 @@ export interface Item {
   letter: string;
   kind: ItemKind;
   drawingId: string;
-  /** 1-based page number in the drawing PDF. */
+  /** 1-based position in the drawing's pages (Drawing.pages). */
   page: number;
   /** Normalised page coordinates (0..1), never screen pixels. */
   x: number;
@@ -242,6 +258,7 @@ export interface MemoTemplate {
 export interface ObservationBox {
   id: string;
   drawingId: string;
+  /** 1-based position in the drawing's pages (Drawing.pages). */
   page: number;
   /** Normalised top-left (0..1). */
   x: number;

@@ -231,5 +231,19 @@ export class InspectionDb extends Dexie {
             delete inspection.client;
           });
       });
+    // v11: drawings list their pages, so pages can be hidden or duplicated
+    // (the Pages view). Each starts as its PDF page, so items and notes
+    // boxes (which refer to a page by position) don't change.
+    this.version(11).upgrade(async (tx) => {
+      await tx
+        .table<Drawing>("drawings")
+        .toCollection()
+        .modify((drawing) => {
+          drawing.pages ??= Array.from(
+            { length: drawing.pageCount },
+            (_, i) => ({ source: i + 1 }),
+          );
+        });
+    });
   }
 }

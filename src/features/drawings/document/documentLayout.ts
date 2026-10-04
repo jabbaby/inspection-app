@@ -9,6 +9,7 @@
  * own coordinates stay in PDF points; `scale` converts points to document
  * units for that page.
  */
+import type { DrawingPage } from "../../../db/types";
 import type { Point, Rect, Size } from "../viewer/viewTransform";
 
 export const DOC_WIDTH = 1000;
@@ -18,15 +19,20 @@ export const PAGE_GAP = 28;
 export interface DrawingInput {
   id: string;
   name: string;
-  /** [width, height] of each page in points. */
+  /** [width, height] of each PDF page in points. */
   pageSizes: [number, number][];
+  /** The drawing's pages (default: each PDF page once); hidden ones are skipped. */
+  pages?: DrawingPage[];
 }
 
 export interface PageLayout {
   key: string;
   drawingId: string;
-  /** 1-based page number in the drawing. */
+  /** 1-based position in the drawing's pages (what items refer to). */
   page: number;
+  /** 1-based page of the PDF it shows. */
+  source: number;
+  /** Pages in the PDF file. */
   pageCount: number;
   /** 1-based page number in the whole document. */
   number: number;
@@ -54,13 +60,17 @@ export function layoutDocument(drawings: DrawingInput[]): DocumentLayout {
   const pages: PageLayout[] = [];
   let y = 0;
   for (const drawing of drawings) {
-    drawing.pageSizes.forEach(([width, height], i) => {
+    drawingPages(drawing).forEach((entry, i) => {
+      const size = drawing.pageSizes[entry.source - 1];
+      if (entry.hidden || !size) return;
+      const [width, height] = size;
       const scale = DOC_WIDTH / width;
       const docHeight = height * scale;
       pages.push({
         key: pageKey(drawing.id, i + 1),
         drawingId: drawing.id,
         page: i + 1,
+        source: entry.source,
         pageCount: drawing.pageSizes.length,
         number: pages.length + 1,
         size: { width, height },
@@ -72,6 +82,38 @@ export function layoutDocument(drawings: DrawingInput[]): DocumentLayout {
     });
   }
   return { width: DOC_WIDTH, height: Math.max(0, y - PAGE_GAP), pages };
+}
+
+/** A drawing's pages, or each PDF page once for a drawing without the list. */
+export function drawingPages(drawing: {
+  pages?: DrawingPage[];
+  pageSizes?: unknown[];
+  pageCount?: number;
+}): DrawingPage[] {
+  return (
+    drawing.pages ??
+    Array.from(
+      { length: drawing.pageSizes?.length ?? drawing.pageCount ?? 0 },
+      (_, i) => ({ source: i + 1 }),
+    )
+  );
+}
+
+/**
+ * Each visible page's number through the whole document ("Page 4"), by page
+ * key; hidden pages have none.
+ */
+export function documentPageNumbers(
+  drawings: { id: string; pages?: DrawingPage[]; pageCount?: number }[],
+): Map<string, number> {
+  const numbers = new Map<string, number>();
+  for (const drawing of drawings) {
+    drawingPages(drawing).forEach((entry, i) => {
+      if (!entry.hidden)
+        numbers.set(pageKey(drawing.id, i + 1), numbers.size + 1);
+    });
+  }
+  return numbers;
 }
 
 /** The page at (or nearest to) a document y, e.g. the centre of the view. */

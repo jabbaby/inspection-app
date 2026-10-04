@@ -44,6 +44,9 @@ export async function addDrawing(
         name: drawing.name,
         pdfBlobId,
         pageCount: drawing.pageCount,
+        pages: Array.from({ length: drawing.pageCount }, (_, i) => ({
+          source: i + 1,
+        })),
         fileSize: drawing.pdf.byteLength,
         pageSizes: drawing.pageSizes,
         // Strictly after the others, so document order never ties (several

@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   DOC_WIDTH,
   PAGE_GAP,
+  documentPageNumbers,
   hitPage,
   layoutDocument,
   pageAtY,
@@ -32,6 +33,34 @@ describe("layoutDocument", () => {
     expect(p3.height).toBeCloseTo((A4[1] / A4[0]) * DOC_WIDTH);
     expect(p3.scale).toBeCloseTo(DOC_WIDTH / A4[0]);
     expect(layout.height).toBeCloseTo(p3.top + p3.height);
+  });
+
+  test("skips hidden pages and shows duplicates of their PDF page", () => {
+    const managed = layoutDocument([
+      {
+        id: "d1",
+        name: "S-101",
+        pageSizes: [A1, A4],
+        pages: [{ source: 1 }, { source: 1 }, { source: 2, hidden: true }],
+      },
+      { id: "d2", name: "S-001 notes", pageSizes: [A4] },
+    ]);
+    expect(managed.pages.map((p) => [p.key, p.source, p.number])).toEqual([
+      ["d1:1", 1, 1],
+      ["d1:2", 1, 2],
+      ["d2:1", 1, 3],
+    ]);
+    expect(
+      documentPageNumbers([
+        { id: "d1", pages: [{ source: 1 }, { source: 2, hidden: true }] },
+        { id: "d2", pages: [{ source: 1 }] },
+      ]),
+    ).toEqual(
+      new Map([
+        ["d1:1", 1],
+        ["d2:1", 2],
+      ]),
+    );
   });
 
   test("is empty with no drawings", () => {
