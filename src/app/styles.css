@@ -3298,3 +3298,26 @@ h1 {
     border: 1px solid var(--line-soft);
   }
 }
+
+/* Recent inspections: swipe a row left for Delete (asks first). */
+.swipe-delete-row {
+  position: relative;
+  overflow: hidden;
+}
+
+.swipe-delete-row .swipe-delete {
+  width: 96px;
+}
+
+.swipe-delete-content {
+  position: relative;
+  background: var(--surface);
+  transition: transform 200ms ease;
+  /* Vertical drags scroll the page; sideways ones swipe. */
+  touch-action: pan-y;
+}
+
+.swipe-delete-content a {
+  -webkit-user-drag: none;
+  -webkit-touch-callout: none;
+}
