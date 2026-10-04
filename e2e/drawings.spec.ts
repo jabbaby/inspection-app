@@ -741,6 +741,25 @@ test("double-tap and hold places an observation with an arrow in one step", asyn
   await expect(page.getByTestId("viewer-pin")).toHaveCount(0);
 });
 
+test("jumping to an item keeps its pin clear of the panel", async ({
+  page,
+}) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openDrawing(page, "S-101 Level 3");
+  // Low on the page: in portrait the panel covers the bottom of the view.
+  await addPinAt(page, 0.5, 0.9);
+  await sheet(page).getByRole("button", { name: "Done" }).first().click();
+  await page.getByRole("button", { name: "Items", exact: true }).click();
+  await panelRows(page).first().getByRole("button").click();
+  await expect(sheet(page)).toBeVisible();
+  await expect(async () => {
+    const pin = await centre(pinByLetter(page, "A"));
+    const panel = (await sheet(page).boundingBox())!;
+    expect(pin.y).toBeLessThan(panel.y - 20);
+  }).toPass();
+});
+
 test("tapping the drawing closes the item editor and keeps the text", async ({
   page,
 }) => {

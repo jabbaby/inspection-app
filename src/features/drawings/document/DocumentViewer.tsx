@@ -109,6 +109,8 @@ interface Props {
   onVisiblePins: (itemIds: string[]) => void;
   renderPageOverlay: (page: PageLayout) => ReactNode;
   scrollTarget: ScrollTarget | null;
+  /** A panel floating over the view, if any: scroll targets stay clear of it. */
+  coveredBy?: () => Element | null;
   /** Change to fit the current page to the view. */
   fitRequest: number;
 }
@@ -448,6 +450,22 @@ export function DocumentViewer(props: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layout]);
 
+  /** The part of the view (local px) not covered by a floating panel. */
+  function clearArea() {
+    const { width, height } = viewSize.current;
+    const area = { left: 0, top: 0, right: width, bottom: height };
+    const panel = latest.current.coveredBy?.();
+    if (!panel) return area;
+    const view = containerRef.current!.getBoundingClientRect();
+    const r = panel.getBoundingClientRect();
+    // A tall panel runs down the left (landscape); else it is along the
+    // bottom (portrait).
+    if (r.height >= view.height * 0.6)
+      area.left = Math.min(width, Math.max(0, r.right - view.left));
+    else area.bottom = Math.max(0, Math.min(height, r.top - view.top));
+    return area;
+  }
+
   // Scroll requests (opening at a drawing or an item).
   useEffect(() => {
     if (!scrollTarget) return;
@@ -456,12 +474,22 @@ export function DocumentViewer(props: Props) {
     if (scrollTarget.at) {
       const fitted = fitPage(page);
       const p = pageToScreen(fitted, pagePointToDoc(page, scrollTarget.at));
-      const { width, height } = viewSize.current;
-      // Fit the page, then centre the point if it would be near an edge.
+      const area = clearArea();
+      // Fit the page, then centre the point (in the part of the view no
+      // panel covers) if it would be near an edge or under the panel.
       const inView =
-        p.x > 40 && p.x < width - 40 && p.y > 40 && p.y < height - 40;
+        p.x > area.left + 40 &&
+        p.x < area.right - 40 &&
+        p.y > area.top + 40 &&
+        p.y < area.bottom - 40;
       setTransform(
-        inView ? fitted : panBy(fitted, width / 2 - p.x, height / 2 - p.y),
+        inView
+          ? fitted
+          : panBy(
+              fitted,
+              (area.left + area.right) / 2 - p.x,
+              (area.top + area.bottom) / 2 - p.y,
+            ),
       );
     } else {
       setTransform(topOfPage(page));

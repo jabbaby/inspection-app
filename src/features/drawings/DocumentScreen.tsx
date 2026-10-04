@@ -578,6 +578,9 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
               onVisiblePins={(ids) => setPinsInView(new Set(ids))}
               renderPageOverlay={renderPageOverlay}
               scrollTarget={scrollTarget}
+              coveredBy={() =>
+                document.querySelector(".drawing-body > .item-sheet")
+              }
               fitRequest={fitRequest}
             />
             {/* Floating over the drawing: they never move it. Both pills sit
