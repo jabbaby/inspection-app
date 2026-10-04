@@ -1933,9 +1933,14 @@ button.list-row-main:hover:not(:disabled) {
 }
 
 @media (min-width: 900px) and (orientation: landscape) {
+  /* The panel opens on the left, away from the controls on the right. */
   .drawing-body.with-sheet {
-    grid-template-columns: minmax(0, 1fr) 360px;
+    grid-template-columns: 360px minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr);
+  }
+
+  .drawing-body.with-sheet > .viewer-wrap {
+    order: 1;
   }
 }
 
@@ -3235,12 +3240,21 @@ a.list-row {
   position: static;
 }
 
-.viewer-tools {
+/* Both pills, stacked in the middle of the right edge: clear of the notes
+   box (top right of a page). */
+.viewer-controls {
   position: absolute;
   z-index: 4;
-  left: 12px;
+  right: 12px;
   top: 50%;
   transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.viewer-tools {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -3286,7 +3300,9 @@ a.list-row {
 }
 
 .viewer-tools .toolbar-toast {
-  left: calc(100% + 12px);
+  /* Beside the pill, over the drawing (the pill is on the right edge). */
+  left: auto;
+  right: calc(100% + 12px);
   bottom: auto;
   top: 50%;
   transform: translateY(-50%);
@@ -3415,12 +3431,6 @@ h1 {
 /* The page and Items: a charcoal pill on the right of the drawing, so
    they read as controls and never blend into the drawing. */
 .viewer-side {
-  position: absolute;
-  z-index: 4;
-  /* Middle of the right edge: clear of the notes box (top right of a page). */
-  top: 50%;
-  transform: translateY(-50%);
-  right: 12px;
   display: flex;
   flex-direction: column;
   gap: 4px;

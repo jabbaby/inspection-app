@@ -532,130 +532,134 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
               scrollTarget={scrollTarget}
               fitRequest={fitRequest}
             />
-            {/* Floating over the drawing: they never move it. */}
-            {/* The page and Items: a charcoal pill on the right. */}
-            <div className="viewer-side">
-              <button
-                type="button"
-                className={`side-button${drawingsOpen ? " toggle-on" : ""}`}
-                aria-label="Drawings"
-                aria-pressed={drawingsOpen}
-                title={
-                  currentDrawing && current
-                    ? `${currentDrawing.name} · page ${current.page} of ${current.pageCount}`
-                    : "Drawings"
-                }
-                onClick={() => {
-                  setDrawingsOpen((open) => !open);
-                  setItemsOpen(false);
-                  select(null);
-                }}
-              >
-                <Files aria-hidden="true" />
-                <span
-                  className="side-label"
-                  data-testid="page-indicator"
-                  // Which drawing and its own page, for tests and tooltips.
-                  data-label={
+            {/* Floating over the drawing: they never move it. Both pills sit
+                on the right edge (easier for the right hand on site); the
+                panels open on the left. */}
+            <div className="viewer-controls">
+              {/* The page and Items. */}
+              <div className="viewer-side">
+                <button
+                  type="button"
+                  className={`side-button${drawingsOpen ? " toggle-on" : ""}`}
+                  aria-label="Drawings"
+                  aria-pressed={drawingsOpen}
+                  title={
                     currentDrawing && current
                       ? `${currentDrawing.name} · page ${current.page} of ${current.pageCount}`
-                      : ""
+                      : "Drawings"
                   }
+                  onClick={() => {
+                    setDrawingsOpen((open) => !open);
+                    setItemsOpen(false);
+                    select(null);
+                  }}
                 >
-                  {current
-                    ? `Page ${current.number} of ${layout.pages.length}`
-                    : ""}
-                </span>
-              </button>
-              <button
-                type="button"
-                className={`side-button${itemsOpen ? " toggle-on" : ""}`}
-                aria-label="Items"
-                aria-pressed={itemsOpen}
-                title="Items"
-                onClick={() => {
-                  setItemsOpen((open) => !open);
-                  setDrawingsOpen(false);
-                  select(null);
-                }}
+                  <Files aria-hidden="true" />
+                  <span
+                    className="side-label"
+                    data-testid="page-indicator"
+                    // Which drawing and its own page, for tests and tooltips.
+                    data-label={
+                      currentDrawing && current
+                        ? `${currentDrawing.name} · page ${current.page} of ${current.pageCount}`
+                        : ""
+                    }
+                  >
+                    {current
+                      ? `Page ${current.number} of ${layout.pages.length}`
+                      : ""}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className={`side-button${itemsOpen ? " toggle-on" : ""}`}
+                  aria-label="Items"
+                  aria-pressed={itemsOpen}
+                  title="Items"
+                  onClick={() => {
+                    setItemsOpen((open) => !open);
+                    setDrawingsOpen(false);
+                    select(null);
+                  }}
+                >
+                  <List aria-hidden="true" />
+                  <span className="side-label">
+                    Items
+                    {(items?.length ?? 0) > 0 && (
+                      <span className="count-badge" aria-hidden="true">
+                        {items?.length}
+                      </span>
+                    )}
+                  </span>
+                </button>
+              </div>
+              {/* Tools: a vertical pill below; Add pin first. */}
+              <div
+                className="viewer-tools"
+                role="toolbar"
+                aria-label="Drawing tools"
+                aria-orientation="vertical"
               >
-                <List aria-hidden="true" />
-                <span className="side-label">
-                  Items
-                  {(items?.length ?? 0) > 0 && (
-                    <span className="count-badge" aria-hidden="true">
-                      {items?.length}
-                    </span>
-                  )}
-                </span>
-              </button>
-            </div>
-            {/* Tools: a vertical pill on the left; Add pin first. */}
-            <div
-              className="viewer-tools"
-              role="toolbar"
-              aria-label="Drawing tools"
-              aria-orientation="vertical"
-            >
-              <button
-                type="button"
-                aria-label="Add pin"
-                aria-pressed={addPinMode}
-                title={addPinMode ? "Tap the drawing…" : "Add pin"}
-                className={`tool-add${addPinMode ? " toggle-on" : ""}`}
-                onClick={() => {
-                  setPlacingArrow(null);
-                  setAddPinMode((on) => !on);
-                }}
-                disabled={layout.pages.length === 0}
-              >
-                <MapPinPlus aria-hidden="true" />
-              </button>
-              <QuickPhotoButton inspectionId={inspectionId} />
-              <button
-                type="button"
-                className="icon-button quiet"
-                aria-label="Undo"
-                disabled={!history.undo}
-                title={
-                  history.undo
-                    ? `Undo: ${history.undo.label}`
-                    : "Nothing to undo"
-                }
-                onClick={() => {
-                  // An undone change could leave the open sheet pointing at nothing.
-                  select(null);
-                  void undoLast(inspectionId);
-                }}
-              >
-                <Undo2 aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                className="icon-button quiet"
-                aria-label="Redo"
-                disabled={!history.redo}
-                title={
-                  history.redo
-                    ? `Redo: ${history.redo.label}`
-                    : "Nothing to redo"
-                }
-                onClick={() => {
-                  select(null);
-                  void redoLast(inspectionId);
-                }}
-              >
-                <Redo2 aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                className="icon-button quiet"
-                aria-label="Fit page"
-                title="Fit page"
-                onClick={() => setFitRequest((n) => n + 1)}
-              >
-                <Maximize aria-hidden="true" />
-              </button>
+                <button
+                  type="button"
+                  aria-label="Add pin"
+                  aria-pressed={addPinMode}
+                  title={addPinMode ? "Tap the drawing…" : "Add pin"}
+                  className={`tool-add${addPinMode ? " toggle-on" : ""}`}
+                  onClick={() => {
+                    setPlacingArrow(null);
+                    setAddPinMode((on) => !on);
+                  }}
+                  disabled={layout.pages.length === 0}
+                >
+                  <MapPinPlus aria-hidden="true" />
+                </button>
+                <QuickPhotoButton inspectionId={inspectionId} />
+                <button
+                  type="button"
+                  className="icon-button quiet"
+                  aria-label="Undo"
+                  disabled={!history.undo}
+                  title={
+                    history.undo
+                      ? `Undo: ${history.undo.label}`
+                      : "Nothing to undo"
+                  }
+                  onClick={() => {
+                    // An undone change could leave the open sheet pointing at nothing.
+                    select(null);
+                    void undoLast(inspectionId);
+                  }}
+                >
+                  <Undo2 aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  className="icon-button quiet"
+                  aria-label="Redo"
+                  disabled={!history.redo}
+                  title={
+                    history.redo
+                      ? `Redo: ${history.redo.label}`
+                      : "Nothing to redo"
+                  }
+                  onClick={() => {
+                    select(null);
+                    void redoLast(inspectionId);
+                  }}
+                >
+                  <Redo2 aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  className="icon-button quiet"
+                  aria-label="Fit page"
+                  title="Fit page"
+                  onClick={() => setFitRequest((n) => n + 1)}
+                >
+                  <Maximize aria-hidden="true" />
+                </button>
+              </div>
             </div>
             {addPinMode && (
               <p className="viewer-hint" role="status">
