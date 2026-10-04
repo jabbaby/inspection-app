@@ -142,7 +142,8 @@ const GREY = hex(northrop.colours.grey);
 const RULE = hex(northrop.colours.rule);
 const MUTED = hex(northrop.colours.muted);
 
-type Fonts = Record<FontKey, PDFFont>;
+export type MemoFonts = Record<FontKey, PDFFont>;
+type Fonts = MemoFonts;
 
 class MemoWriter {
   readonly pages: PDFPage[] = [];
@@ -292,50 +293,61 @@ class MemoWriter {
   }
 
   drawFooters() {
-    const { regular } = this.fonts;
-    const f = FOOTER;
-    this.pages.forEach((page, index) => {
-      page.drawImage(this.icon, {
-        x: f.iconX,
-        y: f.iconBottom,
-        width: f.iconSize,
-        height: f.iconSize,
-      });
-      const space = regular.widthOfTextAtSize(" ", f.textSize);
-      let x = f.textX;
-      northrop.strapline.forEach((part, i) => {
-        if (i > 0) {
-          x += space;
-          page.drawText("·", {
-            x,
-            y: f.textBottom - 1,
-            font: regular,
-            size: f.dotSize,
-            color: GREY,
-          });
-          x += regular.widthOfTextAtSize("·", f.dotSize) + space;
-        }
-        page.drawText(part, {
-          x,
-          y: f.textBottom,
-          font: regular,
-          size: f.textSize,
-          color: GREY,
-        });
-        x += regular.widthOfTextAtSize(part, f.textSize);
-      });
-      const number = String(index + 1);
-      page.drawText(number, {
-        x:
-          f.pageNumberRight -
-          regular.widthOfTextAtSize(number, f.pageNumberSize),
-        y: f.pageNumberBottom,
+    this.pages.forEach((page, index) =>
+      drawFooter(page, index + 1, this.fonts, this.icon),
+    );
+  }
+}
+
+/**
+ * The memo's footer: the red roundel, the strapline and the page number.
+ * Also used on the photo appendix pages of the export pack.
+ */
+export function drawFooter(
+  page: PDFPage,
+  number: number,
+  fonts: MemoFonts,
+  icon: PDFImage,
+) {
+  const { regular } = fonts;
+  const f = FOOTER;
+  page.drawImage(icon, {
+    x: f.iconX,
+    y: f.iconBottom,
+    width: f.iconSize,
+    height: f.iconSize,
+  });
+  const space = regular.widthOfTextAtSize(" ", f.textSize);
+  let x = f.textX;
+  northrop.strapline.forEach((part, i) => {
+    if (i > 0) {
+      x += space;
+      page.drawText("·", {
+        x,
+        y: f.textBottom - 1,
         font: regular,
-        size: f.pageNumberSize,
+        size: f.dotSize,
         color: GREY,
       });
+      x += regular.widthOfTextAtSize("·", f.dotSize) + space;
+    }
+    page.drawText(part, {
+      x,
+      y: f.textBottom,
+      font: regular,
+      size: f.textSize,
+      color: GREY,
     });
-  }
+    x += regular.widthOfTextAtSize(part, f.textSize);
+  });
+  const label = String(number);
+  page.drawText(label, {
+    x: f.pageNumberRight - regular.widthOfTextAtSize(label, f.pageNumberSize),
+    y: f.pageNumberBottom,
+    font: regular,
+    size: f.pageNumberSize,
+    color: GREY,
+  });
 }
 
 function drawHeader(w: MemoWriter, input: MemoPdfInput): number {
@@ -639,6 +651,14 @@ function drawDisclaimer(w: MemoWriter) {
   });
 }
 
+/** What writeMemo leaves for the rest of the export pack to reuse. */
+export interface MemoResources {
+  fonts: MemoFonts;
+  icon: PDFImage;
+  /** The memo's pages, in order (at the start of the document). */
+  pages: PDFPage[];
+}
+
 /** Builds the branded Site Instruction Memo as PDF bytes. */
 export async function renderMemoPdf(
   input: MemoPdfInput,
@@ -646,6 +666,17 @@ export async function renderMemoPdf(
   signature: MemoSignature | null = null,
 ): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
+  await writeMemo(doc, input, assets, signature);
+  return doc.save();
+}
+
+/** Writes the memo's pages into `doc` (expected to be empty). */
+export async function writeMemo(
+  doc: PDFDocument,
+  input: MemoPdfInput,
+  assets: MemoAssets,
+  signature: MemoSignature | null = null,
+): Promise<MemoResources> {
   doc.registerFontkit(fontkit);
 
   const fontEntries = await Promise.all(
@@ -682,5 +713,5 @@ export async function renderMemoPdf(
   drawDisclaimer(w);
   w.drawFooters();
 
-  return doc.save();
+  return { fonts, icon, pages: w.pages };
 }
