@@ -1,12 +1,19 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { addDrawing } from "./drawings";
+import {
+  addDrawing,
+  listDrawings,
+  moveDrawing,
+  reorderDrawings,
+} from "./drawings";
 import { createInspection } from "./inspections";
 import { createItem } from "./items";
 import {
   countUnmarked,
   duplicatePage,
   hideUnmarkedPages,
+  movePage,
+  pageMoveTarget,
   setPagesHidden,
 } from "./pages";
 import { InspectionDb } from "./schema";
@@ -105,5 +112,65 @@ describe("drawing pages", () => {
     expect(await hideUnmarkedPages(db, inspection.id)).toBe(3);
     const after = await db.drawings.toArray();
     expect(countUnmarked(after, await db.items.toArray())).toBe(0);
+  });
+});
+
+describe("moving pages and drawings", () => {
+  test("pageMoveTarget steps over hidden pages and stops at the ends", () => {
+    const pages = [{ source: 1 }, { source: 2, hidden: true }, { source: 3 }];
+    expect(pageMoveTarget(pages, 1, 1)).toBe(3);
+    expect(pageMoveTarget(pages, 3, -1)).toBe(1);
+    expect(pageMoveTarget(pages, 1, -1)).toBeNull();
+    expect(pageMoveTarget(pages, 3, 1)).toBeNull();
+  });
+
+  test("a page moves with its pins and notes box; letters follow", async () => {
+    const d = await drawing(3);
+    const onOne = await pin(d.id, 1);
+    const onThree = await pin(d.id, 3);
+    expect([onOne.letter, (await db.items.get(onThree.id))!.letter]).toEqual([
+      "A",
+      "B",
+    ]);
+    expect(await movePage(db, d.id, 3, -1)).toBe(2);
+    expect(await movePage(db, d.id, 2, -1)).toBe(1);
+    expect((await db.drawings.get(d.id))!.pages).toEqual([
+      { source: 3 },
+      { source: 1 },
+      { source: 2 },
+    ]);
+    const [one, three] = await db.items.bulkGet([onOne.id, onThree.id]);
+    expect([one!.page, one!.letter]).toEqual([2, "B"]);
+    expect([three!.page, three!.letter]).toEqual([1, "A"]);
+    const boxes = await db.observationBoxes.toArray();
+    expect(boxes.map((b) => b.page).sort()).toEqual([1, 2]);
+    // Already first: nothing changes.
+    expect(await movePage(db, d.id, 1, -1)).toBe(1);
+  });
+
+  test("reordering drawings re-letters in the new document order", async () => {
+    const a = await drawing(1);
+    const b = await drawing(1);
+    const pinA = await pin(a.id, 1);
+    const pinB = await pin(b.id, 1);
+    await moveDrawing(db, b.id, -1);
+    expect((await listDrawings(db, inspection.id)).map((d) => d.id)).toEqual([
+      b.id,
+      a.id,
+    ]);
+    const [ia, ib] = await db.items.bulkGet([pinA.id, pinB.id]);
+    expect([ia!.letter, ib!.letter]).toEqual(["B", "A"]);
+    // A new drawing still goes last.
+    const c = await drawing(1);
+    expect((await listDrawings(db, inspection.id)).at(-1)!.id).toBe(c.id);
+    await reorderDrawings(db, inspection.id, [c.id, a.id, b.id]);
+    expect((await listDrawings(db, inspection.id)).map((d) => d.id)).toEqual([
+      c.id,
+      a.id,
+      b.id,
+    ]);
+    await expect(
+      reorderDrawings(db, inspection.id, [a.id, b.id]),
+    ).rejects.toThrow();
   });
 });

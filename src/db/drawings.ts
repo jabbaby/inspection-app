@@ -132,3 +132,54 @@ export async function deleteDrawing(
     },
   );
 }
+
+/**
+ * Puts an inspection's drawings in a new order (ids, first to last). The
+ * document, page numbers, PDF pack and letters all follow drawing order,
+ * which is createdAt: the drawings swap their createdAt values, so new
+ * drawings still go last. Re-letters the items.
+ */
+export async function reorderDrawings(
+  db: InspectionDb,
+  inspectionId: string,
+  order: string[],
+  now = Date.now(),
+): Promise<void> {
+  await db.transaction(
+    "rw",
+    [db.inspections, db.drawings, db.items],
+    async () => {
+      const drawings = await listDrawings(db, inspectionId);
+      const ids = new Set(drawings.map((d) => d.id));
+      if (order.length !== ids.size || !order.every((id) => ids.has(id)))
+        throw new Error("The new order must list every drawing once");
+      const times = drawings.map((d) => d.createdAt);
+      let changed = false;
+      for (const [i, id] of order.entries()) {
+        if (drawings[i].id === id) continue;
+        changed = true;
+        await db.drawings.update(id, { createdAt: times[i] });
+      }
+      if (!changed) return;
+      await reletterInspection(db, inspectionId);
+      await touchInspection(db, inspectionId, now);
+    },
+  );
+}
+
+/** Moves a drawing one place earlier (-1) or later (1) in the document. */
+export async function moveDrawing(
+  db: InspectionDb,
+  drawingId: string,
+  direction: -1 | 1,
+  now = Date.now(),
+): Promise<void> {
+  const drawing = await db.drawings.get(drawingId);
+  if (!drawing) return;
+  const order = (await listDrawings(db, drawing.inspectionId)).map((d) => d.id);
+  const from = order.indexOf(drawingId);
+  const to = from + direction;
+  if (to < 0 || to >= order.length) return;
+  [order[from], order[to]] = [order[to], order[from]];
+  await reorderDrawings(db, drawing.inspectionId, order, now);
+}

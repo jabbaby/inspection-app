@@ -109,6 +109,72 @@ export async function duplicatePage(
   );
 }
 
+/**
+ * Where a page lands when moved one visible page earlier (-1) or later
+ * (1) within its drawing (hidden pages are stepped over); null when it is
+ * already first or last.
+ */
+export function pageMoveTarget(
+  pages: DrawingPage[],
+  position: number,
+  direction: -1 | 1,
+): number | null {
+  for (
+    let i = position - 1 + direction;
+    i >= 0 && i < pages.length;
+    i += direction
+  )
+    if (!pages[i].hidden) return i + 1;
+  return null;
+}
+
+/**
+ * Moves a page within its drawing, past the next visible page in that
+ * direction. Its pins and notes box go with it, and letters follow the new
+ * page order. Returns the page's new position (unchanged if it can't move).
+ */
+export async function movePage(
+  db: InspectionDb,
+  drawingId: string,
+  position: number,
+  direction: -1 | 1,
+  now = Date.now(),
+): Promise<number> {
+  return db.transaction(
+    "rw",
+    [db.inspections, db.drawings, db.items, db.observationBoxes],
+    async () => {
+      const drawing = await db.drawings.get(drawingId);
+      if (!drawing) return position;
+      const pages = pagesOf(drawing);
+      const target = pageMoveTarget(pages, position, direction);
+      if (target === null) return position;
+      // Old positions in their new order.
+      const order = pages.map((_, i) => i + 1);
+      order.splice(position - 1, 1);
+      order.splice(target - 1, 0, position);
+      const newPosition = new Map(order.map((old, i) => [old, i + 1]));
+      await db.drawings.update(drawingId, {
+        pages: order.map((old) => pages[old - 1]),
+      });
+      await db.items
+        .where("drawingId")
+        .equals(drawingId)
+        .modify((item) => {
+          item.page = newPosition.get(item.page) ?? item.page;
+        });
+      await db.observationBoxes
+        .filter((box) => box.drawingId === drawingId)
+        .modify((box) => {
+          box.page = newPosition.get(box.page) ?? box.page;
+        });
+      await reletterInspection(db, drawing.inspectionId);
+      await touchInspection(db, drawing.inspectionId, now);
+      return target;
+    },
+  );
+}
+
 /** How many visible pages across an inspection's drawings have no pins. */
 export function countUnmarked(drawings: Drawing[], items: Item[]): number {
   let count = 0;
