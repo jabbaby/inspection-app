@@ -232,6 +232,13 @@ export interface Memo {
   signatureBlobId: string | null;
   /** Print the signature between "Yours sincerely," and the name. */
   includeSignature: boolean;
+  /** When the PDF pack was last exported (build step 8). */
+  exportedAt?: number;
+  /**
+   * Each item's kind and letter at that export ("instruction:A" by item
+   * id), to warn when letters change before the memo is sent.
+   */
+  exportedLetters?: Record<string, string>;
   createdAt: number;
   updatedAt: number;
 }

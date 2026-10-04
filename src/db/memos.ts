@@ -149,3 +149,17 @@ export async function updateMemo(
     await touchInspection(db, memo.inspectionId, now);
   });
 }
+
+/**
+ * Records an export of the PDF pack: when, and each item's letter at the
+ * time, so the app can warn if letters change before the memo is sent.
+ * Not an edit, so the memo's updatedAt is left alone.
+ */
+export async function markMemoExported(
+  db: InspectionDb,
+  id: string,
+  exportedLetters: Record<string, string>,
+  now = Date.now(),
+): Promise<void> {
+  await db.memos.update(id, { exportedAt: now, exportedLetters });
+}

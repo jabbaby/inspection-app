@@ -36,10 +36,14 @@ import {
 import { usePdfDocuments } from "./document/usePdfDocuments";
 import { DOUBLE_TAP_MS } from "./document/gestures";
 import { ObservationBoxOverlay } from "./ObservationBoxOverlay";
-import { boxHeader, boxLines, defaultBoxPosition } from "./observationBox";
+import {
+  DEFAULT_OBSERVATION_HEADING,
+  boxHeader,
+  boxLines,
+  defaultBoxPosition,
+  observationHeading,
+} from "./observationBox";
 import type { Point } from "./viewer/viewTransform";
-
-const DEFAULT_HEADING = "Noted for information:";
 
 /** Measures and saves page sizes for drawings added before they were stored. */
 async function backfillPageSizes(drawing: Drawing) {
@@ -101,11 +105,7 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
       .where("kind")
       .equals("heading")
       .toArray();
-    return (
-      headings.find((s) => s.id === "heading-noted-for-information")?.text ??
-      headings[0]?.text ??
-      DEFAULT_HEADING
-    );
+    return observationHeading(headings);
   }, []);
 
   const history = useUndo(inspectionId);
@@ -484,7 +484,7 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
             box={box}
             lines={boxLines({
               header: boxHeader(inspection),
-              observationHeading: heading ?? DEFAULT_HEADING,
+              observationHeading: heading ?? DEFAULT_OBSERVATION_HEADING,
               items: pageItems,
             })}
             onMoveEnd={(to) =>

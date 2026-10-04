@@ -5,7 +5,7 @@
  * Sizes are in page units (PDF points) and scale with the sheet.
  */
 import { northrop } from "../../brand/northrop";
-import type { Item } from "../../db/types";
+import type { Item, Snippet } from "../../db/types";
 import { formatDdMmYyyy } from "../../lib/dates";
 import { indexForLetter } from "../items/letters";
 import type { Point, Size } from "./viewer/viewTransform";
@@ -93,6 +93,20 @@ export function boxHeader(inspection: {
   ]
     .filter(Boolean)
     .join(" | ");
+}
+
+/** The observations heading when no heading snippet exists. */
+export const DEFAULT_OBSERVATION_HEADING = "Noted for information:";
+
+/** The heading snippet the box uses: the starter one, else the first. */
+export function observationHeading(
+  headings: Pick<Snippet, "id" | "text">[],
+): string {
+  return (
+    headings.find((s) => s.id === "heading-noted-for-information")?.text ??
+    headings[0]?.text ??
+    DEFAULT_OBSERVATION_HEADING
+  );
 }
 
 /** Fixed template heading for the page's instructions in the box. */
