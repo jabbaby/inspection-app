@@ -16,10 +16,18 @@ function stubStorage() {
 describe("backTarget", () => {
   beforeEach(stubStorage);
 
-  it("goes to Inspections when nothing was remembered", () => {
+  it("goes to the Inspections list when nothing was remembered", () => {
+    expect(backTarget("inspection:a")).toEqual({
+      path: "/inspections",
+      label: "Back to inspections",
+    });
+  });
+
+  it("goes back to the dashboard an inspection was opened from", () => {
+    rememberBack("inspection:a", "/");
     expect(backTarget("inspection:a")).toEqual({
       path: "/",
-      label: "Back to inspections",
+      label: "Back to dashboard",
     });
   });
 
@@ -29,9 +37,9 @@ describe("backTarget", () => {
       path: "/projects/p1",
       label: "Back to project",
     });
-    // Opening it from Inspections later goes back there instead.
-    rememberBack("inspection:a", "/");
-    expect(backTarget("inspection:a").path).toBe("/");
+    // Opening it from the Inspections list later goes back there instead.
+    rememberBack("inspection:a", "/inspections");
+    expect(backTarget("inspection:a").path).toBe("/inspections");
   });
 
   it("goes back to the inspection a project was opened from", () => {
@@ -50,6 +58,6 @@ describe("backTarget", () => {
       },
     });
     rememberBack("inspection:a", "/projects/p1");
-    expect(backTarget("inspection:a").path).toBe("/");
+    expect(backTarget("inspection:a").path).toBe("/inspections");
   });
 });

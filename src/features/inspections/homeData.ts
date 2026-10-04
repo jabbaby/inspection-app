@@ -197,3 +197,8 @@ export function inspectionMatches(inspection: JobInspection, query: string) {
     inspection.client.company,
   ].some((field) => field.toLowerCase().includes(q));
 }
+
+/** What was inspected, or a placeholder. */
+export function titleOf(inspection: Pick<JobInspection, "itemInspected">) {
+  return inspection.itemInspected.trim() || "Untitled inspection";
+}

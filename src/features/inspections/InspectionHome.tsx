@@ -271,7 +271,7 @@ function PreInspectionFor({ id }: { id: string }) {
         onConfirm={() => {
           autosave.cancel();
           setConfirmDelete(false);
-          void deleteInspection(db, id).then(() => navigate("/"));
+          void deleteInspection(db, id).then(() => navigate("/inspections"));
         }}
       />
     </section>

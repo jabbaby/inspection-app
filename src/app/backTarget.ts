@@ -1,7 +1,7 @@
 /**
  * Where a screen's back button goes: the screen it was opened from (e.g.
  * an inspection opened from its project goes back to the project), else
- * Inspections. Kept for the browser session only; it's navigation, not
+ * the Inspections list. Kept for the browser session only; it's navigation, not
  * user data.
  */
 const KEY = "back-targets";
@@ -33,9 +33,10 @@ export interface BackTarget {
 }
 
 export function backTarget(key: string): BackTarget {
-  const path = read()[key] ?? "/";
+  const path = read()[key] ?? "/inspections";
   if (path.startsWith("/projects/")) return { path, label: "Back to project" };
   if (path.startsWith("/inspections/"))
     return { path, label: "Back to inspection" };
-  return { path: "/", label: "Back to inspections" };
+  if (path === "/") return { path, label: "Back to dashboard" };
+  return { path: "/inspections", label: "Back to inspections" };
 }

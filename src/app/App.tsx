@@ -2,6 +2,7 @@ import { Navigate, createHashRouter, useParams } from "react-router";
 import { RouterProvider } from "react-router/dom";
 import { PreInspectionScreen } from "../features/inspections/InspectionHome";
 import { tabPath } from "../features/inspections/tabPath";
+import { DashboardPage } from "../features/inspections/DashboardPage";
 import { InspectionsPage } from "../features/inspections/InspectionsPage";
 import { ProjectPage } from "../features/projects/ProjectPage";
 import { SettingsPage } from "../features/settings/SettingsPage";
@@ -15,7 +16,8 @@ const router = createHashRouter([
   {
     element: <Shell />,
     children: [
-      { index: true, element: <InspectionsPage /> },
+      { index: true, element: <DashboardPage /> },
+      { path: "inspections", element: <InspectionsPage /> },
       // An inspection opens on its Inspection tab (SPEC section 12).
       { path: "inspections/:id", element: <OpenInspection /> },
       { path: "inspections/:id/details", element: <PreInspectionScreen /> },

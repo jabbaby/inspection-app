@@ -9,7 +9,7 @@ export function NotFound({ what }: { what: string }) {
       <AppBar
         left={
           <>
-            <BackLink to="/" label="Back to inspections" />
+            <BackLink to="/inspections" label="Back to inspections" />
             <BarTitle heading={`${what} not found`} />
           </>
         }
@@ -19,7 +19,7 @@ export function NotFound({ what }: { what: string }) {
       </span>
       <h1>{what} not found</h1>
       <p className="muted">It may have been deleted on this device.</p>
-      <Link to="/" className="button-link primary">
+      <Link to="/inspections" className="button-link primary">
         Go to Inspections
       </Link>
     </section>

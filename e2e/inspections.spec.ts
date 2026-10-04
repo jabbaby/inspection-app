@@ -1,5 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
-import { openTab, startInspection, waitForServiceWorker } from "./helpers";
+import {
+  openInspectionsList,
+  openTab,
+  startInspection,
+  waitForServiceWorker,
+} from "./helpers";
 
 const field = (page: Page, label: string) =>
   page.getByLabel(label, { exact: true });
@@ -54,13 +59,18 @@ test("creates an inspection, autosaves every field and keeps it after reload", a
     "Level 3 slab reinforcement",
   );
 
-  await page.getByRole("link", { name: "Back to inspections" }).click();
+  await page.getByRole("link", { name: "Back to dashboard" }).click();
+  await openInspectionsList(page);
   const card = page
     .getByRole("list", { name: "Recent inspections" })
     .getByRole("listitem")
     .filter({ hasText: "SY000001 – Example Apartments" });
   await expect(card).toContainText("Example Builders Pty Ltd");
-  // When it was edited shows on the Continue card.
+  // The Dashboard's Continue tile shows when it was edited.
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Dashboard" })
+    .click();
   const continueTile = page.getByRole("region", {
     name: "Continue where you left off",
   });
@@ -72,7 +82,8 @@ test("saves an edit made just before leaving the screen", async ({ page }) => {
   const url = page.url();
   await field(page, "Job name").fill("Quick edit");
   // Leave immediately, before the autosave delay has passed.
-  await page.getByRole("link", { name: "Back to inspections" }).click();
+  await page.getByRole("link", { name: "Back to dashboard" }).click();
+  await openInspectionsList(page);
   await expect(
     page.getByRole("list", { name: "Recent inspections" }),
   ).toContainText("Quick edit");
@@ -90,7 +101,8 @@ test("deletes an inspection only after confirming", async ({ page }) => {
   const dialog = page.getByRole("dialog", { name: "Delete inspection?" });
   await expect(dialog).toContainText("SY000001 – Example Apartments");
   await dialog.getByRole("button", { name: "Cancel" }).click();
-  await page.getByRole("link", { name: "Back to inspections" }).click();
+  await page.getByRole("link", { name: "Back to dashboard" }).click();
+  await openInspectionsList(page);
   await expect(
     page
       .getByRole("list", { name: "Recent inspections" })
@@ -114,6 +126,47 @@ test("deletes an inspection only after confirming", async ({ page }) => {
   await expect(page.getByText("No inspections yet")).toBeVisible();
 });
 
+test("swiping a recent inspection left deletes it after a confirm", async ({
+  page,
+}) => {
+  await newInspection(page);
+  await fillJob(page);
+  await page.getByRole("link", { name: "Back to dashboard" }).click();
+  await openInspectionsList(page);
+  const rows = page
+    .getByRole("list", { name: "Recent inspections" })
+    .getByRole("listitem");
+  await expect(rows).toHaveCount(1);
+
+  // Drag the row left with the mouse: Delete shows (and the row's link
+  // doesn't open).
+  const box = (await rows.first().boundingBox())!;
+  const y = box.y + box.height / 2;
+  await page.mouse.move(box.x + box.width - 40, y);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width - 200, y, { steps: 10 });
+  await page.mouse.up();
+  await expect(page).toHaveURL(/#\/inspections$/);
+  const remove = page.getByRole("button", {
+    name: "Delete Level 3 slab reinforcement",
+  });
+  await expect(remove).toBeVisible();
+
+  // It asks first; Cancel keeps it.
+  await remove.click();
+  const dialog = page.getByRole("dialog", { name: "Delete inspection?" });
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(rows).toHaveCount(1);
+
+  await page.mouse.move(box.x + box.width - 40, y);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width - 200, y, { steps: 10 });
+  await page.mouse.up();
+  await remove.click();
+  await dialog.getByRole("button", { name: "Delete" }).click();
+  await expect(page.getByText("No inspections yet")).toBeVisible();
+});
+
 test("deletes from the inspection screen", async ({ page }) => {
   await newInspection(page);
   await page.getByRole("button", { name: "Delete inspection" }).click();
@@ -121,7 +174,7 @@ test("deletes from the inspection screen", async ({ page }) => {
     .getByRole("dialog")
     .getByRole("button", { name: "Delete" })
     .click();
-  await expect(page).toHaveURL(/#\/$/);
+  await expect(page).toHaveURL(/#\/inspections$/);
   await expect(page.getByText("No inspections yet")).toBeVisible();
 });
 
@@ -148,7 +201,8 @@ test("an inspection has Pre-inspection, Inspection and Site memo tabs", async ({
   await expect(tab("Pre-inspection")).toHaveAttribute("aria-current", "page");
 
   // Opening it again goes to the Inspection tab.
-  await page.getByRole("link", { name: "Back to inspections" }).click();
+  await page.getByRole("link", { name: "Back to dashboard" }).click();
+  await openInspectionsList(page);
   await page
     .getByRole("list", { name: "Recent inspections" })
     .getByRole("link")

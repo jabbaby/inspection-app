@@ -240,7 +240,7 @@ function ProjectFor({ initial }: { initial: Project }) {
         onConfirm={() => {
           autosave.cancel();
           setConfirmDelete(false);
-          void deleteProject(db, id).then(() => navigate("/"));
+          void deleteProject(db, id).then(() => navigate("/inspections"));
         }}
       >
         <p>

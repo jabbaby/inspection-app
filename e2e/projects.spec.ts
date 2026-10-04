@@ -6,9 +6,9 @@ const field = (page: Page, label: string) =>
 
 const PROJECT = { jobNumber: "SY000001", jobName: "Example Apartments" };
 
-/** The home screen, where Projects sit beside Recent inspections. */
+/** The Inspections tab, where Projects sit beside Recent inspections. */
 async function openProjects(page: Page) {
-  await page.goto("./");
+  await page.goto("./#/inspections");
   await expect(page.getByRole("heading", { name: "Projects" })).toBeVisible();
 }
 
@@ -88,7 +88,7 @@ test("an inspection without a project is flagged until it gets one", async ({
   await expect(page.getByTestId("save-state")).toHaveText("Saved");
 
   // Flagged in Recent; it opens on Pre-inspection.
-  await page.goto("./");
+  await page.goto("./#/inspections");
   const flagged = page
     .getByRole("list", { name: "Recent inspections" })
     .getByRole("listitem")
@@ -182,7 +182,10 @@ test("deleting a project says how many inspections go with it", async ({
   await dialog.getByRole("button", { name: "Cancel" }).click();
   await page.getByRole("button", { name: "Delete project" }).click();
   await dialog.getByRole("button", { name: "Delete" }).click();
-  // Nothing left: Inspections shows its first-run start.
+  // Nothing left: the list is empty and the Dashboard shows its start.
+  await expect(page.getByText("No projects yet")).toBeVisible();
+  await expect(page.getByText("No inspections yet")).toBeVisible();
+  await page.goto("./");
   await expect(
     page.getByRole("heading", { name: "Start your first inspection" }),
   ).toBeVisible();
@@ -193,8 +196,9 @@ test("back returns to the screen an inspection or project was opened from", asyn
 }) => {
   await page.goto("./");
   await startInspection(page, PROJECT);
-  // Home → project → inspection: back goes to the project, then home.
-  await page.goto("./");
+  // Inspections → project → inspection: back goes to the project, then
+  // the Inspections list.
+  await page.goto("./#/inspections");
   await page
     .getByRole("link", { name: /Example Apartments/ })
     .last()
@@ -234,6 +238,7 @@ test("Recent shows the last 10 inspections edited", async ({ page }) => {
     await expect(page.getByTestId("save-state")).toHaveText("Saved");
     await page.goto("./");
   }
+  await page.goto("./#/inspections");
   const recent = page.getByRole("list", { name: "Recent inspections" });
   await expect(recent.getByRole("listitem")).toHaveCount(10);
   await expect(recent.getByRole("listitem").first()).toContainText("Item 11");

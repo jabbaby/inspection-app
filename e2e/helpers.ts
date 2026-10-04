@@ -90,6 +90,15 @@ export async function touchTap(page: Page, at: { x: number; y: number }) {
   }, at);
 }
 
+/** The Inspections tab (Recent and Projects), from the rail. */
+export async function openInspectionsList(page: Page) {
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Inspections" })
+    .click();
+  await expect(page).toHaveURL(/#\/inspections$/);
+}
+
 /** Opens an inspection tab: Pre-inspection, Inspection or Site memo. */
 export async function openTab(
   page: Page,

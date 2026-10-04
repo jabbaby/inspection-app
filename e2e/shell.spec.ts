@@ -5,7 +5,11 @@ test("loads the shell with Inspections and Settings only", async ({ page }) => {
   await page.goto("./");
 
   const nav = page.getByRole("navigation", { name: "Main" });
-  await expect(nav.getByRole("link")).toHaveText(["Inspections", "Settings"]);
+  await expect(nav.getByRole("link")).toHaveText([
+    "Dashboard",
+    "Inspections",
+    "Settings",
+  ]);
   await expect(
     page.getByRole("heading", { name: "Start your first inspection" }),
   ).toBeVisible();
