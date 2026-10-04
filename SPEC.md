@@ -58,7 +58,7 @@ The sample is a one-page **Site Instruction Memo**, not a long report. Anatomy:
 | Job number | text, from the project |
 | Job name | text, from the project |
 | Memo reference | auto-generated per job (e.g. `SIM-001`, `SIM-002`), editable. Shown in the memo header with the item inspected, e.g. "SIM-001 – Level 3 slab reinforcement". The sample template has no reference field; it is placed in the right-hand header column on its own line under Job name, in the same style as Job name. |
-| Recipients table | up to 5 rows: Company, Attn, and To or Copy (checkbox pair; at least one "To", warned if none). A new memo starts with the client as the first "To". **Add from contacts** offers the project's contacts not already listed (added as "To" if there is none yet, otherwise "Copy"); a recipient typed in is added to the project's contacts when you leave its row (no duplicates: same company and attn, ignoring case and spaces), and a new memo's client is added too. |
+| Recipients table | up to 10 rows (5 until 2026-10-05): Company, Attn, and To or Copy (checkbox pair; at least one "To", warned if none). A new memo starts with the client as the first "To". **Add from contacts** offers the project's contacts not already listed (added as "To" if there is none yet, otherwise "Copy"); a recipient typed in is added to the project's contacts when you leave its row (no duplicates: same company and attn, ignoring case and spaces), and a new memo's client is added too. |
 | Site visit requested by | defaults to "client name, client company"; editable, with Reset |
 | Reason for visit | the item inspected (e.g. "Level 3 slab reinforcement"); prefilled from the inspection's Item inspected |
 | Inspector | the engineer's name |

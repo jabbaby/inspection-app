@@ -50,7 +50,7 @@ import { CreateMemo } from "./CreateMemo";
 import { MemoPreview } from "./MemoPreview";
 import { conditionsLeadIn, confirmationParagraph } from "./memoTemplate";
 
-const MAX_RECIPIENTS = 5;
+const MAX_RECIPIENTS = 10;
 const SENT_VIA: SentVia[] = ["Aconex", "Email"];
 
 /**

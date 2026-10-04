@@ -130,6 +130,27 @@ describe("renderMemoPdf", () => {
     expect(texts[1]).toMatch(/REAL IMPACT 2$/);
   });
 
+  test("lists ten recipients, flowing on when the page fills", async () => {
+    const input: MemoPdfInput = {
+      ...sampleMemo,
+      fields: {
+        ...sampleMemo.fields,
+        recipients: Array.from({ length: 10 }, (_, i) => ({
+          company: `Recipient Company ${i + 1}`,
+          attn: `Person ${i + 1}`,
+          to: i === 0,
+          copy: i > 0,
+        })),
+      },
+    };
+    const bytes = await renderMemoPdf(input, assets);
+    saveForInspection("ten-recipients-memo.pdf", bytes);
+    const text = (await pageTexts(bytes)).join(" ");
+    for (let i = 1; i <= 10; i++)
+      expect(text).toContain(`Recipient Company ${i}`);
+    expect(text).toContain(northrop.disclaimer.lead);
+  });
+
   test("replaces characters the font cannot draw instead of failing", async () => {
     const input = {
       ...sampleMemo,

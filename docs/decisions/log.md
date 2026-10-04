@@ -109,3 +109,4 @@ Format: `YYYY-MM-DD | decision | why | changed in SPEC section`
 2026-10-04 | After an export, a letter change shows a one-time notice over the drawing and the Export card lists the changes until exported again; no confirm before deleting (replaces "warn before deleting once a memo has been exported") | deletes are instant and undoable; confirms slow site work | 5, 8, 12
 2026-10-04 | Export card on the Site memo step: contents, non-blocking warnings, progress, then Share / Preview / Export again; PDF built before the Share tap | iPadOS only opens the Share sheet straight from a tap | 12
 2026-10-04 | Order of work kept: step 8, then step 9 (inspection file and backups), then slice 2 markup | backups protect real drawings already on the iPad; the export draws each page's markup in one place, so markup can be added later | 13
+2026-10-05 | Memo recipients capped at 10 (was 5); the memo flows onto a second page when the table pushes it down | engineer request | 4
