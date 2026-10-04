@@ -2,16 +2,24 @@
 import { pushUndo, relabelUndo, type UndoEntry } from "../../app/undo";
 import { db } from "../../db/db";
 import {
+  addCopy,
   createItem,
   deleteItem,
+  removeCopy,
+  removeOriginalSpot,
   reorderItems,
+  restoreCopy,
   restoreItem,
+  restoreOriginalSpot,
+  updateCopy,
   updateItem,
   type DeletedItem,
   type NewItem,
+  type RemovedCopy,
 } from "../../db/items";
 import type { Item, ItemArrow, ItemKind } from "../../db/types";
 import { kindName } from "./letters";
+import { itemSpots } from "./spots";
 
 /** Places a new pin; Undo removes it (with anything typed since), Redo puts it back. */
 export async function createItemWithUndo(
@@ -86,18 +94,26 @@ export async function deleteItemWithUndo(item: Item): Promise<void> {
   });
 }
 
-/** Sets an item's arrows (add, move or remove one); Undo restores the old set. */
+/**
+ * Sets the arrows of one of an item's pins (the original, or the copy
+ * `copyId`): add, move or remove one; Undo restores the old set.
+ */
 export async function setArrowsWithUndo(
   item: Item,
   arrows: ItemArrow[],
   label: string,
+  copyId: string | null = null,
 ): Promise<void> {
-  const previous = item.arrows ?? [];
-  await updateItem(db, item.id, { arrows });
+  const previous =
+    itemSpots(item).find((s) => s.copyId === copyId)?.arrows ?? [];
+  const write = (next: ItemArrow[]) =>
+    copyId
+      ? updateCopy(db, item.id, copyId, { arrows: next })
+      : updateItem(db, item.id, { arrows: next });
+  await write(arrows);
   // The item may be gone by the time these run (deleted since).
   const apply = (next: ItemArrow[]) => async () => {
-    if (await db.items.get(item.id))
-      await updateItem(db, item.id, { arrows: next });
+    if (await db.items.get(item.id)) await write(next);
   };
   pushUndo(item.inspectionId, {
     label,
@@ -192,4 +208,57 @@ export function setPhotoConfirmationWithUndo(items: Item[], on: boolean) {
     on,
     `Photo confirmation ${on ? "on" : "off"} for ${count(instructions.filter((i) => i.requiresPhotoConfirmation !== on).length)}`,
   );
+}
+
+/** Pins an item at another spot (Copy pin); Undo removes that copy. */
+export async function addCopyWithUndo(
+  item: Item,
+  spot: { drawingId: string; page: number; x: number; y: number },
+  boxPosition: { x: number; y: number },
+): Promise<string> {
+  const copy = await addCopy(db, item.id, spot, boxPosition);
+  let removed: RemovedCopy | null = null;
+  pushUndo(item.inspectionId, {
+    label: `Copy ${kindName(item.kind).toLowerCase()} ${item.letter}`,
+    undo: async () => {
+      removed = await removeCopy(db, item.id, copy.id);
+    },
+    redo: async () => {
+      if (removed) await restoreCopy(db, removed);
+    },
+  });
+  return copy.id;
+}
+
+/**
+ * Removes one of an item's pins, keeping the item: a copy, or the original
+ * (the first copy then becomes the original, which may change letters).
+ * Undo puts it back.
+ */
+export async function removeSpotWithUndo(
+  item: Item,
+  copyId: string | null,
+): Promise<void> {
+  const label = `Remove a pin of ${kindName(item.kind).toLowerCase()} ${item.letter}`;
+  if (copyId) {
+    let removed = await removeCopy(db, item.id, copyId);
+    if (!removed) return;
+    pushUndo(item.inspectionId, {
+      label,
+      undo: () => restoreCopy(db, removed!),
+      redo: async () => {
+        removed = (await removeCopy(db, item.id, copyId)) ?? removed;
+      },
+    });
+    return;
+  }
+  let removed = await removeOriginalSpot(db, item.id);
+  if (!removed) return;
+  pushUndo(item.inspectionId, {
+    label,
+    undo: () => restoreOriginalSpot(db, removed!),
+    redo: async () => {
+      removed = (await removeOriginalSpot(db, item.id)) ?? removed;
+    },
+  });
 }

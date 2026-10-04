@@ -12,6 +12,7 @@ import type {
   Snippet,
 } from "../../db/types";
 import { compareItems, itemLabel } from "../items/letters";
+import { isOnPage, itemSpots } from "../items/spots";
 import {
   appendixGroups,
   layoutAppendix,
@@ -50,8 +51,19 @@ export interface PinnedPage {
   position: number;
   /** 1-based page of the drawing's PDF it shows. */
   source: number;
-  /** Its items, observations then instructions, each in letter order. */
+  /** Items pinned here (copies too): observations, then instructions, each in letter order. */
   items: Item[];
+  /** Every pin on the page, copies included, with its item's letter. */
+  pins: PagePin[];
+}
+
+/** A pin to burn in: its item's kind and letter at one spot. */
+export interface PagePin {
+  kind: Item["kind"];
+  letter: string;
+  x: number;
+  y: number;
+  arrows: Item["arrows"];
 }
 
 /** The pages that go in the pack, in document order. */
@@ -61,10 +73,21 @@ export function pinnedPages(drawings: Drawing[], items: Item[]): PinnedPage[] {
       const position = i + 1;
       if (entry.hidden) return [];
       const onPage = items
-        .filter((it) => it.drawingId === drawing.id && it.page === position)
+        .filter((it) => isOnPage(it, drawing.id, position))
         .sort(compareItems);
+      const pins = onPage.flatMap((item) =>
+        itemSpots(item)
+          .filter((s) => s.drawingId === drawing.id && s.page === position)
+          .map((s) => ({
+            kind: item.kind,
+            letter: item.letter,
+            x: s.x,
+            y: s.y,
+            arrows: s.arrows,
+          })),
+      );
       return onPage.length > 0
-        ? [{ drawing, position, source: entry.source, items: onPage }]
+        ? [{ drawing, position, source: entry.source, items: onPage, pins }]
         : [];
     }),
   );

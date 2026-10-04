@@ -8,6 +8,7 @@ import {
   setPhotoConfirmationWithUndo,
 } from "./itemActions";
 import { compareItems, groupItems, kindName } from "./letters";
+import { spotCount } from "./spots";
 import {
   documentPageNumbers,
   pageKey,
@@ -62,6 +63,18 @@ function pageGroups(items: Item[]) {
       });
   }
   return groups;
+}
+
+/** "3 pins · 2 photos": copies and photos, when there are any. */
+function rowMeta(item: Item): string {
+  const pins = spotCount(item);
+  const photos = item.photoIds.length;
+  return [
+    pins > 1 ? `${pins} pins` : "",
+    photos ? `${photos} photo${photos === 1 ? "" : "s"}` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 interface Drag {
@@ -382,11 +395,8 @@ export function ItemsPanel({
                 <strong>{item.letter}.</strong>{" "}
                 {item.text.trim() || <span className="muted">No text yet</span>}
               </span>
-              {item.photoIds.length > 0 && (
-                <span className="muted item-photo-count">
-                  {item.photoIds.length} photo
-                  {item.photoIds.length === 1 ? "" : "s"}
-                </span>
+              {rowMeta(item) && (
+                <span className="muted item-photo-count">{rowMeta(item)}</span>
               )}
             </span>
           </button>

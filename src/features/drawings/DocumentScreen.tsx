@@ -7,10 +7,12 @@ import { NotFound } from "../../app/NotFound";
 import { redoLast, undoLast, useUndo } from "../../app/undo";
 import { db } from "../../db/db";
 import { listDrawings, setPageSizes } from "../../db/drawings";
-import { moveObservationBox, updateItem } from "../../db/items";
+import { moveObservationBox, updateCopy, updateItem } from "../../db/items";
 import {
   createItemWithUndo,
   setArrowsWithUndo,
+  addCopyWithUndo,
+  removeSpotWithUndo,
   setKindWithUndo,
   switchNewItemKind,
 } from "../items/itemActions";
@@ -20,6 +22,12 @@ import { DrawingsSection } from "./DrawingsSection";
 import { PagesSheet } from "./PagesSheet";
 import { kindName } from "../items/letters";
 import { ArrowsOverlay } from "./ArrowsOverlay";
+import {
+  isOnPage,
+  itemSpots,
+  parseSpotKey,
+  type PinSpot,
+} from "../items/spots";
 import type { Drawing, Item, ItemArrow, ItemKind } from "../../db/types";
 import { ItemSheet } from "../items/ItemSheet";
 import { ItemsPanel } from "../items/ItemsPanel";
@@ -130,10 +138,13 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
   const [arrowMessage, setArrowMessage] = useState<string | null>(null);
   const [selectedArrow, setSelectedArrow] = useState<string | null>(null);
   const [draggingArrow, setDraggingArrow] = useState<{
-    itemId: string;
+    /** The pin's spot key (an item id, or "itemId~copyId" for a copy). */
+    key: string;
     arrowId: string;
     to: Point;
   } | null>(null);
+  // Copy pin: the item whose copies each tap on the drawing places.
+  const [copying, setCopying] = useState<string | null>(null);
 
   // Drawings added before page sizes were stored get them measured once.
   const missingSizes =
@@ -214,30 +225,40 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
     }
   }, [layout, items, selected, startDrawing, savedPage]);
 
-  /** An item as shown right now: a pin or arrow tip mid-drag included. */
-  function live(item: Item) {
-    const arrows = (item.arrows ?? []).map((arrow) =>
-      draggingArrow?.itemId === item.id && draggingArrow.arrowId === arrow.id
+  /** A pin as shown right now: the pin or an arrow tip mid-drag included. */
+  function live(spot: PinSpot): PinSpot {
+    const arrows = spot.arrows.map((arrow) =>
+      draggingArrow?.key === spot.key && draggingArrow.arrowId === arrow.id
         ? { ...arrow, ...draggingArrow.to }
         : arrow,
     );
-    return { ...item, ...(dragging[item.id] ?? {}), arrows };
+    return { ...spot, ...(dragging[spot.key] ?? {}), arrows };
   }
 
-  const pins: DocPin[] = (items ?? []).map((item) => {
-    const shown = live(item);
-    return {
-      id: item.id,
-      letter: item.letter,
-      kind: item.kind,
-      selected: item.id === selectedId,
-      pageKey: pageKey(item.drawingId, item.page),
-      x: shown.x,
-      y: shown.y,
-      arrows: shown.arrows,
-      selectedArrowId: item.id === selectedId ? selectedArrow : null,
-    };
-  });
+  // One pin per spot: an item's original and its copies share its letter.
+  const pins: DocPin[] = (items ?? []).flatMap((item) =>
+    itemSpots(item).map((spot) => {
+      const shown = live(spot);
+      return {
+        id: spot.key,
+        letter: item.letter,
+        kind: item.kind,
+        selected: item.id === selectedId,
+        pageKey: pageKey(spot.drawingId, spot.page),
+        x: shown.x,
+        y: shown.y,
+        arrows: shown.arrows,
+        selectedArrowId: item.id === selectedId ? selectedArrow : null,
+      };
+    }),
+  );
+
+  const itemOf = (key: string) =>
+    items?.find((i) => i.id === parseSpotKey(key).itemId);
+
+  /** "Page 4": a page's number through the document. */
+  const pageLabel = (drawingId: string, page: number) =>
+    `Page ${layout.pages.find((p) => p.drawingId === drawingId && p.page === page)?.number ?? "?"}`;
 
   function select(itemId: string | null) {
     const next: Record<string, string> = {};
@@ -247,29 +268,55 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
       setSelectedArrow(null);
       setPlacingArrow(null);
       setArrowMessage(null);
+      setCopying(null);
     }
   }
 
   async function placeArrow(page: PageLayout, at: Point) {
     const item = items?.find((i) => i.id === placingArrow);
     if (!item) return setPlacingArrow(null);
-    if (page.drawingId !== item.drawingId || page.page !== item.page) {
-      // Arrows stay on the pin's page; keep waiting for a tap there.
-      const number = layout.pages.find(
-        (p) => p.drawingId === item.drawingId && p.page === item.page,
-      )?.number;
-      setArrowMessage(`Tap on page ${number ?? item.page}, where the pin is.`);
+    // Arrows stay on a pin's page: the item's pin on the tapped page (the
+    // nearest, if it has copies there) gets it.
+    const spots = itemSpots(item);
+    const onPage = spots.filter(
+      (s) => s.drawingId === page.drawingId && s.page === page.page,
+    );
+    if (onPage.length === 0) {
+      const pages = [
+        ...new Set(spots.map((s) => pageLabel(s.drawingId, s.page))),
+      ];
+      setArrowMessage(
+        `Tap on ${pages.join(" or ").toLowerCase()}, where the pin is.`,
+      );
       return;
     }
+    const spot = onPage.reduce((best, s) =>
+      Math.hypot(s.x - at.x, s.y - at.y) <
+      Math.hypot(best.x - at.x, best.y - at.y)
+        ? s
+        : best,
+    );
     const arrow = { id: crypto.randomUUID(), ...at };
     setPlacingArrow(null);
     setArrowMessage(null);
     await setArrowsWithUndo(
       item,
-      [...(item.arrows ?? []), arrow],
+      [...spot.arrows, arrow],
       `Add arrow to ${kindName(item.kind).toLowerCase()} ${item.letter}`,
+      spot.copyId,
     );
     setSelectedArrow(arrow.id);
+  }
+
+  /** Copy pin: each tap pins the item again (it stays on until Done). */
+  async function placeCopy(page: PageLayout, at: Point) {
+    const item = items?.find((i) => i.id === copying);
+    if (!item) return setCopying(null);
+    await addCopyWithUndo(
+      item,
+      { drawingId: page.drawingId, page: page.page, ...at },
+      defaultBoxPosition(page.size),
+    );
   }
 
   async function placePin(
@@ -350,7 +397,11 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
         placing && performance.now() - placing.time < 1000
           ? await placing.item
           : null;
-      if (!created || (pinId !== null && pinId !== created.id)) return null;
+      if (
+        !created ||
+        (pinId !== null && parseSpotKey(pinId).itemId !== created.id)
+      )
+        return null;
       await switchNewItemKind(created, "observation");
       return created;
     })();
@@ -425,15 +476,17 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
       openItem(turned.id);
       return;
     }
-    const existing = pinId ? items?.find((i) => i.id === pinId) : undefined;
-    if (existing) {
+    const existing = pinId ? itemOf(pinId) : undefined;
+    if (existing && pinId) {
       select(existing.id);
       await setKindWithUndo(existing, "observation");
-      if (arrows.length) {
+      const spot = itemSpots(existing).find((s) => s.key === pinId);
+      if (arrows.length && spot) {
         await setArrowsWithUndo(
           existing,
-          [...(existing.arrows ?? []), ...arrows],
+          [...spot.arrows, ...arrows],
           `Add arrow to observation ${existing.letter}`,
+          spot.copyId,
         );
       }
       return;
@@ -460,7 +513,7 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
       if ("hit" in target) tapDrawing(target.hit);
       return;
     }
-    const item = items?.find((i) => i.id === pinId);
+    const item = itemOf(pinId);
     if (!item) return;
     select(item.id);
     await setKindWithUndo(
@@ -474,12 +527,18 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
       (b) => b.drawingId === page.drawingId && b.page === page.page,
     );
     if (!inspection) return null;
-    const pageItems = (items ?? []).filter(
-      (item) => item.drawingId === page.drawingId && item.page === page.page,
+    // Items with a pin (original or copy) here: the notes box lists them.
+    const pageItems = (items ?? []).filter((item) =>
+      isOnPage(item, page.drawingId, page.page),
+    );
+    const pageSpots = pageItems.flatMap((item) =>
+      itemSpots(item)
+        .filter((s) => s.drawingId === page.drawingId && s.page === page.page)
+        .map((s) => ({ ...live(s), id: s.key, kind: item.kind })),
     );
     return (
       <>
-        <ArrowsOverlay items={pageItems.map(live)} />
+        <ArrowsOverlay items={pageSpots} />
         {box && (
           <ObservationBoxOverlay
             box={box}
@@ -539,46 +598,57 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
               layout={layout}
               docs={docs}
               pins={pins}
-              addPinMode={addPinMode || placingArrow !== null}
+              addPinMode={
+                addPinMode || placingArrow !== null || copying !== null
+              }
               onPlacePin={(page, at) =>
-                void (placingArrow ? placeArrow(page, at) : placePin(page, at))
+                void (copying
+                  ? placeCopy(page, at)
+                  : placingArrow
+                    ? placeArrow(page, at)
+                    : placePin(page, at))
               }
-              onMovePin={(itemId, to) =>
-                setDragging((d) => ({ ...d, [itemId]: to }))
-              }
-              onMovePinEnd={(itemId, to) => {
-                void updateItem(db, itemId, to).then(() =>
+              onMovePin={(key, to) => setDragging((d) => ({ ...d, [key]: to }))}
+              onMovePinEnd={(key, to) => {
+                const { itemId, copyId } = parseSpotKey(key);
+                void (
+                  copyId
+                    ? updateCopy(db, itemId, copyId, to)
+                    : updateItem(db, itemId, to)
+                ).then(() =>
                   setDragging((d) => {
                     const rest = { ...d };
-                    delete rest[itemId];
+                    delete rest[key];
                     return rest;
                   }),
                 );
               }}
-              onSelectPin={(itemId) => select(itemId)}
+              onSelectPin={(key) => select(parseSpotKey(key).itemId)}
               onTapDrawing={tapDrawing}
               onSecondPress={secondPress}
               onDoubleTap={(target) => void doubleTap(target)}
               onHoldPlace={(page, at, tip, kind, pinId) =>
                 void holdPlace(page, at, tip, kind, pinId)
               }
-              onSelectArrow={(itemId, arrowId) => {
-                select(itemId);
+              onSelectArrow={(key, arrowId) => {
+                select(parseSpotKey(key).itemId);
                 setSelectedArrow(arrowId);
               }}
-              onMoveArrow={(itemId, arrowId, to) =>
-                setDraggingArrow({ itemId, arrowId, to })
+              onMoveArrow={(key, arrowId, to) =>
+                setDraggingArrow({ key, arrowId, to })
               }
-              onMoveArrowEnd={(itemId, arrowId, to) => {
-                const item = items?.find((i) => i.id === itemId);
-                if (!item) return;
+              onMoveArrowEnd={(key, arrowId, to) => {
+                const item = itemOf(key);
+                const spot = item && itemSpots(item).find((s) => s.key === key);
+                if (!item || !spot) return;
                 setSelectedArrow(arrowId);
                 void setArrowsWithUndo(
                   item,
-                  (item.arrows ?? []).map((a) =>
+                  spot.arrows.map((a) =>
                     a.id === arrowId ? { ...a, ...to } : a,
                   ),
                   "Move arrow",
+                  spot.copyId,
                 ).then(() => setDraggingArrow(null));
               }}
               onCurrentPage={(page) => {
@@ -586,7 +656,9 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
                 writePlace(`doc-page:${inspectionId}`, page.key);
               }}
               onActiveDrawings={setNeeded}
-              onVisiblePins={(ids) => setPinsInView(new Set(ids))}
+              onVisiblePins={(keys) =>
+                setPinsInView(new Set(keys.map((k) => parseSpotKey(k).itemId)))
+              }
               renderPageOverlay={renderPageOverlay}
               scrollTarget={scrollTarget}
               coveredBy={() =>
@@ -733,6 +805,15 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
                 Tap the drawing to place the pin
               </p>
             )}
+            {copying && selected && (
+              <p className="viewer-hint viewer-hint-copy" role="status">
+                Tap each spot for a copy of {kindName(selected.kind)}{" "}
+                {selected.letter}
+                <button type="button" onClick={() => setCopying(null)}>
+                  Done
+                </button>
+              </p>
+            )}
             {items && !addPinMode && (
               <ExportedLettersNotice
                 inspectionId={inspectionId}
@@ -758,6 +839,7 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
               message: arrowMessage,
               onAdd: () => {
                 setAddPinMode(false);
+                setCopying(null);
                 setPlacingArrow(selected.id);
                 setArrowMessage(null);
               },
@@ -766,13 +848,43 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
                 setArrowMessage(null);
               },
               onRemove: (arrowId) => {
+                const spot = itemSpots(selected).find((s) =>
+                  s.arrows.some((a) => a.id === arrowId),
+                );
+                if (!spot) return;
                 setSelectedArrow(null);
                 void setArrowsWithUndo(
                   selected,
-                  (selected.arrows ?? []).filter((a) => a.id !== arrowId),
+                  spot.arrows.filter((a) => a.id !== arrowId),
                   `Remove arrow from ${kindName(selected.kind).toLowerCase()} ${selected.letter}`,
+                  spot.copyId,
                 );
               },
+            }}
+            copies={{
+              copying: copying === selected.id,
+              spots: itemSpots(selected).map((s) => ({
+                key: s.key,
+                copyId: s.copyId,
+                label: pageLabel(s.drawingId, s.page),
+              })),
+              onCopy: () => {
+                setAddPinMode(false);
+                setPlacingArrow(null);
+                setArrowMessage(null);
+                setCopying(selected.id);
+              },
+              onStop: () => setCopying(null),
+              onGoTo: (key) => {
+                const spot = itemSpots(selected).find((s) => s.key === key);
+                if (spot)
+                  setScrollTarget({
+                    pageKey: pageKey(spot.drawingId, spot.page),
+                    at: { x: spot.x, y: spot.y },
+                    token: Date.now(),
+                  });
+              },
+              onRemove: (copyId) => void removeSpotWithUndo(selected, copyId),
             }}
           />
         ) : (

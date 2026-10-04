@@ -1779,3 +1779,63 @@ test("pre-inspection: drag a drawing to reorder; letters follow", async ({
   await expect(itemRows.first()).toContainText("A. On S-102");
   await expect(itemRows.nth(1)).toContainText("B. On S-101");
 });
+
+test("copy pin: the same item at several spots, removable one by one", async ({
+  page,
+}) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openDrawing(page, "S-101 Level 3");
+  await addPinAt(page, 0.3, 0.3);
+  await typeItem(page, "Grind back and patch");
+
+  // Copy pin stays on: each tap places a copy until Done.
+  await sheet(page).getByRole("button", { name: "Copy pin" }).click();
+  await expect(page.locator(".viewer-hint-copy")).toContainText(
+    "Tap each spot for a copy of Instruction A",
+  );
+  const box = await stageBox(page);
+  await page.mouse.click(box.x + box.width * 0.6, box.y + box.height * 0.5);
+  await expect(pinByLetter(page, "A")).toHaveCount(2);
+  await page.mouse.click(box.x + box.width * 0.4, box.y + box.height * 0.7);
+  await expect(pinByLetter(page, "A")).toHaveCount(3);
+  await page
+    .locator(".viewer-hint-copy")
+    .getByRole("button", { name: "Done" })
+    .click();
+  await expect(page.locator(".viewer-hint-copy")).toHaveCount(0);
+
+  // One item: the notes box lists it once; the sheet lists its pins.
+  await expect(page.getByTestId("observation-box")).toHaveCount(1);
+  await expect(page.getByTestId("observation-box")).toContainText(
+    "INSTRUCTIONS:A. GRIND BACK AND PATCH",
+  );
+  const spots = sheet(page).getByRole("list", { name: "Pin spots" });
+  await expect(spots.getByRole("listitem")).toHaveCount(3);
+
+  // Remove one copy; Undo brings it back.
+  await spots
+    .getByRole("button", { name: "Remove the pin on Page 1" })
+    .first()
+    .click();
+  await expect(pinByLetter(page, "A")).toHaveCount(2);
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(pinByLetter(page, "A")).toHaveCount(3);
+
+  // (Undo closes the sheet.) The Items panel counts it once, with its pins.
+  await expect(sheet(page)).toHaveCount(0);
+  await page.getByRole("button", { name: "Items" }).click();
+  await expect(panelRows(page)).toHaveCount(1);
+  await expect(panelRows(page).first()).toContainText("3 pins");
+  await page.getByRole("button", { name: "Items" }).click();
+
+  // Tapping a copy opens the same item; editing it changes every pin.
+  await pinByLetter(page, "A").nth(2).click();
+  await expect(sheet(page).getByRole("textbox")).toHaveValue(
+    "Grind back and patch",
+  );
+  await sheet(page)
+    .getByRole("button", { name: "Observation", exact: true })
+    .click();
+  await expect(pinByLetter(page, "A", "observation")).toHaveCount(3);
+});

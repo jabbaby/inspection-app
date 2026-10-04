@@ -3956,3 +3956,44 @@ h1 {
   border: 0;
   border-top: 1px solid var(--line-soft);
 }
+
+/* Copy pin: the hint over the drawing carries a Done button. */
+.viewer-hint-copy {
+  /* Top right: clear of the item sheet, which opens on the left. */
+  left: auto;
+  right: 16px;
+  transform: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding-right: 0.4rem;
+  background: var(--selected);
+  color: var(--on-selected);
+}
+
+.viewer-hint-copy button {
+  min-height: 32px;
+  padding: 0 0.9rem;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background-color: var(--on-selected);
+  color: var(--selected);
+  font-weight: 700;
+}
+
+/* The item's pins in its sheet (Copy pin). */
+.item-spots {
+  width: 100%;
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+}
+
+.item-spots li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: var(--control);
+  border-top: 1px solid var(--line-soft);
+}

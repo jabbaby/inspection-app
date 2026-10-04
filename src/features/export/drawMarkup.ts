@@ -18,6 +18,7 @@ import { defaultBoxPosition, type BoxLine } from "../drawings/observationBox";
 import type { Point } from "../drawings/viewer/viewTransform";
 import { toEncodable } from "../memo/pdf/text";
 import { layoutNotesBox, pageView, pinMetrics } from "./markupGeometry";
+import type { PagePin } from "./packContents";
 
 export interface MarkupFonts {
   regular: PDFFont;
@@ -25,8 +26,8 @@ export interface MarkupFonts {
 }
 
 export interface PageMarkup {
-  /** The items pinned on this page. */
-  items: Item[];
+  /** Every pin on this page (copies included). */
+  pins: PagePin[];
   /** The notes box's top-left, normalised on the page (null: default spot). */
   box: Point | null;
   /** From boxLines(): what the notes box says. */
@@ -68,7 +69,7 @@ export function drawPageMarkup(
   drawNotesBox(page, markup, size, fonts);
 
   const am = arrowMetrics(size);
-  for (const item of markup.items) {
+  for (const item of markup.pins) {
     const colour = kindColour(item.kind);
     for (const arrow of item.arrows) {
       // arrowShape works in y-down page units; flip the result.
@@ -96,7 +97,7 @@ export function drawPageMarkup(
   }
 
   const pm = pinMetrics(size);
-  for (const item of markup.items) {
+  for (const item of markup.pins) {
     const centre = at(item);
     page.drawCircle({
       ...centre,

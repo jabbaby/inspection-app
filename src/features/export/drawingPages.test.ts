@@ -90,6 +90,39 @@ describe("pinnedPages", () => {
   });
 });
 
+describe("pinnedPages with copies", () => {
+  test("a page with only a copy goes in, with the item's letter and the copy's arrows", () => {
+    const d1 = drawing("d1", [{ source: 1 }, { source: 2 }]);
+    const a = item({
+      drawingId: "d1",
+      page: 1,
+      letter: "A",
+      copies: [
+        {
+          id: "c1",
+          drawingId: "d1",
+          page: 2,
+          x: 0.7,
+          y: 0.2,
+          arrows: [{ id: "t", x: 0.8, y: 0.3 }],
+        },
+      ],
+    });
+    const pages = pinnedPages([d1], [a]);
+    expect(pages.map((p) => p.position)).toEqual([1, 2]);
+    expect(pages[1].items.map((i) => i.id)).toEqual([a.id]);
+    expect(pages[1].pins).toEqual([
+      {
+        kind: "instruction",
+        letter: "A",
+        x: 0.7,
+        y: 0.2,
+        arrows: [{ id: "t", x: 0.8, y: 0.3 }],
+      },
+    ]);
+  });
+});
+
 describe("appendDrawingPages", () => {
   test("copies each pinned page at its own size with the markup burned in", async () => {
     const d1 = drawing("d1", [{ source: 1 }, { source: 2 }, { source: 2 }]);

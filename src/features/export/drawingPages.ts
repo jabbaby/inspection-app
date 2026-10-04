@@ -70,7 +70,7 @@ export async function appendDrawingPages(
       drawPageMarkup(
         page,
         {
-          items: pinned.items,
+          pins: pinned.pins,
           box: box ? { x: box.x, y: box.y } : null,
           boxLines: boxLines({
             header: input.header,

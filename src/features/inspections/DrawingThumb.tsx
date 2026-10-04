@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { db } from "../../db/db";
 import { listDrawings } from "../../db/drawings";
 import type { ItemKind } from "../../db/types";
+import { itemSpots } from "../items/spots";
 
 interface Target {
   pdfBlobId: string;
@@ -64,9 +65,13 @@ export function DrawingThumb({ inspectionId }: { inspectionId: string }) {
       .where("inspectionId")
       .equals(inspectionId)
       .toArray();
+    // Every pin, copies included (a copy shows its item's letter).
+    const spots = items.flatMap((item) =>
+      itemSpots(item).map((spot) => ({ spot, item })),
+    );
     const counts = new Map<string, number>();
-    for (const item of items) {
-      const key = `${item.drawingId}:${item.page}`;
+    for (const { spot } of spots) {
+      const key = `${spot.drawingId}:${spot.page}`;
       counts.set(key, (counts.get(key) ?? 0) + 1);
     }
     let best = { drawingId: first.id, page: 1, count: 0 };
@@ -80,14 +85,17 @@ export function DrawingThumb({ inspectionId }: { inspectionId: string }) {
       pdfBlobId: drawing.pdfBlobId,
       page: best.page,
       source: drawing.pages?.[best.page - 1]?.source ?? best.page,
-      pins: items
-        .filter((i) => i.drawingId === drawing.id && i.page === best.page)
-        .map((i) => ({
-          id: i.id,
-          kind: i.kind,
-          letter: i.letter,
-          x: i.x,
-          y: i.y,
+      pins: spots
+        .filter(
+          ({ spot }) =>
+            spot.drawingId === drawing.id && spot.page === best.page,
+        )
+        .map(({ spot, item }) => ({
+          id: spot.key,
+          kind: item.kind,
+          letter: item.letter,
+          x: spot.x,
+          y: spot.y,
         })),
     };
   }, [inspectionId]);

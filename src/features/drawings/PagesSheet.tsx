@@ -13,6 +13,7 @@ import {
 import type { Drawing, Item } from "../../db/types";
 import { drawingPages, pageKey } from "./document/documentLayout";
 import { usePdfDocuments } from "./document/usePdfDocuments";
+import { itemSpots } from "../items/spots";
 import { storePdf } from "./drawingFiles";
 import { ReorderDrawingsDialog } from "./ReorderDrawingsDialog";
 import type { PDFDocumentProxy } from "./pdf/pdfjs";
@@ -47,9 +48,10 @@ function entriesFor(drawings: Drawing[], items: Item[]): PageEntry[] {
   let number = 0;
   for (const drawing of drawings) {
     const pins = new Map<number, number>();
-    for (const item of items)
-      if (item.drawingId === drawing.id)
-        pins.set(item.page, (pins.get(item.page) ?? 0) + 1);
+    // Copies of a pin count on their own pages.
+    for (const spot of items.flatMap(itemSpots))
+      if (spot.drawingId === drawing.id)
+        pins.set(spot.page, (pins.get(spot.page) ?? 0) + 1);
     drawingPages(drawing).forEach((page, i) => {
       const hidden = Boolean(page.hidden);
       if (!hidden) number++;
