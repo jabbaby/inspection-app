@@ -3831,3 +3831,98 @@ h1 {
     calc(var(--space-3) + env(safe-area-inset-bottom));
   border-top: 1px solid var(--line-soft);
 }
+
+/* Export card (Site memo step). */
+.export-card .notice {
+  margin-bottom: var(--space-3);
+}
+
+.export-contents {
+  list-style: none;
+  margin: var(--space-3) 0;
+  padding: 0;
+  border-top: 1px solid var(--line-soft);
+}
+
+.export-contents li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.export-contents li > span:last-child {
+  text-align: right;
+}
+
+.export-progress {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
+}
+
+.export-progress progress {
+  width: 100%;
+  height: 8px;
+  appearance: none;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background-color: var(--sunken);
+  overflow: hidden;
+}
+
+.export-progress progress::-webkit-progress-bar {
+  background-color: var(--sunken);
+  border-radius: var(--radius-pill);
+}
+
+.export-progress progress::-webkit-progress-value {
+  background-color: var(--selected);
+  border-radius: var(--radius-pill);
+}
+
+.export-progress progress::-moz-progress-bar {
+  background-color: var(--selected);
+}
+
+.export-file {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+  border-radius: var(--radius);
+  background-color: var(--surface-2);
+}
+
+.export-file > svg {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  color: var(--accent);
+}
+
+.export-file-name {
+  overflow-wrap: anywhere;
+}
+
+/* Over the drawing: letters changed after the memo was exported. */
+.viewer-notice {
+  position: absolute;
+  z-index: 4;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: min(90%, 480px);
+  min-height: 0;
+  padding: 0.6rem 1.1rem;
+  border: 0;
+  border-radius: var(--radius-lg);
+  background-color: var(--selected);
+  color: var(--on-selected);
+  font-weight: 600;
+  text-align: center;
+  box-shadow: var(--shadow-float);
+}

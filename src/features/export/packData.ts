@@ -4,7 +4,7 @@ import { getMemo } from "../../db/memos";
 import { loadJobInspection } from "../../db/projects";
 import type { InspectionDb } from "../../db/schema";
 import { observationHeading } from "../drawings/observationBox";
-import type { LoadBlob, PackData } from "./buildPack";
+import type { LoadBlob, PackData } from "./packContents";
 
 /** Null when the inspection or its memo is missing. */
 export async function loadPackData(

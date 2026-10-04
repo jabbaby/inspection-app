@@ -4,48 +4,19 @@
  * on the memo and appendix pages (drawings keep their own title blocks).
  */
 import { PDFDocument, StandardFonts } from "pdf-lib";
-import type {
-  Drawing,
-  Item,
-  JobInspection,
-  Memo,
-  ObservationBox,
-  Photo,
-  Snippet,
-} from "../../db/types";
 import { boxHeader } from "../drawings/observationBox";
-import { itemLabel } from "../items/letters";
 import { buildMemoPdfInput } from "../memo/buildMemo";
 import { memoFilename } from "../memo/memoFilename";
 import { referenceLine } from "../memo/memoTemplate";
 import { writeMemo, type MemoAssets } from "../memo/pdf/renderMemoPdf";
+import { appendDrawingPages } from "./drawingPages";
 import {
-  appendixGroups,
-  layoutAppendix,
-  type AppendixPage,
-} from "./appendixLayout";
-import { appendDrawingPages, pinnedPages } from "./drawingPages";
+  appendixPages,
+  pinnedPages,
+  type LoadBlob,
+  type PackData,
+} from "./packContents";
 import { appendPhotoAppendix } from "./renderAppendix";
-
-/** Everything the pack is built from, loaded by packData.ts. */
-export interface PackData {
-  inspection: JobInspection;
-  memo: Memo;
-  items: Item[];
-  /** In document order. */
-  drawings: Drawing[];
-  boxes: ObservationBox[];
-  conditionSnippets: Snippet[];
-  observationHeading: string;
-  photos: Map<string, Photo>;
-  /** The memo's signature (PNG), if it prints one. */
-  signature: Uint8Array | null;
-}
-
-/** Stored file bytes and type, by blob id. */
-export type LoadBlob = (
-  id: string,
-) => Promise<{ data: Uint8Array; type: string }>;
 
 export interface PackProgress {
   /** 0..1 */
@@ -54,47 +25,10 @@ export interface PackProgress {
   label: string;
 }
 
-export interface PackSummary {
-  drawingPages: number;
-  photos: number;
-  appendixPages: number;
-}
-
 export interface Pack {
   bytes: Uint8Array;
   filename: string;
   pages: number;
-}
-
-function appendixPages(data: PackData): AppendixPage[] {
-  return layoutAppendix(
-    appendixGroups(data.items, data.inspection.photoIds, data.photos),
-  );
-}
-
-/** What the pack will hold, for the Export card before exporting. */
-export function packSummary(data: PackData): PackSummary {
-  const pages = appendixPages(data);
-  return {
-    drawingPages: pinnedPages(data.drawings, data.items).length,
-    photos: pages
-      .flatMap((p) => p.rows)
-      .reduce((n, row) => n + row.photos.length, 0),
-    appendixPages: pages.length,
-  };
-}
-
-/** Things worth checking before sending; none of them stop the export. */
-export function packWarnings(data: PackData): string[] {
-  const warnings: string[] = [];
-  const empty = data.items
-    .filter((item) => !item.text.trim())
-    .map((item) => itemLabel(item));
-  if (empty.length === 1) warnings.push(`${empty[0]} has no text.`);
-  else if (empty.length > 1) warnings.push(`${empty.join(", ")} have no text.`);
-  if (!data.memo.recipients.some((r) => r.to && (r.company || r.attn).trim()))
-    warnings.push('The memo has no "To" recipient.');
-  return warnings;
 }
 
 /** Builds the pack. Drawings and photos are read one at a time. */

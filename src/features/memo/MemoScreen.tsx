@@ -1,5 +1,5 @@
 import { useLiveQuery } from "dexie-react-hooks";
-import { FileDown, Pencil } from "lucide-react";
+import { Pencil } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useParams } from "react-router";
 import { NotFound } from "../../app/NotFound";
@@ -43,6 +43,7 @@ import {
 } from "./buildMemo";
 import { InspectionHeader } from "../inspections/InspectionTabs";
 import { inspectionTitle } from "../inspections/inspectionTitle";
+import { ExportCard } from "../export/ExportCard";
 import { PhotosSection } from "../photos/PhotosSection";
 import { SignatureField } from "../signature/SignatureField";
 import { CreateMemo } from "./CreateMemo";
@@ -83,15 +84,7 @@ export function MemoScreen() {
         </section>
       )}
       <PhotosSection inspectionId={id} jobNumber={inspection.jobNumber} />
-      <div className="card page-section">
-        <h2 className="section-title">
-          <FileDown aria-hidden="true" /> Export
-        </h2>
-        <p className="muted">
-          One PDF pack: memo, marked-up drawings and photos. Coming in build
-          step 8.
-        </p>
-      </div>
+      <ExportCard inspectionId={id} />
     </>
   );
 }

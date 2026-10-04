@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { PDFDocument } from "pdf-lib";
 import {
   TYPICAL_DRAWING,
   buildSyntheticDrawing,
@@ -358,4 +359,85 @@ test("a signature drawn in Settings goes on new memos; a memo can upload its own
   await expect(
     onMemo.getByRole("img", { name: "Signature on this memo" }),
   ).toBeVisible();
+});
+
+test("export the PDF pack: memo then the marked-up page; warns when letters change after", async ({
+  page,
+}) => {
+  // Stand-in Share sheet that keeps the shared PDF's bytes.
+  await page.addInitScript(() => {
+    const shared: { name: string; bytes: number[] }[] = [];
+    Object.assign(window, { sharedFiles: shared });
+    Object.defineProperty(navigator, "canShare", {
+      value: (data: { files?: File[] }) => !!data.files?.length,
+    });
+    Object.defineProperty(navigator, "share", {
+      value: async (data: { files: File[] }) => {
+        for (const f of data.files)
+          shared.push({
+            name: f.name,
+            bytes: Array.from(new Uint8Array(await f.arrayBuffer())),
+          });
+      },
+    });
+  });
+  const home = await newInspection(page);
+  await addItems(page);
+  await page.goto(home);
+  await createMemo(page);
+
+  const card = page.getByTestId("export-card");
+  await expect(card).toContainText("1 page with pins");
+  await expect(card).toContainText("No photos");
+  await card.getByRole("button", { name: "Export PDF" }).click();
+  const file = card.getByTestId("export-file");
+  await expect(file).toContainText(
+    "SY000001_SIM-001_Level-3-slab-reinforcement.pdf",
+    { timeout: 30_000 },
+  );
+  await expect(file).toContainText("2 pages");
+  await card.getByRole("button", { name: "Share…" }).click();
+  const shared = await page.evaluate(
+    () =>
+      (
+        window as unknown as {
+          sharedFiles: { name: string; bytes: number[] }[];
+        }
+      ).sharedFiles,
+  );
+  expect(shared).toHaveLength(1);
+  const pdf = await PDFDocument.load(Uint8Array.from(shared[0].bytes));
+  expect(pdf.getPages().map((p) => Math.round(p.getSize().width))).toEqual([
+    595, 2384,
+  ]);
+
+  // Deleting instruction A re-letters B: the viewer says so once, and the
+  // Export card lists the change until it is exported again.
+  await openTab(page, "Inspection");
+  await expect(
+    page.locator('[data-testid="drawing-viewer"][data-ready="true"]'),
+  ).toBeVisible({ timeout: 20_000 });
+  await page
+    .getByRole("button", { name: "Instruction pin A", exact: true })
+    .click();
+  await page
+    .getByTestId("item-sheet")
+    .getByRole("button", { name: /^Delete instruction / })
+    .click();
+  await expect(page.getByTestId("letters-changed-notice")).toBeVisible();
+  await page.getByTestId("letters-changed-notice").click();
+  await expect(page.getByTestId("letters-changed-notice")).toHaveCount(0);
+
+  await openTab(page, "Site memo");
+  await expect(page.getByTestId("letters-changed")).toContainText(
+    "Instruction A was deleted; Instruction B is now Instruction A",
+  );
+  await page
+    .getByTestId("export-card")
+    .getByRole("button", { name: "Export PDF" })
+    .click();
+  await expect(page.getByTestId("export-file")).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(page.getByTestId("letters-changed")).toHaveCount(0);
 });

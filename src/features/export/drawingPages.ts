@@ -5,36 +5,10 @@
  * a duplicated page with pins exports as its own page.
  */
 import { PDFDocument } from "pdf-lib";
-import type { Drawing, Item, ObservationBox } from "../../db/types";
-import { compareItems } from "../items/letters";
+import type { Drawing, ObservationBox } from "../../db/types";
 import { boxLines } from "../drawings/observationBox";
 import { drawPageMarkup, type MarkupFonts } from "./drawMarkup";
-
-export interface PinnedPage {
-  drawing: Drawing;
-  /** 1-based position in Drawing.pages (what items refer to). */
-  position: number;
-  /** 1-based page of the drawing's PDF it shows. */
-  source: number;
-  /** Its items, observations then instructions, each in letter order. */
-  items: Item[];
-}
-
-/** The pages that go in the pack, in document order. */
-export function pinnedPages(drawings: Drawing[], items: Item[]): PinnedPage[] {
-  return drawings.flatMap((drawing) =>
-    drawing.pages.flatMap((entry, i) => {
-      const position = i + 1;
-      if (entry.hidden) return [];
-      const onPage = items
-        .filter((it) => it.drawingId === drawing.id && it.page === position)
-        .sort(compareItems);
-      return onPage.length > 0
-        ? [{ drawing, position, source: entry.source, items: onPage }]
-        : [];
-    }),
-  );
-}
+import type { PinnedPage } from "./packContents";
 
 export interface DrawingPagesInput {
   pages: PinnedPage[];

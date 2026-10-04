@@ -6,7 +6,8 @@ import {
   SHEET_SIZES,
   buildSyntheticDrawing,
 } from "../drawings/fixtures/syntheticDrawing";
-import { appendDrawingPages, pinnedPages } from "./drawingPages";
+import { appendDrawingPages } from "./drawingPages";
+import { pinnedPages } from "./packContents";
 
 let pdf: Uint8Array;
 

@@ -137,14 +137,14 @@ export async function appendPhotoAppendix(
             : await doc.embedJpg(data);
         const size = fitPhoto(image, { width: CELL_W, height: PHOTO_H });
         page.drawImage(image, {
-          x: left + (CELL_W - size.width) / 2,
+          x: left,
           y: PAGE_H - photoTop - size.height,
           ...size,
         });
 
-        // "Photo IA1 – caption": the label bold, the caption regular.
+        // "Photo IA1 – caption" just under the photo: label bold, caption regular.
         const caption = entry.photo.caption?.trim();
-        const baseline = photoTop + PHOTO_H + CAPTION.gap;
+        const baseline = photoTop + size.height + CAPTION.gap;
         text(entry.label, left, baseline, fonts.bold, CAPTION.size);
         if (caption) {
           const lead = fonts.bold.widthOfTextAtSize(

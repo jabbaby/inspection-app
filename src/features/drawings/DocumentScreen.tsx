@@ -36,6 +36,7 @@ import {
 import { usePdfDocuments } from "./document/usePdfDocuments";
 import { DOUBLE_TAP_MS } from "./document/gestures";
 import { ObservationBoxOverlay } from "./ObservationBoxOverlay";
+import { ExportedLettersNotice } from "../export/ExportedLettersNotice";
 import {
   DEFAULT_OBSERVATION_HEADING,
   boxHeader,
@@ -731,6 +732,12 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
               <p className="viewer-hint" role="status">
                 Tap the drawing to place the pin
               </p>
+            )}
+            {items && !addPinMode && (
+              <ExportedLettersNotice
+                inspectionId={inspectionId}
+                items={items}
+              />
             )}
           </div>
         )}

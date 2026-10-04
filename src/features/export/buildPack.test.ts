@@ -16,7 +16,8 @@ import {
   buildSyntheticDrawing,
 } from "../drawings/fixtures/syntheticDrawing";
 import { loadTestMemoAssets } from "../memo/pdf/memoAssets.testutil";
-import { buildPack, packSummary, packWarnings } from "./buildPack";
+import { buildPack } from "./buildPack";
+import { packSummary, packWarnings } from "./packContents";
 import { blobLoader, loadPackData } from "./packData";
 
 let db: InspectionDb;
