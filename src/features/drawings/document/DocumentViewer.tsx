@@ -64,6 +64,13 @@ interface Props {
   onMovePinEnd: (id: string, to: Point) => void;
   onSelectPin: (id: string) => void;
   /**
+   * The second tap of a double-tap: on a pin (often the one the first tap
+   * just placed), or on the drawing (with the spot, null between pages).
+   */
+  onDoubleTap: (
+    target: { pinId: string } | { hit: { page: PageLayout; at: Point } | null },
+  ) => void;
+  /**
    * A tap on the drawing away from pins, outside Add pin / Add arrow, with
    * the page spot it landed on (null between pages).
    */
@@ -90,6 +97,9 @@ const SETTLE_MS = 160;
 const PAD = 16;
 /** A touch this soon after the view scrolled stops the scroll; it isn't a tap. */
 const SCROLL_STOP_MS = 120;
+/** Two taps this close in time and space are a double-tap. */
+const DOUBLE_TAP_MS = 300;
+const DOUBLE_TAP_SLOP = 30;
 
 interface Tracked extends Point {
   type: string;
@@ -499,6 +509,8 @@ export function DocumentViewer(props: Props) {
 
   const pointers = useRef(new Map<number, Tracked>());
   const tap = useRef<{ id: number; start: Point; time: number } | null>(null);
+  /** The last tap (drawing or pin), to spot a double-tap. */
+  const lastTap = useRef<{ at: Point; time: number } | null>(null);
   /** A touch that stopped a scroll: it never counts as a tap. */
   const stopTouch = useRef<number | null>(null);
   const pinch = useRef<{
@@ -607,17 +619,32 @@ export function DocumentViewer(props: Props) {
       pending?.id === e.pointerId &&
       e.timeStamp - pending.time < TAP_MS;
     if (!tapped) return;
+    const second = isSecondTap(local(e), e.timeStamp);
     const hit = hitPage(
       currentLayout(),
       screenToPage(currentTransform(), local(e)),
     );
     if (latest.current.addPinMode) {
       if (hit) latest.current.onPlacePin(hit.page, hit.at);
+    } else if (second) {
+      latest.current.onDoubleTap({ hit });
     } else {
       // A tap on the drawing itself (pins, arrow tips and the notes box
       // handle their own taps).
       latest.current.onTapDrawing(hit);
     }
+  }
+
+  /** Records a tap; true when it is the second of a double-tap. */
+  function isSecondTap(at: Point, time: number) {
+    const prev = lastTap.current;
+    const second =
+      prev !== null &&
+      time - prev.time < DOUBLE_TAP_MS &&
+      Math.hypot(at.x - prev.at.x, at.y - prev.at.y) < DOUBLE_TAP_SLOP;
+    // A third tap starts a new pair.
+    lastTap.current = second ? null : { at, time };
+    return second;
   }
 
   // Native scrolling, touch pinch, Pencil and wheel zoom.
@@ -822,9 +849,13 @@ export function DocumentViewer(props: Props) {
       else if (!drag.moved) latest.current.onSelectArrow(drag.id, drag.arrowId);
       return;
     }
-    if (drag.moved && drag.last)
+    if (drag.moved && drag.last) {
       latest.current.onMovePinEnd(drag.id, drag.last);
-    else if (!drag.moved) latest.current.onSelectPin(drag.id);
+    } else if (!drag.moved) {
+      if (isSecondTap(local(e), e.timeStamp))
+        latest.current.onDoubleTap({ pinId: drag.id });
+      else latest.current.onSelectPin(drag.id);
+    }
   }
 
   // Each page's overlay converts pointer positions relative to that page.

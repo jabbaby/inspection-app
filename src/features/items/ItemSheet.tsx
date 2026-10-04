@@ -5,7 +5,7 @@ import { db } from "../../db/db";
 import { updateItem, type ItemPatch } from "../../db/items";
 import type { Item, ItemKind } from "../../db/types";
 import { ItemPhotos } from "../photos/ItemPhotos";
-import { deleteItemWithUndo } from "./itemActions";
+import { deleteItemWithUndo, setKindWithUndo } from "./itemActions";
 import { itemLabel, kindName } from "./letters";
 
 interface Props {
@@ -149,9 +149,7 @@ export function ItemSheet({
             aria-pressed={item.kind === kind}
             onClick={() => {
               if (item.kind !== kind)
-                void autosave
-                  .flush()
-                  .then(() => updateItem(db, item.id, { kind }));
+                void autosave.flush().then(() => setKindWithUndo(item, kind));
             }}
           >
             {label}

@@ -8,7 +8,12 @@ import { redoLast, undoLast, useUndo } from "../../app/undo";
 import { db } from "../../db/db";
 import { listDrawings, setPageSizes } from "../../db/drawings";
 import { moveObservationBox, updateItem } from "../../db/items";
-import { createItemWithUndo, setArrowsWithUndo } from "../items/itemActions";
+import {
+  createItemWithUndo,
+  setArrowsWithUndo,
+  setKindWithUndo,
+  switchNewItemKind,
+} from "../items/itemActions";
 import { InspectionHeader } from "../inspections/InspectionTabs";
 import { QuickPhotoButton } from "../photos/QuickPhotoButton";
 import { DrawingsSection } from "./DrawingsSection";
@@ -258,6 +263,67 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
     );
     setJustPlaced(item.id);
     select(item.id);
+    return item;
+  }
+
+  /** The pin the latest tap placed (it may still be saving), and when. */
+  const placedByTap = useRef<{ item: Promise<Item>; time: number } | null>(
+    null,
+  );
+
+  function tapDrawing(hit: { page: PageLayout; at: Point } | null) {
+    placedByTap.current = null;
+    // Tapping the drawing closes what's open beside it: an item's editor
+    // first (its text is saved), then the Items or Drawings panel. With
+    // nothing open it places an instruction pin.
+    if (selectedId) {
+      setJustPlaced(null);
+      select(null);
+      return;
+    }
+    if (itemsOpen || drawingsOpen) {
+      setItemsOpen(false);
+      setDrawingsOpen(false);
+      return;
+    }
+    if (hit)
+      placedByTap.current = {
+        item: placePin(hit.page, hit.at),
+        time: performance.now(),
+      };
+  }
+
+  /**
+   * A double-tap: when the first tap placed a pin, that pin becomes an
+   * observation (still one Undo step); on an existing pin it switches kind.
+   */
+  async function doubleTap(
+    target: { pinId: string } | { hit: { page: PageLayout; at: Point } | null },
+  ) {
+    const placing = placedByTap.current;
+    placedByTap.current = null;
+    // Only a pin placed by the first tap of this double-tap counts.
+    const created =
+      placing && performance.now() - placing.time < 1000
+        ? await placing.item
+        : null;
+    const pinId = "pinId" in target ? target.pinId : null;
+    if (created && (pinId === null || pinId === created.id)) {
+      await switchNewItemKind(created, "observation");
+      return;
+    }
+    if (pinId === null) {
+      // The first tap only closed something: this one is a plain tap.
+      if ("hit" in target) tapDrawing(target.hit);
+      return;
+    }
+    const item = items?.find((i) => i.id === pinId);
+    if (!item) return;
+    select(item.id);
+    await setKindWithUndo(
+      item,
+      item.kind === "instruction" ? "observation" : "instruction",
+    );
   }
 
   function renderPageOverlay(page: PageLayout) {
@@ -346,23 +412,8 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
                 );
               }}
               onSelectPin={(itemId) => select(itemId)}
-              onTapDrawing={(hit) => {
-                // Tapping the drawing closes what's open beside it: an
-                // item's editor first (its text is saved), then the Items
-                // or Drawings panel. With nothing open it places an
-                // instruction pin.
-                if (selectedId) {
-                  setJustPlaced(null);
-                  select(null);
-                  return;
-                }
-                if (itemsOpen || drawingsOpen) {
-                  setItemsOpen(false);
-                  setDrawingsOpen(false);
-                  return;
-                }
-                if (hit) void placePin(hit.page, hit.at);
-              }}
+              onTapDrawing={tapDrawing}
+              onDoubleTap={(target) => void doubleTap(target)}
               onSelectArrow={(itemId, arrowId) => {
                 select(itemId);
                 setSelectedArrow(arrowId);

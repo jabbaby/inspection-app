@@ -607,6 +607,56 @@ test("a tap on the drawing with nothing open places an instruction pin", async (
   await expect(pinByLetter(page, "B")).toBeVisible();
 });
 
+test("a double-tap places an observation; Undo removes it in one step", async ({
+  page,
+}) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openDrawing(page, "S-101 Level 3");
+  const box = await stageBox(page);
+
+  await page.mouse.dblclick(box.x + box.width * 0.4, box.y + box.height * 0.5);
+  await expect(pinByLetter(page, "A", "observation")).toBeVisible();
+  await expect(page.getByTestId("viewer-pin")).toHaveCount(1);
+  const undo = page.getByRole("button", { name: "Undo" });
+  await expect(undo).toHaveAttribute("title", "Undo: Add observation A");
+
+  await undo.click();
+  await expect(page.getByTestId("viewer-pin")).toHaveCount(0);
+  await page.getByRole("button", { name: "Redo" }).click();
+  await expect(pinByLetter(page, "A", "observation")).toBeVisible();
+});
+
+test("a double-tap on a pin switches its kind; Undo switches it back", async ({
+  page,
+}) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openDrawing(page, "S-101 Level 3");
+  await addPinAt(page, 0.3, 0.5);
+  await sheet(page).getByRole("button", { name: "Done" }).first().click();
+  await expect(sheet(page)).toHaveCount(0);
+
+  const c = await centre(pinByLetter(page, "A"));
+  await page.mouse.dblclick(c.x, c.y);
+  await expect(pinByLetter(page, "A", "observation")).toBeVisible();
+  await expect(sheet(page)).toBeVisible();
+  const undo = page.getByRole("button", { name: "Undo" });
+  await expect(undo).toHaveAttribute(
+    "title",
+    "Undo: Switch instruction A to observation",
+  );
+  await undo.click();
+  await expect(pinByLetter(page, "A", "instruction")).toBeVisible();
+
+  // The editor's Instruction | Observation switch is undoable too.
+  await pinByLetter(page, "A").click();
+  await sheet(page).getByRole("button", { name: "Observation" }).click();
+  await expect(pinByLetter(page, "A", "observation")).toBeVisible();
+  await undo.click();
+  await expect(pinByLetter(page, "A", "instruction")).toBeVisible();
+});
+
 test("tapping the drawing closes the item editor and keeps the text", async ({
   page,
 }) => {

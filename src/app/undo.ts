@@ -39,6 +39,12 @@ export function pushUndo(scope: string, entry: UndoEntry): void {
   changed();
 }
 
+/** Renames an entry (its action changed, e.g. a new pin switched kind). */
+export function relabelUndo(entry: UndoEntry, label: string): void {
+  entry.label = label;
+  changed();
+}
+
 /** The action Undo would reverse next, if any. */
 export function peekUndo(scope: string): UndoEntry | undefined {
   return undoStacks.get(scope)?.at(-1);
