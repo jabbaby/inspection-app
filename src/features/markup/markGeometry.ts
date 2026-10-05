@@ -138,8 +138,15 @@ const SMOOTH_PASSES = 3;
  * in it. Points closer than about three quarters of the line's width to the last one
  * kept are dropped, then the rest are averaged with their neighbours (the
  * ends stay put). Page units in and out.
+ *
+ * While a stroke is drawn, its last `tail` points aren't averaged, so the
+ * line runs right to the Pencil's tip instead of trailing behind it.
  */
-export function smoothStroke(points: Point[], width: number): Point[] {
+export function smoothStroke(
+  points: Point[],
+  width: number,
+  tail = 0,
+): Point[] {
   if (points.length <= 2) return points;
   const step = width * 0.75;
   const kept: Point[] = [points[0]];
@@ -156,7 +163,7 @@ export function smoothStroke(points: Point[], width: number): Point[] {
   let out = kept;
   for (let pass = 0; pass < SMOOTH_PASSES && out.length > 2; pass++) {
     out = out.map((p, i) =>
-      i === 0 || i === out.length - 1
+      i === 0 || i >= out.length - 1 - tail
         ? p
         : {
             x: (out[i - 1].x + 2 * p.x + out[i + 1].x) / 4,

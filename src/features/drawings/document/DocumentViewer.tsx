@@ -150,6 +150,8 @@ const SCROLL_STOP_MS = 120;
 const HOLD_MS = 500;
 /** The eraser removes marks within this many screen px of it. */
 const ERASER_REACH = 10;
+/** The newest points of a stroke being drawn aren't evened out (see smoothStroke). */
+const LIVE_TAIL = 3;
 /** A stroke is simplified to within this many screen px when saved. */
 const STROKE_TOLERANCE = 0.25;
 /** Released closer to the pin than this, the hold places just the pin. */
@@ -737,6 +739,8 @@ export function DocumentViewer(props: Props) {
     page: PageLayout;
     points: Point[];
     erased: Set<string>;
+    /** Where the Pencil is about to be (drawn, never saved). */
+    predicted: Point[];
     frame: number;
   } | null>(null);
 
@@ -776,6 +780,7 @@ export function DocumentViewer(props: Props) {
       page: hit.page,
       points: [hit.at],
       erased: new Set(),
+      predicted: [],
       frame: 0,
     };
     if (ink.current.eraser) eraseAt(p);
@@ -792,7 +797,13 @@ export function DocumentViewer(props: Props) {
       if (stroke.eraser) eraseAt(p);
       else stroke.points.push(clampNormalised(onPagePoint(stroke.page, p)));
     }
-    if (!stroke.eraser) requestInkFrame();
+    if (stroke.eraser) return;
+    // The iPad's estimate of the next few positions hides the delay
+    // between the Pencil and the screen, as Apple's own apps do.
+    stroke.predicted = (e.nativeEvent.getPredictedEvents?.() ?? []).map((p) =>
+      clampNormalised(onPagePoint(stroke.page, local(p))),
+    );
+    requestInkFrame();
   }
 
   /** Marks the eraser touches at a screen point. */
@@ -843,10 +854,11 @@ export function DocumentViewer(props: Props) {
     const size = stroke.page.size;
     const even = smoothStroke(
       toPagePoints(
-        stroke.points.flatMap((p) => [p.x, p.y]),
+        [...stroke.points, ...stroke.predicted].flatMap((p) => [p.x, p.y]),
         size,
       ),
       markWidth(style.weight, size),
+      LIVE_TAIL + stroke.predicted.length,
     );
     const screen = even.map((p) =>
       pageToScreen(

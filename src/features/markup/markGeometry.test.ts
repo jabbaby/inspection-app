@@ -97,6 +97,16 @@ describe("mark geometry", () => {
     }
   });
 
+  test("while drawing, the newest points aren't evened out", () => {
+    const zigzag = Array.from({ length: 12 }, (_, i) => ({
+      x: i * 10,
+      y: i % 2 ? 6 : 0,
+    }));
+    const even = smoothStroke(zigzag, 4, 3);
+    expect(even.slice(-4)).toEqual(zigzag.slice(-4));
+    expect(even[5]).not.toEqual(zigzag[5]);
+  });
+
   test("a mark's path is drawn from its evened-out points", () => {
     const d = markPath(
       { points: [0.1, 0.1, 0.1001, 0.1, 0.2, 0.2], weight: 0.0025 },
