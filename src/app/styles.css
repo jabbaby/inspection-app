@@ -1335,6 +1335,11 @@ dl.facts dd {
   list-style: none;
 }
 
+.memo-photo-note {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-sm);
+}
+
 .memo-instructions textarea {
   width: 100%;
 }

@@ -59,6 +59,7 @@ export async function buildPack(
     inspection,
     data.items,
     data.conditionSnippets,
+    data.photoNote,
   );
   const written = await writeMemo(doc, memoInput, assets, data.signature);
   step(1, pinned.length > 0 ? `Drawing page 1 of ${pinned.length}` : "Photos");

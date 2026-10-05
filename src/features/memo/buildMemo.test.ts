@@ -4,12 +4,14 @@ import { emptyClient } from "../../db/inspections";
 import { blankMemo } from "../../db/memos";
 import type { Item, JobInspection, Memo, Snippet } from "../../db/types";
 import {
+  DEFAULT_PHOTO_NOTE,
   buildMemoPdfInput,
   defaultSalutation,
   defaultSiteVisitRequestedBy,
   letterRange,
   memoConditions,
   memoFields,
+  photoNote,
 } from "./buildMemo";
 
 const conditionSnippets = (starterSnippets as Snippet[]).filter(
@@ -73,19 +75,38 @@ describe("conditions", () => {
       memoConditions(memo(), items, conditionSnippets).map((c) => c.text),
     ).toEqual([
       "Complete items A–B listed below.",
-      "Confirm completion of items via photos prior to proceeding.",
-      "A. Add N12 bar at grid C/4",
+      "A. Add N12 bar at grid C/4 (provide photos confirming completion before proceeding)",
       "B. Prop spacing per shop drawing",
     ]);
   });
 
-  test("the photo condition is off unless an instruction needs it", () => {
-    const texts = memoConditions(
-      memo(),
-      [item("A", "Add bar")],
-      conditionSnippets,
-    ).map((c) => c.text);
-    expect(texts).toEqual(["Complete items A listed below.", "A. Add bar"]);
+  test("photo confirmation: a note on the instruction, not the photo condition", () => {
+    const a = item("A", "Add bar", { requiresPhotoConfirmation: true });
+    const texts = (note?: string) =>
+      memoConditions(
+        memo({ itemOverrides: { [a.id]: "Add N16 bar" } }),
+        [a],
+        conditionSnippets,
+        note,
+      ).map((c) => c.text);
+    // Reworded for the memo, it still carries the note.
+    expect(texts()).toEqual([
+      "Complete items A listed below.",
+      "A. Add N16 bar (provide photos confirming completion before proceeding)",
+    ]);
+    expect(texts("(photos please)")[1]).toBe("A. Add N16 bar (photos please)");
+    // An empty note (Settings) adds nothing.
+    expect(texts("")[1]).toBe("A. Add N16 bar");
+  });
+
+  test("the photo note comes from Settings, else the default", () => {
+    expect(photoNote([])).toBe(DEFAULT_PHOTO_NOTE);
+    expect(
+      photoNote([
+        { kind: "condition", text: "x" },
+        { kind: "photoNote", text: " (photos) " },
+      ]),
+    ).toBe("(photos)");
   });
 
   test("the engineer's ticks win over the defaults", () => {

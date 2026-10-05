@@ -17,7 +17,16 @@ import { confirmationParagraph } from "./memoTemplate";
 import type { MemoPdfInput } from "./pdf/renderMemoPdf";
 
 export const COMPLETE_ITEMS_ID = "condition-complete-listed-items";
-export const PHOTO_CONFIRMATION_ID = "condition-photo-confirmation";
+
+/** The photo note when no message for it is stored (a Settings message). */
+export const DEFAULT_PHOTO_NOTE =
+  "(provide photos confirming completion before proceeding)";
+
+/** The note added after an instruction that needs photo confirmation. */
+export function photoNote(snippets: Pick<Snippet, "kind" | "text">[]): string {
+  const stored = snippets.find((s) => s.kind === "photoNote");
+  return stored ? stored.text.trim() : DEFAULT_PHOTO_NOTE;
+}
 
 /** Instructions in letter order (only instructions appear in the memo). */
 export function memoInstructions(items: Item[]): Item[] {
@@ -54,8 +63,8 @@ export function defaultSiteVisitRequestedBy(client: Client): string {
 /**
  * Whether a standard condition is ticked. Unless the engineer chose,
  * "Complete items [letters] listed below." is on when there are
- * instructions, and the photo condition when any instruction needs photo
- * confirmation; others start off.
+ * instructions; others (the photo condition too: each instruction needing
+ * photos carries its own note) start off.
  */
 export function conditionTicked(
   memo: Pick<Memo, "conditionChoices">,
@@ -65,8 +74,6 @@ export function conditionTicked(
   const chosen = memo.conditionChoices[snippetId];
   if (chosen !== undefined) return chosen;
   if (snippetId === COMPLETE_ITEMS_ID) return instructions.length > 0;
-  if (snippetId === PHOTO_CONFIRMATION_ID)
-    return instructions.some((item) => item.requiresPhotoConfirmation);
   return false;
 }
 
@@ -82,12 +89,14 @@ export interface MemoCondition {
 /**
  * The bulleted conditions: ticked standard conditions first ("[letters]"
  * filled in, e.g. "A–D"), then each instruction as "A. text", reworded
- * where the engineer changed it for this memo.
+ * where the engineer changed it for this memo, followed by the photo note
+ * when it needs photo confirmation.
  */
 export function memoConditions(
   memo: Pick<Memo, "conditionChoices" | "itemOverrides">,
   items: Item[],
   conditionSnippets: Snippet[],
+  note = DEFAULT_PHOTO_NOTE,
 ): MemoCondition[] {
   const instructions = memoInstructions(items);
   const letters = letterRange(instructions.map((item) => item.letter));
@@ -100,10 +109,11 @@ export function memoConditions(
     }));
   const lines = instructions.map<MemoCondition>((item) => {
     const override = memo.itemOverrides[item.id];
+    const photos = item.requiresPhotoConfirmation && note ? ` ${note}` : "";
     return {
       key: item.id,
       kind: "instruction",
-      text: `${item.letter}. ${(override ?? item.text).trim()}`.trim(),
+      text: `${item.letter}. ${(override ?? item.text).trim()}${photos}`.trim(),
       reworded: override !== undefined,
     };
   });
@@ -140,6 +150,7 @@ export function buildMemoPdfInput(
   inspection: JobInspection,
   items: Item[],
   conditionSnippets: Snippet[],
+  note = DEFAULT_PHOTO_NOTE,
 ): MemoPdfInput {
   return {
     reference: memo.reference,
@@ -148,7 +159,7 @@ export function buildMemoPdfInput(
       confirmationParagraph(inspection.itemInspected),
       memo.bodyText.trim(),
     ].filter(Boolean),
-    conditions: memoConditions(memo, items, conditionSnippets).map(
+    conditions: memoConditions(memo, items, conditionSnippets, note).map(
       (c) => c.text,
     ),
   };

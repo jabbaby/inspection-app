@@ -31,6 +31,8 @@ export interface PackData {
   /** Pen and highlighter marks (slice 2). */
   marks: Markup[];
   conditionSnippets: Snippet[];
+  /** The note after instructions needing photo confirmation. */
+  photoNote: string;
   observationHeading: string;
   photos: Map<string, Photo>;
   /** The memo's signature (PNG), if it prints one. */

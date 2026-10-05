@@ -35,6 +35,7 @@ import {
 } from "../inspections/jobDetails";
 import {
   buildMemoPdfInput,
+  photoNote,
   conditionTicked,
   defaultSalutation,
   defaultSiteVisitRequestedBy,
@@ -188,7 +189,13 @@ function MemoEditorFor({ inspectionId }: { inspectionId: string }) {
   const bodySnippets = snippets.filter((s) => s.kind === "body");
   const instructions = memoInstructions(items);
   const letters = letterRange(instructions.map((i) => i.letter));
-  const input = buildMemoPdfInput(memo, inspection, items, conditionSnippets);
+  const input = buildMemoPdfInput(
+    memo,
+    inspection,
+    items,
+    conditionSnippets,
+    photoNote(snippets),
+  );
   const saveState =
     jobSave.state === "error" || memoSave.state === "error"
       ? "error"
@@ -614,6 +621,16 @@ function MemoEditorFor({ inspectionId }: { inspectionId: string }) {
                           onBlur={() => void memoSave.flush()}
                         />
                       </label>
+                      {/* Added after the text in the memo (Settings). */}
+                      {item.requiresPhotoConfirmation &&
+                        photoNote(snippets) && (
+                          <p
+                            className="muted memo-photo-note"
+                            data-testid="memo-photo-note"
+                          >
+                            + {photoNote(snippets)}
+                          </p>
+                        )}
                       {override !== undefined && (
                         <button
                           type="button"

@@ -99,7 +99,8 @@ test("create a memo from the instructions, with a live preview", async ({
     "We confirm having inspected the Level 3 slab reinforcement as highlighted on the drawing attached.",
   );
 
-  // Conditions: standard first, photo condition on because A needs it.
+  // Conditions: standard first. A needs photos: the note goes on A, and the
+  // general photo condition stays off unless ticked.
   await expect(page.getByTestId("memo-lead-in")).toHaveText(
     "Ok to proceed subject to the following:",
   );
@@ -110,9 +111,12 @@ test("create a memo from the instructions, with a live preview", async ({
     page.getByLabel(
       "Confirm completion of items via photos prior to proceeding.",
     ),
-  ).toBeChecked();
+  ).not.toBeChecked();
   const instructions = page.getByRole("list", { name: "Instructions" });
   await expect(instructions.getByRole("listitem")).toHaveCount(2);
+  await expect(instructions.getByTestId("memo-photo-note")).toHaveText(
+    "+ (provide photos confirming completion before proceeding)",
+  );
 
   // Reword A for the memo only, then go back to the item's text.
   const a = page.getByLabel("Instruction A in the memo");

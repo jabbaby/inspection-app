@@ -8,7 +8,13 @@ import { db } from "../../db/db";
 import { addSnippet, deleteSnippet, updateSnippet } from "../../db/snippets";
 import type { Snippet, SnippetKind } from "../../db/types";
 
-const GROUPS: { kind: SnippetKind; title: string; hint: string }[] = [
+const GROUPS: {
+  kind: SnippetKind;
+  title: string;
+  hint: string;
+  /** One message only: no Add or Delete. */
+  single?: boolean;
+}[] = [
   {
     kind: "body",
     title: "Memo messages",
@@ -23,6 +29,12 @@ const GROUPS: { kind: SnippetKind; title: string; hint: string }[] = [
     kind: "heading",
     title: "Notes box heading",
     hint: "Heads the observations in each drawing page's notes box.",
+  },
+  {
+    kind: "photoNote",
+    title: "Photo confirmation note",
+    hint: "Added in the memo after each instruction that needs photo confirmation. Leave it empty for no note.",
+    single: true,
   },
 ];
 
@@ -77,19 +89,21 @@ export function SnippetsEditor() {
                 key={s.id === added ? `${s.id}:new` : s.id}
                 snippet={s}
                 startOpen={s.id === added}
-                onDelete={() => setDeleting(s)}
+                onDelete={group.single ? undefined : () => setDeleting(s)}
               />
             ))}
-            <p className="button-row">
-              <button
-                type="button"
-                onClick={() =>
-                  void addSnippet(db, group.kind).then((s) => setAdded(s.id))
-                }
-              >
-                <Plus aria-hidden="true" /> Add
-              </button>
-            </p>
+            {!group.single && (
+              <p className="button-row">
+                <button
+                  type="button"
+                  onClick={() =>
+                    void addSnippet(db, group.kind).then((s) => setAdded(s.id))
+                  }
+                >
+                  <Plus aria-hidden="true" /> Add
+                </button>
+              </p>
+            )}
           </section>
         );
       })}
@@ -125,7 +139,8 @@ function SnippetRow({
 }: {
   snippet: Snippet;
   startOpen: boolean;
-  onDelete: () => void;
+  /** Absent for a message that can't be deleted. */
+  onDelete?: () => void;
 }) {
   const [open, setOpen] = useState(startOpen);
   const row = useRef<HTMLDetailsElement>(null);
@@ -180,11 +195,13 @@ function SnippetRow({
           onBlur={() => void autosave.flush()}
         />
       </label>
-      <p className="button-row">
-        <button type="button" className="danger-outline" onClick={onDelete}>
-          <Trash2 aria-hidden="true" /> Delete
-        </button>
-      </p>
+      {onDelete && (
+        <p className="button-row">
+          <button type="button" className="danger-outline" onClick={onDelete}>
+            <Trash2 aria-hidden="true" /> Delete
+          </button>
+        </p>
+      )}
     </details>
   );
 }

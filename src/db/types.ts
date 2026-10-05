@@ -311,7 +311,8 @@ export interface Markup {
   createdAt: number;
 }
 
-export type SnippetKind = "body" | "condition" | "heading";
+/** "photoNote": the note after an instruction needing photo confirmation. */
+export type SnippetKind = "body" | "condition" | "heading" | "photoNote";
 
 export interface Snippet {
   id: string;

@@ -16,6 +16,9 @@ These seed the Snippet table. The engineer can edit them in the app. Add new one
 - Noted for information: "Noted for information:"
 - Noted for information (long): "The following items are noted for information only and do not form conditions of this instruction:"
 
+## Photo confirmation note (kind: photoNote, one only; added in the memo after each instruction that needs photo confirmation)
+- Photo confirmation note: "(provide photos confirming completion before proceeding)"
+
 ## Rules (template logic, not snippets)
 - Conditions lead-in: with one or more instruction items, one line "Ok to proceed subject to the following:" then the list, whichever body message is chosen. With no instruction items, "Ok to proceed." and no list.
 - Observations never appear in the memo. They go in a draggable text box on each drawing page that has them, and the box is hidden on pages with none.

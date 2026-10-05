@@ -5,6 +5,7 @@ const NEW_LABELS: Record<SnippetKind, string> = {
   body: "New message",
   condition: "New condition",
   heading: "New heading",
+  photoNote: "Photo confirmation note",
 };
 
 export async function addSnippet(

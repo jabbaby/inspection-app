@@ -6,7 +6,7 @@
  * The "Rules" section is template logic, not snippets, and is skipped.
  */
 
-export type SnippetKind = "body" | "condition" | "heading";
+export type SnippetKind = "body" | "condition" | "heading" | "photoNote";
 
 export interface SnippetRecord {
   id: string;
@@ -19,6 +19,7 @@ const SECTION_KINDS: [prefix: string, kind: SnippetKind][] = [
   ["Body messages", "body"],
   ["Standard conditions", "condition"],
   ["Observations box heading", "heading"],
+  ["Photo confirmation note", "photoNote"],
 ];
 
 const BULLET = /^- (.+?): "(.+)"\s*$/;

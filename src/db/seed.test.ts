@@ -15,21 +15,33 @@ afterEach(async () => {
 });
 
 describe("ensureSeeded", () => {
-  test("seeds the 8 starter snippets and settings on first run", async () => {
+  test("seeds the 9 starter snippets and settings on first run", async () => {
     await ensureSeeded(db);
 
-    expect(await db.snippets.count()).toBe(8);
+    expect(await db.snippets.count()).toBe(9);
     expect(await db.snippets.where("kind").equals("body").count()).toBe(4);
     expect(await db.snippets.where("kind").equals("condition").count()).toBe(2);
     expect(await db.snippets.where("kind").equals("heading").count()).toBe(2);
+    expect(await db.snippets.where("kind").equals("photoNote").count()).toBe(1);
     expect((await db.settings.get(SETTINGS_ID))?.snippetsSeeded).toBe(true);
+  });
+
+  test("a device seeded before the photo note gets it once", async () => {
+    await ensureSeeded(db);
+    await db.snippets.where("kind").equals("photoNote").delete();
+    await ensureSeeded(db);
+    await ensureSeeded(db);
+    const notes = await db.snippets.where("kind").equals("photoNote").toArray();
+    expect(notes.map((n) => n.text)).toEqual([
+      "(provide photos confirming completion before proceeding)",
+    ]);
   });
 
   test("running again does not duplicate snippets", async () => {
     await ensureSeeded(db);
     await ensureSeeded(db);
 
-    expect(await db.snippets.count()).toBe(8);
+    expect(await db.snippets.count()).toBe(9);
   });
 
   test("never overwrites an edited snippet or restores a deleted one", async () => {
@@ -44,7 +56,7 @@ describe("ensureSeeded", () => {
       "Edited by the engineer",
     );
     expect(await db.snippets.get(second.id)).toBeUndefined();
-    expect(await db.snippets.count()).toBe(7);
+    expect(await db.snippets.count()).toBe(8);
   });
 
   test("keeps existing settings values", async () => {

@@ -46,5 +46,11 @@
     "kind": "heading",
     "label": "Noted for information (long)",
     "text": "The following items are noted for information only and do not form conditions of this instruction:"
+  },
+  {
+    "id": "photoNote-photo-confirmation-note",
+    "kind": "photoNote",
+    "label": "Photo confirmation note",
+    "text": "(provide photos confirming completion before proceeding)"
   }
 ]
