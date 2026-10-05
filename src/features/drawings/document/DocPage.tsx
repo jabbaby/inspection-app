@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { markPath, markStyle } from "../../markup/markGeometry";
+import type { DocMark } from "../../markup/tools";
 import type { PDFDocumentProxy, PDFPageProxy, RenderTask } from "../pdf/pdfjs";
 import type { Rect } from "../viewer/viewTransform";
 import { ViewerCoordsContext, type ViewerCoords } from "../viewer/viewerCoords";
@@ -24,6 +26,8 @@ interface Props {
   /** On or near the screen: render it. Otherwise release its memory. */
   active: boolean;
   view: SettledView | null;
+  /** The page's pen and highlighter marks (painted into canvases). */
+  marks: DocMark[];
   overlay?: ReactNode;
   clientToNormalised: (
     clientX: number,
@@ -51,17 +55,59 @@ function clearHost(host: HTMLElement | null) {
   host?.querySelectorAll("canvas").forEach((c) => releaseCanvas(c));
 }
 
+/** The host's canvas (made once), sized in device pixels. */
+function hostCanvas(host: HTMLElement, width: number, height: number) {
+  let canvas = host.querySelector("canvas");
+  if (!canvas) {
+    canvas = document.createElement("canvas");
+    host.appendChild(canvas);
+  }
+  if (canvas.width !== width) canvas.width = width;
+  if (canvas.height !== height) canvas.height = height;
+  return canvas;
+}
+
+/** Paints marks (page units) for the part `rect` of the page at `scale`. */
+function paintMarks(
+  canvas: HTMLCanvasElement,
+  marks: DocMark[],
+  page: PageLayout,
+  rect: Rect,
+  scale: number,
+) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.setTransform(scale, 0, 0, scale, -rect.x * scale, -rect.y * scale);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  for (const mark of marks) {
+    const style = markStyle(mark, page.size);
+    ctx.globalAlpha = style.opacity;
+    ctx.strokeStyle = style.colour;
+    ctx.lineWidth = style.width;
+    ctx.stroke(new Path2D(markPath(mark, page.size)));
+  }
+}
+
 /**
  * One page of the inspection document. Drawn in its own points inside a box
  * scaled to the document width, so overlays (the notes box) use page units.
  * Renders once at fit-width quality while active, then sharpens the visible
  * part after each gesture settles. Releases its canvases when inactive.
+ *
+ * Pen and highlighter marks are painted into canvases the same way (the
+ * whole page at base quality, and the sharp part), not drawn as SVG: Safari
+ * repaints SVG paths into every tile that scrolls into view, which made
+ * pages with markup slow to appear.
  */
 export function DocPage({
   page,
   doc,
   active,
   view,
+  marks,
   overlay,
   clientToNormalised,
   onRendered,
@@ -69,11 +115,62 @@ export function DocPage({
 }: Props) {
   const baseHost = useRef<HTMLDivElement>(null);
   const tileHost = useRef<HTMLDivElement>(null);
+  const markBaseHost = useRef<HTMLDivElement>(null);
+  const markTileHost = useRef<HTMLDivElement>(null);
+  /** The sharp part on show (page units) and its scale, for its marks. */
+  const tileArea = useRef<{ rect: Rect; scale: number } | null>(null);
+  const marksRef = useRef(marks);
+  useEffect(() => {
+    marksRef.current = marks;
+  });
   const [proxy, setProxy] = useState<PDFPageProxy | null>(null);
   // The pdf.js page whose base render has finished.
   const [renderedProxy, setRenderedProxy] = useState<PDFPageProxy | null>(null);
   const rendered = proxy !== null && renderedProxy === proxy;
   const baseScale = useRef(0);
+
+  /**
+   * Paints the marks: the whole page at base quality (less the sharp part,
+   * so see-through highlights aren't drawn twice there), and the sharp part.
+   */
+  function repaintMarks() {
+    const list = marksRef.current;
+    const baseHostEl = markBaseHost.current;
+    const tileHostEl = markTileHost.current;
+    if (!baseHostEl || !tileHostEl) return;
+    const scale = baseScale.current;
+    if (list.length === 0 || !scale) {
+      clearHost(baseHostEl);
+      clearHost(tileHostEl);
+      return;
+    }
+    const { width, height } = page.size;
+    const base = hostCanvas(
+      baseHostEl,
+      Math.round(width * scale),
+      Math.round(height * scale),
+    );
+    base.className = "viewer-base";
+    paintMarks(base, list, page, { x: 0, y: 0, width, height }, scale);
+    const tile = tileArea.current;
+    if (!tile) return clearHost(tileHostEl);
+    base
+      .getContext("2d")
+      ?.clearRect(tile.rect.x, tile.rect.y, tile.rect.width, tile.rect.height);
+    const sharp = hostCanvas(
+      tileHostEl,
+      Math.ceil(tile.rect.width * tile.scale),
+      Math.ceil(tile.rect.height * tile.scale),
+    );
+    Object.assign(sharp.style, {
+      left: `${tile.rect.x}px`,
+      top: `${tile.rect.y}px`,
+      width: `${tile.rect.width}px`,
+      height: `${tile.rect.height}px`,
+    });
+    paintMarks(sharp, list, page, tile.rect, tile.scale);
+  }
+
   const onRenderedRef = useRef(onRendered);
   useEffect(() => {
     onRenderedRef.current = onRendered;
@@ -142,20 +239,31 @@ export function DocPage({
     page.size.height,
   ]);
 
+  // Marks: repainted when they change and once the base render is in.
+  useEffect(() => {
+    if (rendered) repaintMarks();
+    // repaintMarks reads refs; these are what change what it paints.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [marks, rendered, fitQuality]);
+
   // Release everything when the page goes inactive or unmounts.
   useEffect(() => {
     if (active) return;
     clearHost(baseHost.current);
     clearHost(tileHost.current);
+    clearHost(markBaseHost.current);
+    clearHost(markTileHost.current);
+    tileArea.current = null;
     baseScale.current = 0;
   }, [active]);
   useEffect(() => {
-    const base = baseHost.current;
-    const tile = tileHost.current;
-    return () => {
-      clearHost(base);
-      clearHost(tile);
-    };
+    const hosts = [
+      baseHost.current,
+      tileHost.current,
+      markBaseHost.current,
+      markTileHost.current,
+    ];
+    return () => hosts.forEach(clearHost);
   }, []);
 
   // Sharpen the visible part after each gesture settles.
@@ -167,6 +275,10 @@ export function DocPage({
     let scale = view.devicePxPerDocUnit * page.scale;
     if (!part || scale <= baseScale.current * 1.1) {
       clearHost(tileHost.current);
+      if (tileArea.current) {
+        tileArea.current = null;
+        repaintMarks();
+      }
       return;
     }
     const pad = 40 / (view.devicePxPerDocUnit * page.scale);
@@ -210,6 +322,8 @@ export function DocPage({
         clearHost(tileHost.current);
         tileHost.current?.appendChild(canvas);
         tileTask.current = null;
+        tileArea.current = { rect, scale };
+        repaintMarks();
       },
       (error: unknown) => {
         unregister();
@@ -221,6 +335,8 @@ export function DocPage({
       unregister();
       task.cancel();
     };
+    // repaintMarks reads refs (the marks have their own effect).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [proxy, view, rendered, page, registerRender]);
 
   const coords = useMemo<ViewerCoords>(
@@ -247,6 +363,22 @@ export function DocPage({
       >
         <div ref={baseHost} className="viewer-layer" />
         <div ref={tileHost} className="viewer-layer" />
+        {/* Marks over the drawing, under the arrows, notes box and pins. */}
+        <div ref={markBaseHost} className="viewer-layer viewer-marks" />
+        <div ref={markTileHost} className="viewer-layer viewer-marks" />
+        {marks.length > 0 && (
+          // What's painted, for tests and assistive tech to read.
+          <ul hidden data-testid="page-marks">
+            {marks.map((m) => (
+              <li
+                key={m.id}
+                data-testid="mark"
+                data-tool={m.tool}
+                data-colour={m.colour}
+              />
+            ))}
+          </ul>
+        )}
         {active && (
           <ViewerCoordsContext.Provider value={coords}>
             {overlay}

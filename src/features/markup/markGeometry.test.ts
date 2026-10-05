@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   markPath,
   markWidth,
-  smoothStroke,
+  thinStroke,
   simplify,
   strokePath,
   toPagePoints,
@@ -46,33 +46,19 @@ describe("mark geometry", () => {
     ]);
   });
 
-  test("stroke path: a dot, a line and a smoothed curve", () => {
+  test("stroke path: straight segments exactly through the points", () => {
     expect(strokePath([{ x: 1, y: 2 }])).toBe("M 1 2 L 1 2");
-    expect(
-      strokePath([
-        { x: 0, y: 0 },
-        { x: 10, y: 0 },
-      ]),
-    ).toBe("M 0 0 L 10 0");
     expect(
       strokePath([
         { x: 0, y: 0 },
         { x: 10, y: 0 },
         { x: 10, y: 10 },
       ]),
-    ).toBe("M 0 0 C 6.67 0 10 1.67 10 5 L 10 10");
+    ).toBe("M 0 0 L 10 0 L 10 10");
   });
 
-  test("curves are plain cubics, which every PDF viewer strokes cleanly", () => {
-    const d = strokePath(
-      Array.from({ length: 20 }, (_, i) => ({ x: i * 10, y: (i % 3) * 7 })),
-    );
-    expect(d).not.toMatch(/[QqTtVv]/);
-    expect(d.match(/C /g)).toHaveLength(18);
-  });
-
-  test("Pencil jitter is evened out: the line never doubles back", () => {
-    // 240 Hz samples along a gentle curve, wobbling by up to 0.6 pt.
+  test("thinning drops only points almost on top of the last one", () => {
+    // 240 Hz samples wobbling by up to 0.6 pt along a gentle curve.
     let seed = 7;
     const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
     const raw = Array.from({ length: 400 }, (_, i) => ({
@@ -80,40 +66,23 @@ describe("mark geometry", () => {
       y: 200 + Math.sin(i / 60) * 30 + (random() - 0.5) * 1.2,
     }));
     const width = 4;
-    const even = smoothStroke(raw, width);
-    expect(even[0]).toEqual(raw[0]);
-    expect(even.at(-1)).toEqual(raw.at(-1));
-    expect(even.length).toBeLessThan(raw.length / 3);
-    for (let i = 2; i < even.length; i++) {
-      const a = {
-        x: even[i - 1].x - even[i - 2].x,
-        y: even[i - 1].y - even[i - 2].y,
-      };
-      const b = { x: even[i].x - even[i - 1].x, y: even[i].y - even[i - 1].y };
-      const cos =
-        (a.x * b.x + a.y * b.y) / (Math.hypot(a.x, a.y) * Math.hypot(b.x, b.y));
-      // Turns of more than 60 degrees would be a wobble, not the curve.
-      expect(cos).toBeGreaterThan(0.5);
-    }
+    const thin = thinStroke(raw, width);
+    expect(thin[0]).toEqual(raw[0]);
+    expect(thin.at(-1)).toEqual(raw.at(-1));
+    // Every point left is one the Pencil reported: nothing is reshaped.
+    for (const p of thin) expect(raw).toContainEqual(p);
+    for (let i = 1; i < thin.length - 1; i++)
+      expect(
+        Math.hypot(thin[i].x - thin[i - 1].x, thin[i].y - thin[i - 1].y),
+      ).toBeGreaterThanOrEqual(width / 3);
   });
 
-  test("while drawing, the newest points aren't evened out", () => {
-    const zigzag = Array.from({ length: 12 }, (_, i) => ({
-      x: i * 10,
-      y: i % 2 ? 6 : 0,
-    }));
-    const even = smoothStroke(zigzag, 4, 3);
-    expect(even.slice(-4)).toEqual(zigzag.slice(-4));
-    expect(even[5]).not.toEqual(zigzag[5]);
-  });
-
-  test("a mark's path is drawn from its evened-out points", () => {
+  test("a mark's path goes through its own points", () => {
     const d = markPath(
       { points: [0.1, 0.1, 0.1001, 0.1, 0.2, 0.2], weight: 0.0025 },
       A3,
     );
-    expect(d.startsWith("M 119.1 84.2")).toBe(true);
-    expect(d).not.toMatch(/[QqTtVv]/);
+    expect(d).toBe("M 119.1 84.2 L 238.2 168.4");
   });
 
   test("the eraser touches a mark within reach of its line", () => {

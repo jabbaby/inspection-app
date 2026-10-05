@@ -1898,7 +1898,7 @@ test("markup: no tool places nothing; pen draws, eraser erases, both undo", asyn
   await toolbar.getByRole("button", { name: "Colour #0165FC" }).click();
   await drawLine(page, [0.2, 0.3], [0.5, 0.35]);
   await expect(marks).toHaveCount(1);
-  await expect(marks.first()).toHaveAttribute("stroke", "#0165FC");
+  await expect(marks.first()).toHaveAttribute("data-colour", "#0165FC");
   // Taps with the pen don't place pins either.
   await expect(page.getByTestId("viewer-pin")).toHaveCount(0);
 
@@ -1907,7 +1907,7 @@ test("markup: no tool places nothing; pen draws, eraser erases, both undo", asyn
   await drawLine(page, [0.2, 0.6], [0.6, 0.6]);
   await expect(marks).toHaveCount(2);
   await expect(page.locator('[data-tool="highlighter"]')).toHaveAttribute(
-    "stroke",
+    "data-colour",
     "#FFD400",
   );
 

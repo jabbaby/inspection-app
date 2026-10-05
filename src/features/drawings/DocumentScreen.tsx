@@ -11,7 +11,6 @@ import { listMarkups } from "../../db/markups";
 import { HIGHLIGHTER_OPACITY, toStoredPoints } from "../markup/markGeometry";
 import { drawWithUndo, eraseWithUndo } from "../markup/markupActions";
 import { toolColour, useMarkupPrefs } from "../markup/markupPrefs";
-import { MarkupOverlay } from "../markup/MarkupOverlay";
 import { MarkupToolbar } from "../markup/MarkupToolbar";
 import type { DocMark, ViewerTool } from "../markup/tools";
 import { moveObservationBox, updateCopy, updateItem } from "../../db/items";
@@ -74,8 +73,6 @@ async function backfillPageSizes(drawing: Drawing) {
     await pdf.loadingTask.destroy();
   }
 }
-
-const NO_MARKS: DocMark[] = [];
 
 /** Milliseconds until a performance.now() time (event handlers only). */
 function msUntil(time: number) {
@@ -284,13 +281,7 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
         })),
     [marks, erasing],
   );
-  // Each page's marks as one list that only changes with them.
-  const marksByPage = useMemo(() => {
-    const byPage = new Map<string, DocMark[]>();
-    for (const mark of docMarks)
-      byPage.set(mark.pageKey, [...(byPage.get(mark.pageKey) ?? []), mark]);
-    return byPage;
-  }, [docMarks]);
+
   const inkTool = tool === "highlighter" ? "highlighter" : "pen";
 
   async function saveStroke(page: PageLayout, points: Point[]) {
@@ -600,7 +591,6 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
     );
     return (
       <>
-        <MarkupOverlay marks={marksByPage.get(page.key) ?? NO_MARKS} />
         <ArrowsOverlay items={pageSpots} />
         {box && (
           <ObservationBoxOverlay

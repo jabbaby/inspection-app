@@ -22,7 +22,6 @@ import { kindName } from "../../items/letters";
 import {
   markWidth,
   simplify,
-  smoothStroke,
   strokePath,
   toPagePoints,
   touchesMark,
@@ -148,10 +147,10 @@ const PAD = 16;
 const SCROLL_STOP_MS = 120;
 /** Holding this long without moving starts a pin with an arrow. */
 const HOLD_MS = 500;
+const NO_MARKS: DocMark[] = [];
+
 /** The eraser removes marks within this many screen px of it. */
 const ERASER_REACH = 10;
-/** The newest points of a stroke being drawn aren't evened out (see smoothStroke). */
-const LIVE_TAIL = 3;
 /** A stroke is simplified to within this many screen px when saved. */
 const STROKE_TOLERANCE = 0.25;
 /** Released closer to the pin than this, the hold places just the pin. */
@@ -246,6 +245,13 @@ export function DocumentViewer(props: Props) {
     () => new Map(layout.pages.map((p) => [p.key, p])),
     [layout],
   );
+  // Each page's marks as one list that only changes with them.
+  const marksByPage = useMemo(() => {
+    const byPage = new Map<string, DocMark[]>();
+    for (const mark of props.marks)
+      byPage.set(mark.pageKey, [...(byPage.get(mark.pageKey) ?? []), mark]);
+    return byPage;
+  }, [props.marks]);
   // Handlers outlive renders, so they read the latest layout through refs.
   const pagesRef = useRef(pagesByKey);
   useLayoutEffect(() => {
@@ -739,8 +745,6 @@ export function DocumentViewer(props: Props) {
     page: PageLayout;
     points: Point[];
     erased: Set<string>;
-    /** Where the Pencil is about to be (drawn, never saved). */
-    predicted: Point[];
     frame: number;
   } | null>(null);
 
@@ -780,7 +784,6 @@ export function DocumentViewer(props: Props) {
       page: hit.page,
       points: [hit.at],
       erased: new Set(),
-      predicted: [],
       frame: 0,
     };
     if (ink.current.eraser) eraseAt(p);
@@ -797,13 +800,7 @@ export function DocumentViewer(props: Props) {
       if (stroke.eraser) eraseAt(p);
       else stroke.points.push(clampNormalised(onPagePoint(stroke.page, p)));
     }
-    if (stroke.eraser) return;
-    // The iPad's estimate of the next few positions hides the delay
-    // between the Pencil and the screen, as Apple's own apps do.
-    stroke.predicted = (e.nativeEvent.getPredictedEvents?.() ?? []).map((p) =>
-      clampNormalised(onPagePoint(stroke.page, local(p))),
-    );
-    requestInkFrame();
+    if (!stroke.eraser) requestInkFrame();
   }
 
   /** Marks the eraser touches at a screen point. */
@@ -850,24 +847,9 @@ export function DocumentViewer(props: Props) {
     ctx.clearRect(0, 0, width, height);
     const t = currentTransform();
     const style = latest.current.ink;
-    // Evened out in page units, as the saved mark will be (markPath).
-    const size = stroke.page.size;
-    const even = smoothStroke(
-      toPagePoints(
-        [...stroke.points, ...stroke.predicted].flatMap((p) => [p.x, p.y]),
-        size,
-      ),
-      markWidth(style.weight, size),
-      LIVE_TAIL + stroke.predicted.length,
-    );
-    const screen = even.map((p) =>
-      pageToScreen(
-        t,
-        pagePointToDoc(stroke.page, {
-          x: p.x / size.width,
-          y: p.y / size.height,
-        }),
-      ),
+    // Exactly the points the Pencil reported, joined by straight lines.
+    const screen = stroke.points.map((n) =>
+      pageToScreen(t, pagePointToDoc(stroke.page, n)),
     );
     ctx.globalAlpha = style.opacity;
     ctx.strokeStyle = style.colour;
@@ -1535,6 +1517,7 @@ export function DocumentViewer(props: Props) {
                 doc={docs.get(page.drawingId)}
                 active={activeKeys.has(page.key)}
                 view={settled}
+                marks={marksByPage.get(page.key) ?? NO_MARKS}
                 overlay={
                   activeKeys.has(page.key)
                     ? props.renderPageOverlay(page)
