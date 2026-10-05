@@ -1,6 +1,5 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import {
-  CloudUpload,
   Database,
   MessageSquareText,
   ShieldAlert,
@@ -19,6 +18,7 @@ import {
 import type { SnippetKind } from "../../db/types";
 import { MyDetailsForm, MySignature } from "./MyDetailsForm";
 import { SnippetsEditor } from "./SnippetsEditor";
+import { BackupAll } from "../backup/BackupAll";
 
 const KINDS: SnippetKind[] = ["body", "condition", "heading"];
 
@@ -157,14 +157,7 @@ export function SettingsPage() {
                 <span style={{ width: `${Math.max(used, 1)}%` }} />
               </div>
             )}
-            <p className="button-row">
-              <button type="button" disabled>
-                <CloudUpload aria-hidden="true" /> Back up now
-              </button>
-              <span className="muted small">
-                Available once inspections can be exported (build step 9).
-              </span>
-            </p>
+            <BackupAll />
           </section>
         </div>
       </div>

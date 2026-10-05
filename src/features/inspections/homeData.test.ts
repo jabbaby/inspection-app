@@ -88,19 +88,26 @@ describe("next step and steps done", () => {
 });
 
 describe("needsAttention", () => {
-  it("flags no project, then items without a memo, up to the limit", () => {
+  it("flags no project, then items without a memo, then a backup, up to the limit", () => {
     const a = job({ id: "a", projectId: null });
     const b = job({ id: "b" });
     const c = job({ id: "c" });
+    const d = job({ id: "d", updatedAt: 5, backedUpAt: 4 });
+    const e = job({ id: "e", updatedAt: 5, backedUpAt: 5 });
+    const done = { ...emptyProgress(), itemCount: 1, memoReference: "SIM-001" };
     const progress = new Map([
       ["a", emptyProgress()],
       ["b", { ...emptyProgress(), itemCount: 3 }],
-      ["c", { ...emptyProgress(), itemCount: 1, memoReference: "SIM-001" }],
+      ["c", done],
+      ["d", done],
+      ["e", done],
     ]);
-    const found = needsAttention([a, b, c], progress);
+    const found = needsAttention([a, b, c, d, e], progress, Infinity);
     expect(found.map((f) => [f.inspection.id, f.tone, f.reason])).toEqual([
       ["a", "danger", "Needs a project"],
       ["b", "todo", "3 items, no memo yet"],
+      ["c", "todo", "Not backed up"],
+      ["d", "todo", "Changed since last backup"],
     ]);
     expect(needsAttention([a, b, c], progress, 1)).toHaveLength(1);
   });

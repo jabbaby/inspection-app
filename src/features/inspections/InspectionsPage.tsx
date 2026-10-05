@@ -27,6 +27,7 @@ import {
   StatusChip,
 } from "./inspectionParts";
 import { inspectionTitle } from "./inspectionTitle";
+import { ImportInspection } from "../backup/ImportInspection";
 
 /** How many inspections Recent shows. */
 const RECENT = 10;
@@ -100,7 +101,10 @@ export function InspectionsPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </label>
-        <NewInspectionButton from={HERE} />
+        <div className="home-actions">
+          <ImportInspection />
+          <NewInspectionButton from={HERE} />
+        </div>
       </header>
 
       <div className="home-lower">

@@ -15,6 +15,7 @@ import {
   type JobPatch,
 } from "../../db/projects";
 import type { JobInspection } from "../../db/types";
+import { BackupCard } from "../backup/BackupCard";
 import { DrawingsSection } from "../drawings/DrawingsSection";
 import { ProjectAvatar } from "../projects/ProjectAvatar";
 import { ProjectPicker } from "../projects/ProjectPicker";
@@ -232,6 +233,8 @@ function PreInspectionFor({ id }: { id: string }) {
               </Link>
             </div>
           </section>
+
+          <BackupCard inspectionId={id} />
 
           <button
             type="button"

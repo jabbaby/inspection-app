@@ -1,6 +1,7 @@
 import { missingJobFields } from "../../db/inspections";
 import type { Inspection, Item, JobInspection, Memo } from "../../db/types";
 import type { InspectionTab } from "./tabPath";
+import { needsBackup } from "../../db/backup";
 
 /** How far an inspection has got, for its status and the home screen. */
 export interface InspectionProgress {
@@ -90,7 +91,10 @@ export interface Attention {
   tab: InspectionTab;
 }
 
-/** Inspections that need something: a project, or a memo for their items. */
+/**
+ * Inspections that need something: a project, a memo for their items, or
+ * a backup (drawings or items changed since the last one).
+ */
 export function needsAttention(
   inspections: JobInspection[],
   progress: Map<string, InspectionProgress>,
@@ -112,6 +116,16 @@ export function needsAttention(
         tone: "todo",
         reason: `${p.itemCount} item${p.itemCount === 1 ? "" : "s"}, no memo yet`,
         tab: "memo",
+      });
+    else if ((p.drawings > 0 || p.itemCount > 0) && needsBackup(inspection))
+      // Backed up from its Backup card on Pre-inspection.
+      found.push({
+        inspection,
+        tone: "todo",
+        reason: inspection.backedUpAt
+          ? "Changed since last backup"
+          : "Not backed up",
+        tab: "details",
       });
   }
   return found.slice(0, limit);
