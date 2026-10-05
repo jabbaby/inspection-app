@@ -291,6 +291,26 @@ export interface ObservationBox {
   y: number;
 }
 
+/** Slice 2 markup tools that make marks (SPEC section 5a). */
+export type MarkupTool = "pen" | "highlighter";
+
+/** One mark drawn on a drawing page (SPEC section 5a). */
+export interface Markup {
+  id: string;
+  inspectionId: string;
+  drawingId: string;
+  /** 1-based position in the drawing's pages (Drawing.pages). */
+  page: number;
+  tool: MarkupTool;
+  /** Normalised points (0..1 of the page), flat: x0, y0, x1, y1... */
+  points: number[];
+  /** "#rrggbb". */
+  colour: string;
+  /** Line width as a fraction of the sheet's short side. */
+  weight: number;
+  createdAt: number;
+}
+
 export type SnippetKind = "body" | "condition" | "heading";
 
 export interface Snippet {

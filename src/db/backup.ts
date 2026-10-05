@@ -10,6 +10,7 @@ import type {
   Drawing,
   Inspection,
   Item,
+  Markup,
   Memo,
   ObservationBox,
   Photo,
@@ -18,8 +19,11 @@ import type {
   StoredBlob,
 } from "./types";
 
-/** Bumped when the file's data changes shape; older files stay readable. */
-export const SCHEMA_VERSION = 1;
+/**
+ * Bumped when the file's data changes shape; older files stay readable.
+ * 2: markup (slice 2).
+ */
+export const SCHEMA_VERSION = 2;
 
 export interface InspectionData {
   schemaVersion: number;
@@ -31,6 +35,8 @@ export interface InspectionData {
   drawings: Drawing[];
   items: Item[];
   observationBoxes: ObservationBox[];
+  /** Pen and highlighter marks (schemaVersion 2; absent in version 1 files). */
+  markups?: Markup[];
   photos: Photo[];
   memo: Memo | null;
   /** Prefilled messages, so a memo's conditions and the notes box heading travel too. */
@@ -56,13 +62,16 @@ export async function collectInspection(
 ): Promise<CollectedInspection> {
   const inspection = await db.inspections.get(inspectionId);
   if (!inspection) throw new Error(`Inspection ${inspectionId} not found`);
-  const [project, drawings, items, memo, snippets] = await Promise.all([
-    inspection.projectId ? db.projects.get(inspection.projectId) : undefined,
-    db.drawings.where("inspectionId").equals(inspectionId).toArray(),
-    db.items.where("inspectionId").equals(inspectionId).toArray(),
-    db.memos.where("inspectionId").equals(inspectionId).first(),
-    db.snippets.toArray(),
-  ]);
+  const [project, drawings, items, memo, snippets, markups] = await Promise.all(
+    [
+      inspection.projectId ? db.projects.get(inspection.projectId) : undefined,
+      db.drawings.where("inspectionId").equals(inspectionId).toArray(),
+      db.items.where("inspectionId").equals(inspectionId).toArray(),
+      db.memos.where("inspectionId").equals(inspectionId).first(),
+      db.snippets.toArray(),
+      db.markups.where("inspectionId").equals(inspectionId).toArray(),
+    ],
+  );
   const drawingIds = new Set(drawings.map((d) => d.id));
   const boxes = await db.observationBoxes
     .filter((b) => drawingIds.has(b.drawingId))
@@ -103,6 +112,7 @@ export async function collectInspection(
       drawings,
       items,
       observationBoxes: boxes,
+      markups,
       photos,
       memo: memo ?? null,
       snippets,
@@ -169,6 +179,12 @@ function withNewIds(data: InspectionData): InspectionData {
       id: id(b.id),
       drawingId: id(b.drawingId),
     })),
+    markups: data.markups?.map((m) => ({
+      ...m,
+      id: id(m.id),
+      inspectionId: id(m.inspectionId),
+      drawingId: id(m.drawingId),
+    })),
     photos: data.photos.map((p) => ({
       ...p,
       id: id(p.id),
@@ -232,6 +248,7 @@ export async function importInspection(
       db.photos,
       db.blobs,
       db.observationBoxes,
+      db.markups,
       db.memos,
       db.memoCounters,
       db.snippets,
@@ -277,6 +294,7 @@ export async function importInspection(
       await db.items.bulkPut(data.items);
       await db.photos.bulkPut(data.photos);
       await db.observationBoxes.bulkPut(data.observationBoxes);
+      await db.markups.bulkPut(data.markups ?? []);
       if (data.memo) {
         await db.memos.put(data.memo);
         const seq = simNumber(data.memo.reference);

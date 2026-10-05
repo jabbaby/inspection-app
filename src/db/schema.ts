@@ -8,6 +8,7 @@ import type {
   Drawing,
   Inspection,
   Item,
+  Markup,
   Memo,
   MemoCounter,
   MemoTemplate,
@@ -44,6 +45,7 @@ export class InspectionDb extends Dexie {
   snippets!: EntityTable<Snippet, "id">;
   settings!: EntityTable<Settings, "id">;
   observationBoxes!: EntityTable<ObservationBox, "id">;
+  markups!: EntityTable<Markup, "id">;
 
   constructor(name = DB_NAME) {
     super(name);
@@ -244,6 +246,10 @@ export class InspectionDb extends Dexie {
             (_, i) => ({ source: i + 1 }),
           );
         });
+    });
+    // Slice 2: pen and highlighter marks, one record per mark.
+    this.version(12).stores({
+      markups: "id, inspectionId, drawingId",
     });
   }
 }

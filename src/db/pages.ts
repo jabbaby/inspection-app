@@ -3,12 +3,13 @@
  * duplicate a drawing's pages. The PDF itself never changes; a drawing's
  * `pages` list says which PDF page each position shows and whether it is
  * hidden. Items and notes boxes refer to positions, so hiding moves
- * nothing, and duplicating moves the pins and boxes of later pages along.
+ * nothing, and duplicating moves the pins, boxes and markup of later pages
+ * along.
  */
 import { itemSpots } from "../features/items/spots";
 import { reletterInspection, touchInspection } from "./items";
 import type { InspectionDb } from "./schema";
-import type { Drawing, DrawingPage, Item } from "./types";
+import type { Drawing, DrawingPage, Item, Markup } from "./types";
 
 function pagesOf(drawing: Drawing): DrawingPage[] {
   return (
@@ -17,14 +18,22 @@ function pagesOf(drawing: Drawing): DrawingPage[] {
   );
 }
 
-/** Positions (1-based) on a drawing that have pins (copies included). */
-export function markedPositions(drawingId: string, items: Item[]): Set<number> {
-  return new Set(
-    items
+/**
+ * Positions (1-based) on a drawing that have pins (copies included) or
+ * markup: they can't be hidden.
+ */
+export function markedPositions(
+  drawingId: string,
+  items: Item[],
+  marks: Pick<Markup, "drawingId" | "page">[] = [],
+): Set<number> {
+  return new Set([
+    ...items
       .flatMap(itemSpots)
       .filter((spot) => spot.drawingId === drawingId)
       .map((spot) => spot.page),
-  );
+    ...marks.filter((m) => m.drawingId === drawingId).map((m) => m.page),
+  ]);
 }
 
 /**
@@ -51,8 +60,8 @@ async function remapCopies(
 }
 
 /**
- * Hides (or restores) pages of one drawing. Pages with pins are never
- * hidden (their items must be removed first); returns how many changed.
+ * Hides (or restores) pages of one drawing. Pages with pins or markup are
+ * never hidden (they must be removed first); returns how many changed.
  */
 export async function setPagesHidden(
   db: InspectionDb,
@@ -63,7 +72,7 @@ export async function setPagesHidden(
 ): Promise<number> {
   return db.transaction(
     "rw",
-    [db.inspections, db.drawings, db.items],
+    [db.inspections, db.drawings, db.items, db.markups],
     async () => {
       const drawing = await db.drawings.get(drawingId);
       if (!drawing) return 0;
@@ -72,7 +81,11 @@ export async function setPagesHidden(
         .where("inspectionId")
         .equals(drawing.inspectionId)
         .toArray();
-      const marked = markedPositions(drawingId, items);
+      const marks = await db.markups
+        .where("drawingId")
+        .equals(drawingId)
+        .toArray();
+      const marked = markedPositions(drawingId, items, marks);
       const pages = pagesOf(drawing).map((page) => ({ ...page }));
       let changed = 0;
       for (const position of positions) {
@@ -93,8 +106,9 @@ export async function setPagesHidden(
 }
 
 /**
- * Duplicates a page: a copy (of the same PDF page, without its pins) goes
- * right after it, and later pages' pins and notes boxes move along one.
+ * Duplicates a page: a copy (of the same PDF page, without its pins or
+ * markup) goes right after it, and later pages' pins, notes boxes and
+ * markup move along one.
  * Returns the copy's position.
  */
 export async function duplicatePage(
@@ -105,7 +119,7 @@ export async function duplicatePage(
 ): Promise<number> {
   return db.transaction(
     "rw",
-    [db.inspections, db.drawings, db.items, db.observationBoxes],
+    [db.inspections, db.drawings, db.items, db.observationBoxes, db.markups],
     async () => {
       const drawing = await db.drawings.get(drawingId);
       if (!drawing) throw new Error(`Drawing ${drawingId} not found`);
@@ -129,6 +143,13 @@ export async function duplicatePage(
         .filter((box) => box.drawingId === drawingId && box.page > position)
         .modify((box) => {
           box.page += 1;
+        });
+      await db.markups
+        .where("drawingId")
+        .equals(drawingId)
+        .filter((mark) => mark.page > position)
+        .modify((mark) => {
+          mark.page += 1;
         });
       await remapCopies(db, drawing.inspectionId, drawingId, (page) =>
         page > position ? page + 1 : page,
@@ -161,7 +182,7 @@ export function pageMoveTarget(
 
 /**
  * Moves a page within its drawing, past the next visible page in that
- * direction. Its pins and notes box go with it, and letters follow the new
+ * direction. Its pins, notes box and markup go with it, and letters follow the new
  * page order. Returns the page's new position (unchanged if it can't move).
  */
 export async function movePage(
@@ -173,7 +194,7 @@ export async function movePage(
 ): Promise<number> {
   return db.transaction(
     "rw",
-    [db.inspections, db.drawings, db.items, db.observationBoxes],
+    [db.inspections, db.drawings, db.items, db.observationBoxes, db.markups],
     async () => {
       const drawing = await db.drawings.get(drawingId);
       if (!drawing) return position;
@@ -199,6 +220,12 @@ export async function movePage(
         .modify((box) => {
           box.page = newPosition.get(box.page) ?? box.page;
         });
+      await db.markups
+        .where("drawingId")
+        .equals(drawingId)
+        .modify((mark) => {
+          mark.page = newPosition.get(mark.page) ?? mark.page;
+        });
       await remapCopies(
         db,
         drawing.inspectionId,
@@ -212,11 +239,15 @@ export async function movePage(
   );
 }
 
-/** How many visible pages across an inspection's drawings have no pins. */
-export function countUnmarked(drawings: Drawing[], items: Item[]): number {
+/** How many visible pages across an inspection's drawings have no pins or markup. */
+export function countUnmarked(
+  drawings: Drawing[],
+  items: Item[],
+  marks: Pick<Markup, "drawingId" | "page">[] = [],
+): number {
   let count = 0;
   for (const drawing of drawings) {
-    const marked = markedPositions(drawing.id, items);
+    const marked = markedPositions(drawing.id, items, marks);
     pagesOf(drawing).forEach((page, i) => {
       if (!page.hidden && !marked.has(i + 1)) count++;
     });
@@ -224,7 +255,7 @@ export function countUnmarked(drawings: Drawing[], items: Item[]): number {
   return count;
 }
 
-/** Hides every visible page without pins in an inspection; returns how many. */
+/** Hides every visible page without pins or markup in an inspection; returns how many. */
 export async function hideUnmarkedPages(
   db: InspectionDb,
   inspectionId: string,

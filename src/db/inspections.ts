@@ -84,6 +84,7 @@ export async function deleteInspection(
       db.blobs,
       db.observationBoxes,
       db.memos,
+      db.markups,
     ],
     async () => {
       const drawings = await db.drawings
@@ -111,6 +112,7 @@ export async function deleteInspection(
       await db.observationBoxes
         .filter((box) => drawingIds.includes(box.drawingId))
         .delete();
+      await db.markups.where("inspectionId").equals(id).delete();
       await db.items.where("inspectionId").equals(id).delete();
       await db.drawings.where("inspectionId").equals(id).delete();
       await db.memos.where("inspectionId").equals(id).delete();

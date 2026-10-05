@@ -236,6 +236,7 @@ export async function deleteProject(
       db.blobs,
       db.observationBoxes,
       db.memos,
+      db.markups,
     ],
     async () => {
       const inspections = await db.inspections

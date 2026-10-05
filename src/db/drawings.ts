@@ -119,6 +119,7 @@ export async function deleteDrawing(
       db.items,
       db.photos,
       db.observationBoxes,
+      db.markups,
     ],
     async () => {
       const drawing = await db.drawings.get(id);
@@ -145,6 +146,7 @@ export async function deleteDrawing(
       }
       await deleteItemRecords(db, doomed);
       await db.observationBoxes.filter((box) => box.drawingId === id).delete();
+      await db.markups.where("drawingId").equals(id).delete();
       await db.blobs.delete(drawing.pdfBlobId);
       await db.drawings.delete(id);
       await reletterInspection(db, drawing.inspectionId);

@@ -9,6 +9,7 @@ import {
 import { addDrawing } from "../../db/drawings";
 import { createInspection, emptyClient } from "../../db/inspections";
 import { addCopy, createItem, updateItem } from "../../db/items";
+import { addMarkup } from "../../db/markups";
 import { createMemo, markMemoExported, updateMemo } from "../../db/memos";
 import { addPhotos } from "../../db/photos";
 import { createProject } from "../../db/projects";
@@ -56,7 +57,7 @@ const PNG = Uint8Array.from(
 let source: InspectionDb;
 let inspectionId: string;
 
-/** A full inspection: project, drawing, pins with a copy and arrows, photos, memo. */
+/** A full inspection: project, drawing, pins with a copy and arrows, markup, photos, memo. */
 beforeEach(async () => {
   source = newDb();
   await ensureSeeded(source);
@@ -122,6 +123,24 @@ beforeEach(async () => {
     },
     box,
   );
+  await addMarkup(source, {
+    inspectionId,
+    drawingId: drawing.id,
+    page: 1,
+    tool: "pen",
+    points: [0.1, 0.1, 0.15, 0.12, 0.2, 0.18],
+    colour: "#DA1A32",
+    weight: 0.0025,
+  });
+  await addMarkup(source, {
+    inspectionId,
+    drawingId: drawing.id,
+    page: 2,
+    tool: "highlighter",
+    points: [0.3, 0.3, 0.5, 0.3],
+    colour: "#FFD400",
+    weight: 0.012,
+  });
   await addPhotos(source, { itemId: a.id }, [photo(true), photo(false)]);
   await addPhotos(source, { inspectionId }, [photo(false)]);
   const memo = await createMemo(source, inspectionId);
@@ -156,6 +175,8 @@ describe("inspection file", () => {
 
     const target = newDb();
     await ensureSeeded(target);
+    expect(file.data.schemaVersion).toBe(2);
+    expect(file.data.markups).toHaveLength(2);
     const id = await importInspection(target, file.data, file.blobs, "new");
     expect(id).toBe(inspectionId);
 
@@ -204,6 +225,12 @@ describe("inspection file", () => {
         undefined,
       );
     }
+    const marks = await source.markups
+      .where("inspectionId")
+      .equals(id)
+      .toArray();
+    expect(marks).toHaveLength(2);
+    for (const mark of marks) expect(mark.drawingId).toBe(drawings[0].id);
     const memo = await source.memos.where("inspectionId").equals(id).first();
     const a = items.find((i) => i.kind === "instruction")!;
     expect(memo!.itemOverrides).toEqual({ [a.id]: "Reworded" });
@@ -235,6 +262,23 @@ describe("inspection file", () => {
     expect(imported!.projectId).toBe(local.id);
     expect((await target.projects.get(local.id))!.jobName).toBe("Local name");
     expect(needsBackup(imported!)).toBe(false);
+  });
+
+  test("a version 1 file (before markup) still imports", async () => {
+    const file = await exportFile();
+    const v1: InspectionData = { ...file.data, schemaVersion: 1 };
+    delete v1.markups;
+    const target = newDb();
+    await ensureSeeded(target);
+    const id = await importInspection(target, v1, file.blobs, "new");
+    expect(await target.items.where("inspectionId").equals(id).count()).toBe(2);
+    expect(await target.markups.count()).toBe(0);
+  });
+
+  test("replace removes the device's markup before the file's goes in", async () => {
+    const file = await exportFile();
+    await importInspection(source, file.data, file.blobs, "replace");
+    expect(await source.markups.count()).toBe(2);
   });
 
   test("rejects other files and files from a newer version", async () => {

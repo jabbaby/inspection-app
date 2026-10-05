@@ -19,6 +19,7 @@ describe("InspectionDb", () => {
       "drawings",
       "inspections",
       "items",
+      "markups",
       "memoCounters",
       "memoTemplates",
       "memos",
