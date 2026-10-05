@@ -61,3 +61,10 @@ Reply with the step number and what you saw (no need to edit this file).
 34. **Remove.** With a slot chosen, open its panel and tap **Remove**: it goes and its neighbour is chosen. With one slot left, Remove isn't offered.
 35. **Highlighter.** The highlighter's slots work the same way, with lighter preset colours, and don't affect the pen's.
 36. **Remembered.** Close and reopen the app: the slots and the chosen one are as you left them.
+
+## Follow-up (2026-10-06): PDF strokes and the photo note
+37. **No white nicks.** Draw a few curly pen and highlighter lines, export the PDF pack and open it (Safari, Files): the lines are solid, with no white semicircles along them. Zoom into the PDF too.
+38. **Photo note.** Give instruction A photo confirmation. On the Site memo step, A shows "+ (provide photos confirming completion before proceeding)" under it, and the preview and exported PDF read "A. … (provide photos confirming completion before proceeding)". Instructions without it have no note.
+39. **Photo condition.** "Confirm completion of items via photos prior to proceeding." is no longer ticked by itself; tick it by hand and it appears in the memo as before.
+40. **Rewording.** Reword A for the memo: the note still follows the reworded text.
+41. **Settings.** Settings, prefilled messages, has a **Photo confirmation note** (one, no Add or Delete). Change its wording: the memo follows. Empty it: no note in the memo.
