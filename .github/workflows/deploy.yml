@@ -19,8 +19,16 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # A hung run fails after 20 minutes instead of blocking later deploys.
+    timeout-minutes: 20
+    # Browsers and their system libraries come preinstalled. Keep this tag
+    # in step with the @playwright/test version in package.json.
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
     steps:
       - uses: actions/checkout@v7
+      # Lets vite.config.ts read the commit for the version stamp.
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - uses: actions/setup-node@v7
         with:
           node-version: 24
@@ -30,7 +38,6 @@ jobs:
       - run: npm run lint
       - run: npm run format:check
       - run: npm test
-      - run: npx playwright install --with-deps webkit chromium
       - run: npm run test:e2e
       - run: npm run build
       - uses: actions/upload-pages-artifact@v5
