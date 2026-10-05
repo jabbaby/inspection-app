@@ -388,6 +388,9 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
       pendingOpen.current = 0;
       // Cancelled meanwhile (a double-tap's second press, or another pin).
       if (openToken.current !== token) return;
+      // Its double-tap window is over: a later double-tap on it switches
+      // its kind (its own Undo step) rather than finishing this tap.
+      placedByTap.current = null;
       setJustPlaced(item.id);
       select(item.id);
     };
