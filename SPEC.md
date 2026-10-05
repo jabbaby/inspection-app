@@ -111,7 +111,7 @@ Northrop branding is **hard-coded** for the POC. Brand assets come from the samp
 - **Reordering (decided 2026-10-05):** drawings can be reordered (drag ≡ on the Pre-inspection Drawings card, or from the Pages view) and pages moved within their drawing. The document, page numbers, PDF pack and letters all follow the new order (re-lettered at once; the Export card warns if the memo was already exported). Drawing order is still `createdAt`: a reorder swaps the drawings' values, so new drawings go last.
 - Fields per item: letter, kind, drawing + page, position, text, photos (0..n), `requiresPhotoConfirmation` (bool, only meaningful for instructions). No open/closed status in the POC (re-inspections are out of scope).
 
-## 5a. Markup (slice 2; decided 2026-10-06, being built)
+## 5a. Markup (slice 2; decided 2026-10-06; part 2a built 2026-10-06)
 
 - **Toolbar (GoodNotes style):** a full-width white toolbar joined to the screen header, between it and the drawing. It never floats over the drawing (so it can't cover the notes box), and the drawing doesn't resize when tools change. Tools in order: **Pin**, **Pen**, **Highlighter**, **Shapes** (line, arrow, rectangle, ellipse, revision cloud; tapping it again shows the list, and it remembers the last shape), **Text callout**, **Eraser**, **Select**, then the **Draw with finger** toggle. Icons are Lucide in near-black `#111` with a slightly heavier stroke than the app's other icons. For Pen, Highlighter, Shapes and Text the bar then shows three weights (thin, medium, thick) and the first six saved colours (small 16 px swatches) with a ⌄ for the full saved palette; Pin, Eraser and Select show a one-line hint there instead. The right-edge pills keep Page / Items, the camera, Undo, Redo and Fit page. (The engineer chose a top toolbar for markup over the earlier "Pencil tools on the right edge".)
 - **Every tool is a toggle:** one is on at a time; tapping it again turns it off. A drawing opens with **no tool on**: fingers and Pencil scroll and zoom, tapping a pin opens it, and nothing is placed or drawn.
@@ -125,7 +125,8 @@ Northrop branding is **hard-coded** for the POC. Brand assets come from the samp
 - **Pages and layering:** markup is drawn under the pins, arrows and notes box. Pages with markup can't be hidden (like pages with pins); duplicated pages start without markup.
 - **Undo:** every mark, erase and edit is one Undo / Redo step in the existing history.
 - **Export and file:** markup is burned into the PDF pack as vector, and pages with markup but no pins are exported too. The inspection file carries the markup records (`schemaVersion` 2); older files still import.
-- **Built in parts:** 2a toolbar, Pin tool, pen, highlighter, eraser, finger toggle, palette and weights (with export, file and undo); 2b shapes; 2c text callouts; 2d select.
+- **Built in parts:** 2a toolbar, Pin tool, pen, highlighter, eraser, finger toggle, palette and weights (with export, file and undo; built 2026-10-06, iPad plan docs/test-plans/slice2a-markup.md); 2b shapes; 2c text callouts; 2d select. Until 2b to 2d, the toolbar shows only the tools that are built.
+- **How 2a draws (built):** the stroke being drawn goes on a canvas over the viewer at the Pencil's full rate (coalesced samples); when it lifts it is simplified to within about half a screen pixel and saved, then drawn as an SVG path (smoothed through midpoints) in page units, the same path the pinch snapshot and the PDF export draw (`src/features/markup/markGeometry.ts`). Palettes, weights and Draw with finger are small device preferences (localStorage), never part of an inspection.
 
 ## 6. Photos
 
