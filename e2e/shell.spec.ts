@@ -25,9 +25,8 @@ test("Settings shows storage and the 8 starter snippets", async ({ page }) => {
     "8 snippets (4 body, 2 condition, 2 heading)",
   );
   await expect(page.getByTestId("storage-used")).not.toHaveText("Checking…");
-  await expect(
-    page.getByRole("button", { name: "Back up now" }),
-  ).toBeDisabled();
+  // Back up all appears once there are inspections to back up.
+  await expect(page.getByText("No inspections to back up yet.")).toBeVisible();
 });
 
 // Tagged @offline: runs in the Chromium project only (see playwright.config.ts).
