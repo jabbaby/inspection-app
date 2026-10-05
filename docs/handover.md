@@ -24,12 +24,12 @@ STATUS (SPEC section 13 build steps)
 - Step 8 (PDF export pack) is BUILT (2026-10-04), waiting for the iPad test (docs/test-plans/step8-export.md). Code in src/features/export: markupGeometry.ts (pin size, rotated/cropped pages, notes box layout), drawMarkup.ts, drawingPages.ts, appendixLayout.ts + renderAppendix.ts, packContents.ts (pure: what goes in, warnings; no pdf-lib so the memo screen stays light), buildPack.ts (pdf-lib, loaded on demand), packData.ts (loads from Dexie), exportedLetters.ts, ExportCard.tsx, ExportedLettersNotice.tsx. The memo renderer exposes writeMemo() and drawFooter() for the pack.
 
 - Since step 8 (2026-10-05, all pushed, CI green, waiting for iPad tests): memo recipients up to 10; reorder drawings (Pre-inspection drag handles via src/app/useRowDrag.ts; Pages view menu + ReorderDrawingsDialog) and move pages within a drawing (src/db/pages.ts movePage; drawing order is still createdAt, swapped by reorderDrawings); Copy pin (Item.copies; src/features/items/spots.ts gives each pin a spot key "itemId" or "itemId~copyId"; the original decides the letter); step 9 inspection file and backups (src/db/backup.ts collect/import, src/features/backup: inspectionFile.ts zip via fflate, BackupCard, ImportInspection, BackupAll; Inspection.backedUpAt).
-- iPad test plans waiting: docs/test-plans/step8-export.md, step8b-reorder-recipients.md, step8c-copy-pins.md, step9-backup.md.
+- All four plans (step8-export, step8b-reorder-recipients, step8c-copy-pins, step9-backup) passed on my iPad with no issues (2026-10-05): steps 8 and 9 are DONE.
 - Moving data between devices (decided 2026-10-05, keep as is): no sync; backups are per inspection (Back up now / Back up all) and an inspection is moved to the desktop only when needed (back up on one device, import on the other, Replace to bring edits back). My details, the Settings signature and projects with no inspections don't travel. A one-file "Transfer everything" was offered and declined for now; real sync needs a server (out of POC scope).
 
 NEXT (agreed order; plan + mockup each before building)
-1. Fix anything from the waiting iPad tests.
-2. Slice 2: the markup editor (freehand Pencil, shapes/clouds, arrows, text callouts) in its own mode so it doesn't clash with tap-to-pin; its tools go on the right. The export draws page extras in drawPageMarkup() (src/features/export/drawMarkup.ts) and the inspection file has schemaVersion 1: markup bumps it and must round-trip.
+1. Slice 2: the markup editor (freehand Pencil, shapes/clouds, arrows, text callouts) in its own mode so it doesn't clash with tap-to-pin; its tools go on the right. The export draws page extras in drawPageMarkup() (src/features/export/drawMarkup.ts) and the inspection file has schemaVersion 1: markup bumps it and must round-trip.
+2. The features and limitations PDF (see OPEN ITEMS).
 3. Step 10 hardening (offline tests, large drawings, storage limits).
 
 HOW THE UI IS BUILT
