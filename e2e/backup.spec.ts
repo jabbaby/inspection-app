@@ -8,6 +8,7 @@ import {
   openTab,
   stageBox,
   startInspection,
+  pinToolOn,
 } from "./helpers";
 
 /** A stand-in Share sheet that keeps each shared file's name and bytes. */
@@ -65,7 +66,7 @@ test("back up an inspection, delete it, import it back; importing again asks", a
     page.locator('[data-testid="drawing-viewer"][data-ready="true"]'),
   ).toBeVisible({ timeout: 20_000 });
   const box = await stageBox(page);
-  await page.getByRole("button", { name: "Add pin" }).click();
+  await pinToolOn(page);
   await page.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.3);
   const sheet = page.getByTestId("item-sheet");
   await sheet.getByRole("textbox").fill("Add N12 bar");

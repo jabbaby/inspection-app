@@ -10,7 +10,7 @@ import {
   pageMoveTarget,
   setPagesHidden,
 } from "../../db/pages";
-import type { Drawing, Item } from "../../db/types";
+import type { Drawing, Item, Markup } from "../../db/types";
 import { drawingPages, pageKey } from "./document/documentLayout";
 import { usePdfDocuments } from "./document/usePdfDocuments";
 import { itemSpots } from "../items/spots";
@@ -23,6 +23,8 @@ interface Props {
   inspectionId: string;
   drawings: Drawing[];
   items: Item[];
+  /** Pen and highlighter marks: pages with any can't be hidden. */
+  marks: Pick<Markup, "drawingId" | "page">[];
   /** The page the viewer is on (outlined). */
   currentKey: string | null;
   onGoTo: (pageKey: string) => void;
@@ -41,9 +43,15 @@ interface PageEntry {
   /** Number through the document (visible pages only). */
   number: number;
   pins: number;
+  /** Has pen or highlighter marks. */
+  marked: boolean;
 }
 
-function entriesFor(drawings: Drawing[], items: Item[]): PageEntry[] {
+function entriesFor(
+  drawings: Drawing[],
+  items: Item[],
+  marks: Pick<Markup, "drawingId" | "page">[],
+): PageEntry[] {
   const entries: PageEntry[] = [];
   let number = 0;
   for (const drawing of drawings) {
@@ -63,6 +71,9 @@ function entriesFor(drawings: Drawing[], items: Item[]): PageEntry[] {
         hidden,
         number: hidden ? 0 : number,
         pins: pins.get(i + 1) ?? 0,
+        marked: marks.some(
+          (m) => m.drawingId === drawing.id && m.page === i + 1,
+        ),
       });
     });
   }
@@ -81,6 +92,7 @@ export function PagesSheet({
   inspectionId,
   drawings,
   items,
+  marks,
   currentKey,
   onGoTo,
   onClose,
@@ -102,10 +114,13 @@ export function PagesSheet({
     if (!open && dialog.open) dialog.close();
   }, [open]);
 
-  const entries = useMemo(() => entriesFor(drawings, items), [drawings, items]);
+  const entries = useMemo(
+    () => entriesFor(drawings, items, marks),
+    [drawings, items, marks],
+  );
   const visible = entries.filter((e) => !e.hidden);
   const hidden = entries.filter((e) => e.hidden);
-  const unmarked = countUnmarked(drawings, items);
+  const unmarked = countUnmarked(drawings, items, marks);
   // Each drawing's name sits under its first visible page.
   const firstOfDrawing = new Set(
     drawings
@@ -141,7 +156,7 @@ export function PagesSheet({
   }
 
   async function hide(chosen: PageEntry[]) {
-    const kept = chosen.filter((e) => e.pins > 0).length;
+    const kept = chosen.filter((e) => e.pins > 0 || e.marked).length;
     let count = 0;
     for (const drawing of drawings) {
       const positions = chosen
@@ -153,7 +168,7 @@ export function PagesSheet({
     setSelected(new Set());
     setStatus(
       `${count} ${count === 1 ? "page" : "pages"} hidden` +
-        (kept ? `; ${kept} with pins kept (remove their items first)` : "") +
+        (kept ? `; ${kept} with pins or markup kept (remove them first)` : "") +
         ".",
     );
   }
@@ -360,13 +375,17 @@ export function PagesSheet({
                     <button
                       type="button"
                       role="menuitem"
-                      disabled={entry.pins > 0}
+                      disabled={entry.pins > 0 || entry.marked}
                       onClick={() => {
                         setMenu(null);
                         void hide([entry]);
                       }}
                     >
-                      {entry.pins > 0 ? "Hide (has pins)" : "Hide"}
+                      {entry.pins > 0
+                        ? "Hide (has pins)"
+                        : entry.marked
+                          ? "Hide (has markup)"
+                          : "Hide"}
                     </button>
                     <hr className="page-thumb-menu-rule" />
                     <button

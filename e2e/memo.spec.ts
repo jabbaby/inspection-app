@@ -9,6 +9,7 @@ import {
   stageBox,
   startInspection,
   waitForServiceWorker,
+  pinToolOn,
 } from "./helpers";
 
 const field = (page: Page, label: string) =>
@@ -58,7 +59,7 @@ async function addItems(page: Page) {
     [0.6, "Existing crack noted at grid 4", "observation"],
   ] as const) {
     const box = await stageBox(page);
-    await page.getByRole("button", { name: "Add pin" }).click();
+    await pinToolOn(page);
     await page.mouse.click(box.x + box.width * fx, box.y + box.height * 0.5);
     await expect(sheet.getByRole("textbox")).toBeFocused();
     if (kind === "observation")

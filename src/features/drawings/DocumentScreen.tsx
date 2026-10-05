@@ -1,5 +1,5 @@
 import { useLiveQuery } from "dexie-react-hooks";
-import { Files, List, MapPinPlus, Maximize, Redo2, Undo2 } from "lucide-react";
+import { Files, List, Maximize, Redo2, Undo2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { readPlace, writePlace } from "../../app/sessionPlace";
@@ -7,6 +7,13 @@ import { NotFound } from "../../app/NotFound";
 import { redoLast, undoLast, useUndo } from "../../app/undo";
 import { db } from "../../db/db";
 import { listDrawings, setPageSizes } from "../../db/drawings";
+import { listMarkups } from "../../db/markups";
+import { HIGHLIGHTER_OPACITY, toStoredPoints } from "../markup/markGeometry";
+import { drawWithUndo, eraseWithUndo } from "../markup/markupActions";
+import { useMarkupPrefs } from "../markup/markupPrefs";
+import { MarkupOverlay } from "../markup/MarkupOverlay";
+import { MarkupToolbar } from "../markup/MarkupToolbar";
+import type { DocMark, ViewerTool } from "../markup/tools";
 import { moveObservationBox, updateCopy, updateItem } from "../../db/items";
 import {
   createItemWithUndo,
@@ -109,6 +116,10 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
       .filter((b) => ids.includes(b.drawingId))
       .toArray();
   }, [inspectionId]);
+  const marks = useLiveQuery(
+    () => listMarkups(db, inspectionId),
+    [inspectionId],
+  );
   const heading = useLiveQuery(async () => {
     const headings = await db.snippets
       .where("kind")
@@ -118,7 +129,11 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
   }, []);
 
   const history = useUndo(inspectionId);
-  const [addPinMode, setAddPinMode] = useState(false);
+  // The markup toolbar's tool: none when the drawings open (SPEC 5a).
+  const [tool, setTool] = useState<ViewerTool | null>(null);
+  const prefs = useMarkupPrefs();
+  // Marks the eraser is passing over: hidden until it lifts.
+  const [erasing, setErasing] = useState<Set<string>>(() => new Set());
   const [itemsOpen, setItemsOpen] = useState(false);
   // Opened with ?pages=1 from the Drawings card on Pre-inspection.
   const [pagesOpen, setPagesOpen] = useState(() => params.get("pages") === "1");
@@ -253,6 +268,38 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
     }),
   );
 
+  const docMarks: DocMark[] = (marks ?? [])
+    .filter((m) => !erasing.has(m.id))
+    .map((m) => ({
+      id: m.id,
+      pageKey: pageKey(m.drawingId, m.page),
+      tool: m.tool,
+      points: m.points,
+      colour: m.colour,
+      weight: m.weight,
+    }));
+  const inkTool = tool === "highlighter" ? "highlighter" : "pen";
+
+  async function saveStroke(page: PageLayout, points: Point[]) {
+    if (tool !== "pen" && tool !== "highlighter") return;
+    await drawWithUndo({
+      inspectionId,
+      drawingId: page.drawingId,
+      page: page.page,
+      tool,
+      // Already normalised: stored rounded.
+      points: toStoredPoints(points, { width: 1, height: 1 }),
+      colour: prefs.colour[tool],
+      weight: prefs.weight[tool],
+    });
+  }
+
+  function erase(ids: string[], done: boolean) {
+    if (!done) return setErasing(new Set(ids));
+    const gone = (marks ?? []).filter((m) => ids.includes(m.id));
+    void eraseWithUndo(inspectionId, gone).finally(() => setErasing(new Set()));
+  }
+
   const itemOf = (key: string) =>
     items?.find((i) => i.id === parseSpotKey(key).itemId);
 
@@ -324,7 +371,6 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
     at: Point,
     options: { arrows?: ItemArrow[]; kind?: ItemKind; openAt?: number } = {},
   ) {
-    setAddPinMode(false);
     cancelPendingOpen();
     const token = openToken.current;
     const item = await createItemWithUndo(
@@ -418,7 +464,7 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
     placedByTap.current = null;
     // Tapping the drawing closes what's open beside it: an item's editor
     // first (its text is saved), then the Items or Drawings panel. With
-    // nothing open it places an instruction pin.
+    // nothing open and the Pin tool on, it places an instruction pin.
     if (pendingOpen.current) {
       // The pin just placed, about to open: count it as open.
       cancelPendingOpen();
@@ -433,7 +479,7 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
       setItemsOpen(false);
       return;
     }
-    if (hit) {
+    if (hit && tool === "pin") {
       const time = performance.now();
       placedByTap.current = {
         item: placePin(hit.page, hit.at, { openAt: time + DOUBLE_TAP_MS }),
@@ -538,6 +584,7 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
     );
     return (
       <>
+        <MarkupOverlay marks={docMarks.filter((m) => m.pageKey === page.key)} />
         <ArrowsOverlay items={pageSpots} />
         {box && (
           <ObservationBoxOverlay
@@ -568,6 +615,7 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
   return (
     <section className="drawing-screen">
       <InspectionHeader inspectionId={inspectionId} current="inspection" />
+      {drawings.length > 0 && <MarkupToolbar tool={tool} onTool={setTool} />}
       {loadError && (
         <p role="alert" className="error viewer-alert">
           Could not open a drawing: {loadError}
@@ -598,9 +646,17 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
               layout={layout}
               docs={docs}
               pins={pins}
-              addPinMode={
-                addPinMode || placingArrow !== null || copying !== null
-              }
+              tool={tool}
+              fingerDraw={prefs.fingerDraw}
+              marks={docMarks}
+              ink={{
+                colour: prefs.colour[inkTool],
+                weight: prefs.weight[inkTool],
+                opacity: inkTool === "highlighter" ? HIGHLIGHTER_OPACITY : 1,
+              }}
+              onStroke={saveStroke}
+              onErase={erase}
+              addPinMode={placingArrow !== null || copying !== null}
               onPlacePin={(page, at) =>
                 void (copying
                   ? placeCopy(page, at)
@@ -732,27 +788,14 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
                   </span>
                 </button>
               </div>
-              {/* Tools: a vertical pill below; Add pin first. */}
+              {/* Tools: a vertical pill below (pins and markup are in the
+                  toolbar above the drawing). */}
               <div
                 className="viewer-tools"
                 role="toolbar"
                 aria-label="Drawing tools"
                 aria-orientation="vertical"
               >
-                <button
-                  type="button"
-                  aria-label="Add pin"
-                  aria-pressed={addPinMode}
-                  title={addPinMode ? "Tap the drawing…" : "Add pin"}
-                  className={`tool-add${addPinMode ? " toggle-on" : ""}`}
-                  onClick={() => {
-                    setPlacingArrow(null);
-                    setAddPinMode((on) => !on);
-                  }}
-                  disabled={layout.pages.length === 0}
-                >
-                  <MapPinPlus aria-hidden="true" />
-                </button>
                 <QuickPhotoButton inspectionId={inspectionId} />
                 <button
                   type="button"
@@ -800,11 +843,6 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
                 </button>
               </div>
             </div>
-            {addPinMode && (
-              <p className="viewer-hint" role="status">
-                Tap the drawing to place the pin
-              </p>
-            )}
             {copying && selected && (
               <p className="viewer-hint viewer-hint-copy" role="status">
                 Tap each spot for a copy of {kindName(selected.kind)}{" "}
@@ -814,7 +852,7 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
                 </button>
               </p>
             )}
-            {items && !addPinMode && (
+            {items && tool !== "pin" && (
               <ExportedLettersNotice
                 inspectionId={inspectionId}
                 items={items}
@@ -838,7 +876,6 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
               selectedId: selectedArrow,
               message: arrowMessage,
               onAdd: () => {
-                setAddPinMode(false);
                 setCopying(null);
                 setPlacingArrow(selected.id);
                 setArrowMessage(null);
@@ -869,7 +906,6 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
                 label: pageLabel(s.drawingId, s.page),
               })),
               onCopy: () => {
-                setAddPinMode(false);
                 setPlacingArrow(null);
                 setArrowMessage(null);
                 setCopying(selected.id);
@@ -911,6 +947,7 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
         inspectionId={inspectionId}
         drawings={drawings}
         items={items ?? []}
+        marks={marks ?? []}
         currentKey={current?.key ?? null}
         onGoTo={(key) => setScrollTarget({ pageKey: key, token: Date.now() })}
         onClose={() => {

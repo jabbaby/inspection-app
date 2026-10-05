@@ -20,6 +20,8 @@ import {
   type Size,
   type ViewTransform,
 } from "../viewer/viewTransform";
+import { markStyle, strokePath, toPagePoints } from "../../markup/markGeometry";
+import type { DocMark } from "../../markup/tools";
 import type { DocPin } from "./DocumentViewer";
 import { DOC_WIDTH, pagePointToDoc, type PageLayout } from "./documentLayout";
 
@@ -35,6 +37,8 @@ export interface SnapshotSource {
   transform: ViewTransform;
   pages: PageLayout[];
   pins: DocPin[];
+  /** Pen and highlighter marks (drawn over the pages, under everything else). */
+  marks: DocMark[];
   /** The viewer element: page canvases and notes boxes are read from it. */
   container: HTMLElement;
 }
@@ -188,6 +192,12 @@ function draw(
     };
     if (!overlaps(rect, region)) continue;
     drawPage(ctx, page, rect, pageEls.get(page.key));
+    drawMarks(
+      ctx,
+      page,
+      rect,
+      src.marks.filter((m) => m.pageKey === page.key),
+    );
   }
   drawNotesBoxes(ctx, src.container, region);
   drawPins(ctx, src, region);
@@ -219,6 +229,32 @@ function drawPage(
       parseFloat(tile.style.height) * f,
     );
   }
+}
+
+/** A page's marks, in page units scaled onto its rectangle. */
+function drawMarks(
+  ctx: CanvasRenderingContext2D,
+  page: PageLayout,
+  rect: Rect,
+  marks: DocMark[],
+) {
+  if (marks.length === 0) return;
+  const f = rect.width / page.size.width;
+  ctx.save();
+  ctx.translate(rect.x, rect.y);
+  ctx.scale(f, f);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  for (const mark of marks) {
+    const style = markStyle(mark, page.size);
+    ctx.globalAlpha = style.opacity;
+    ctx.globalCompositeOperation =
+      mark.tool === "highlighter" ? "multiply" : "source-over";
+    ctx.strokeStyle = style.colour;
+    ctx.lineWidth = style.width;
+    ctx.stroke(new Path2D(strokePath(toPagePoints(mark.points, page.size))));
+  }
+  ctx.restore();
 }
 
 /** The notes boxes as laid out on the page (read from the DOM). */

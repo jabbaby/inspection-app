@@ -1085,6 +1085,21 @@ dl.facts dd {
   display: block;
 }
 
+/* The stroke being drawn, over the document until it is saved. */
+.viewer-ink {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* Highlighter: the drawing's lines show through. */
+.mark-highlight {
+  mix-blend-mode: multiply;
+}
+
 .viewer-snapshot-layer {
   position: absolute;
   left: 0;
@@ -1206,7 +1221,9 @@ dl.facts dd {
   margin: 0;
 }
 
-/* Arrows from pins (drawn in page units, under the notes box). */
+/* Arrows from pins (drawn in page units, under the notes box), and pen and
+   highlighter marks under them (SPEC section 5a). */
+.markup-overlay,
 .arrows-overlay {
   position: absolute;
   left: 0;
@@ -4026,4 +4043,190 @@ h1 {
   flex-basis: 100%;
   margin: 0;
   text-align: right;
+}
+
+/* The markup toolbar (SPEC section 5a): a full-width white bar under the
+   screen header, GoodNotes style. Near-black icons, slightly heavier. */
+.markup-toolbar {
+  --tool-ink: #111;
+  position: relative;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  background: var(--surface);
+  border-top: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.markup-toolbar::-webkit-scrollbar {
+  display: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  .markup-toolbar {
+    --tool-ink: var(--ink);
+  }
+}
+
+:where(.markup-toolbar) button {
+  flex: none;
+  min-width: 0;
+  min-height: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background-color: transparent;
+  color: var(--tool-ink);
+}
+
+.markup-tool {
+  width: 40px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+}
+
+.markup-tool .lucide {
+  width: 22px;
+  height: 22px;
+}
+
+.markup-tool[aria-pressed="true"],
+.markup-weight[aria-pressed="true"] {
+  background-color: var(--sunken-hover);
+}
+
+.markup-tool-pin[aria-pressed="true"] {
+  background-color: var(--accent);
+  color: var(--on-accent);
+}
+
+.markup-divider {
+  flex: none;
+  width: 1px;
+  height: 22px;
+  margin: 0 var(--space-2);
+  background: var(--line-strong);
+}
+
+.markup-weight {
+  width: 32px;
+  height: 30px;
+  border-radius: 7px;
+}
+
+.markup-weight span {
+  display: block;
+  width: 18px;
+  border-radius: 3px;
+  background: var(--tool-ink);
+}
+
+.markup-swatch {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  min-width: 0;
+  min-height: 0;
+  margin: 0 5px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.12);
+}
+
+.markup-swatch[aria-pressed="true"]::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ink-muted);
+}
+
+.markup-more {
+  width: 26px;
+  height: 30px;
+}
+
+.markup-more .lucide {
+  width: 16px;
+  height: 16px;
+}
+
+.markup-hint {
+  flex: none;
+  color: var(--ink);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.markup-popover {
+  position: fixed;
+  z-index: 20;
+  padding: var(--space-3);
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-float);
+}
+
+.markup-slider {
+  display: grid;
+  gap: var(--space-2);
+  width: 220px;
+  font-size: var(--text-sm);
+}
+
+.markup-palette {
+  display: grid;
+  grid-template-columns: repeat(6, 28px);
+  gap: var(--space-2);
+  justify-items: center;
+}
+
+.markup-palette .markup-swatch {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+
+.markup-add {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--sunken);
+  color: var(--tool-ink);
+  overflow: hidden;
+}
+
+.markup-add .lucide {
+  width: 16px;
+  height: 16px;
+}
+
+/* The native colour picker opens from the + itself. */
+.markup-add input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  padding: 0;
+}
+
+.markup-note {
+  margin: var(--space-2) 0 0;
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
 }

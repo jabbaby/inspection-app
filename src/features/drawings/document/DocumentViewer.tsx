@@ -19,6 +19,14 @@ import {
   type ViewTransform,
 } from "../viewer/viewTransform";
 import { kindName } from "../../items/letters";
+import {
+  markWidth,
+  simplify,
+  strokePath,
+  toPagePoints,
+  touchesMark,
+} from "../../markup/markGeometry";
+import { isInkTool, type DocMark, type ViewerTool } from "../../markup/tools";
 import { DocPage, type SettledView } from "./DocPage";
 import { DOUBLE_TAP_MS, DOUBLE_TAP_SLOP } from "./gestures";
 import { PinchSnapshot } from "./pinchSnapshot";
@@ -58,7 +66,23 @@ interface Props {
   layout: DocumentLayout;
   docs: Map<string, PDFDocumentProxy>;
   pins: DocPin[];
-  /** While true, every tap (finger, Pencil or mouse) places a pin. */
+  /**
+   * The markup toolbar's tool (SPEC section 5a). Pin gestures (tap,
+   * double-tap, hold) place pins only while it is "pin"; pen, highlighter
+   * and eraser draw with the Pencil (or a finger with `fingerDraw`).
+   */
+  tool: ViewerTool | null;
+  /** Draw with finger: one finger draws, two scroll and zoom. */
+  fingerDraw: boolean;
+  /** Saved pen and highlighter marks (for the eraser and the pinch snapshot). */
+  marks: DocMark[];
+  /** The pen or highlighter's look while a stroke is drawn. */
+  ink: { colour: string; weight: number; opacity: number };
+  /** A finished stroke: normalised points on the page it started on. */
+  onStroke: (page: PageLayout, points: Point[]) => Promise<void>;
+  /** The marks the eraser has touched so far; `done` when it lifts. */
+  onErase: (ids: string[], done: boolean) => void;
+  /** While true, every tap (finger, Pencil or mouse) places an arrow or copy. */
   addPinMode: boolean;
   onPlacePin: (page: PageLayout, at: Point) => void;
   onMovePin: (id: string, to: Point) => void;
@@ -123,6 +147,10 @@ const PAD = 16;
 const SCROLL_STOP_MS = 120;
 /** Holding this long without moving starts a pin with an arrow. */
 const HOLD_MS = 500;
+/** The eraser removes marks within this many screen px of it. */
+const ERASER_REACH = 10;
+/** A stroke is simplified to within this many screen px when saved. */
+const STROKE_TOLERANCE = 0.6;
 /** Released closer to the pin than this, the hold places just the pin. */
 const ARROW_MIN = 24;
 /** The hold ring shows only once a press has lasted this long. */
@@ -178,6 +206,8 @@ export function DocumentViewer(props: Props) {
   /** The picture a pinch moves (see pinchSnapshot.ts), and its host. */
   const snapshotHostRef = useRef<HTMLDivElement>(null);
   const snapshot = useRef<PinchSnapshot | null>(null);
+  /** The stroke being drawn (cleared once it is saved). */
+  const inkRef = useRef<HTMLCanvasElement>(null);
   const snapshotRelease = useRef(0);
   /** Pages on or near the screen (rendered), as last laid out. */
   const activeRef = useRef<Set<string>>(new Set());
@@ -593,6 +623,7 @@ export function DocumentViewer(props: Props) {
       transform: base,
       pages: currentLayout().pages,
       pins: latest.current.pins,
+      marks: latest.current.marks,
       container: containerRef.current!,
     });
   }
@@ -691,10 +722,180 @@ export function DocumentViewer(props: Props) {
     return [...pointers.current.values()].some((p) => p.type === "pen");
   }
 
+  // --- markup: pen, highlighter and eraser (SPEC section 5a) --------------
+
+  /**
+   * A stroke or an erase in progress: one pointer, from the page it started
+   * on. Points are normalised on that page (clamped to it); the eraser
+   * collects the marks it has touched.
+   */
+  const ink = useRef<{
+    pointerId: number;
+    pointerType: string;
+    eraser: boolean;
+    page: PageLayout;
+    points: Point[];
+    erased: Set<string>;
+    frame: number;
+  } | null>(null);
+
+  /** Whether this pointer draws (or erases) with the current tool. */
+  function inks(e: { pointerType: string; button: number }) {
+    if (!isInkTool(latest.current.tool)) return false;
+    if (e.pointerType === "mouse") return e.button === 0;
+    return (
+      e.pointerType === "pen" ||
+      (e.pointerType === "touch" && latest.current.fingerDraw)
+    );
+  }
+
+  /** A screen point (viewer px) as a normalised point on `page`. */
+  function onPagePoint(page: PageLayout, p: Point): Point {
+    const doc = screenToPage(currentTransform(), p);
+    return { x: doc.x / DOC_WIDTH, y: (doc.y - page.top) / page.height };
+  }
+
+  /** Screen px per page unit (PDF point) on `page` at the current zoom. */
+  function pxPerUnit(page: PageLayout) {
+    return (DOC_WIDTH * applied.current.scale) / page.size.width;
+  }
+
+  function startInk(e: React.PointerEvent) {
+    const p = local(e);
+    const hit = hitPage(currentLayout(), screenToPage(currentTransform(), p));
+    if (!hit) return;
+    capture(e);
+    hideSnapshot();
+    cancelHold();
+    tap.current = null;
+    ink.current = {
+      pointerId: e.pointerId,
+      pointerType: e.pointerType,
+      eraser: latest.current.tool === "eraser",
+      page: hit.page,
+      points: [hit.at],
+      erased: new Set(),
+      frame: 0,
+    };
+    if (ink.current.eraser) eraseAt(p);
+    else requestInkFrame();
+  }
+
+  function moveInk(e: React.PointerEvent) {
+    const stroke = ink.current;
+    if (!stroke) return;
+    // Every sample the Pencil sent since the last event (up to 240 Hz).
+    const samples = e.nativeEvent.getCoalescedEvents?.() ?? [];
+    for (const sample of samples.length ? samples : [e.nativeEvent]) {
+      const p = local(sample);
+      if (stroke.eraser) eraseAt(p);
+      else stroke.points.push(clampNormalised(onPagePoint(stroke.page, p)));
+    }
+    if (!stroke.eraser) requestInkFrame();
+  }
+
+  /** Marks the eraser touches at a screen point. */
+  function eraseAt(p: Point) {
+    const stroke = ink.current;
+    if (!stroke) return;
+    const hit = hitPage(currentLayout(), screenToPage(currentTransform(), p));
+    if (!hit) return;
+    const size = hit.page.size;
+    const at = { x: hit.at.x * size.width, y: hit.at.y * size.height };
+    const reach = ERASER_REACH / pxPerUnit(hit.page);
+    let added = false;
+    for (const mark of latest.current.marks) {
+      if (mark.pageKey !== hit.page.key || stroke.erased.has(mark.id)) continue;
+      if (touchesMark(mark, size, at, reach)) {
+        stroke.erased.add(mark.id);
+        added = true;
+      }
+    }
+    if (added) latest.current.onErase([...stroke.erased], false);
+  }
+
+  function requestInkFrame() {
+    const stroke = ink.current;
+    if (stroke && !stroke.frame) stroke.frame = requestAnimationFrame(drawInk);
+  }
+
+  /** Draws the stroke in progress (all of it: see-through ink can't overlap). */
+  function drawInk() {
+    const stroke = ink.current;
+    const canvas = inkRef.current;
+    if (!stroke || !canvas) return;
+    stroke.frame = 0;
+    const dpr = window.devicePixelRatio || 1;
+    const { width, height } = viewSize.current;
+    const pw = Math.round(width * dpr);
+    const ph = Math.round(height * dpr);
+    if (canvas.width !== pw) canvas.width = pw;
+    if (canvas.height !== ph) canvas.height = ph;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+    const t = currentTransform();
+    const screen = stroke.points.map((n) =>
+      pageToScreen(t, pagePointToDoc(stroke.page, n)),
+    );
+    const style = latest.current.ink;
+    ctx.globalAlpha = style.opacity;
+    ctx.strokeStyle = style.colour;
+    ctx.lineWidth =
+      markWidth(style.weight, stroke.page.size) * pxPerUnit(stroke.page);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.stroke(new Path2D(strokePath(screen)));
+  }
+
+  function clearInk() {
+    const canvas = inkRef.current;
+    canvas?.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+  }
+
+  /** The stroke or erase ends: saved, or (cancelled) dropped. */
+  function endInk(cancelled: boolean) {
+    const stroke = ink.current;
+    if (!stroke) return;
+    ink.current = null;
+    cancelAnimationFrame(stroke.frame);
+    if (stroke.eraser) {
+      latest.current.onErase(cancelled ? [] : [...stroke.erased], true);
+      return;
+    }
+    if (cancelled) return clearInk();
+    // Simplified in page units to within a fraction of a screen pixel.
+    const size = stroke.page.size;
+    const units = toPagePoints(
+      stroke.points.flatMap((p) => [p.x, p.y]),
+      size,
+    );
+    const kept = simplify(units, STROKE_TOLERANCE / pxPerUnit(stroke.page));
+    const points = kept.map((p) => ({
+      x: p.x / size.width,
+      y: p.y / size.height,
+    }));
+    // The live stroke stays until the saved mark has drawn.
+    void latest.current
+      .onStroke(stroke.page, points)
+      .finally(() =>
+        requestAnimationFrame(() => requestAnimationFrame(clearInk)),
+      );
+  }
+
   // Runs before pins and the notes box see the touch. A touch that lands
   // while the document is scrolling only stops it: on a pin or the box it
   // is swallowed; on the drawing it never places a pin.
   function onPointerDownCapture(e: React.PointerEvent) {
+    // Drawing and erasing take the pointer before pins and the notes box.
+    if (inks(e)) {
+      e.stopPropagation();
+      // One stroke at a time; a second finger is a pinch.
+      if (!ink.current && !(e.pointerType === "touch" && !e.isPrimary))
+        startInk(e);
+      return;
+    }
     if (msSince(lastScroll.current) > SCROLL_STOP_MS) return;
     // The second tap of a double-tap is never a scroll stop: the first one
     // can make the view move (a panel opening resizes it).
@@ -731,6 +932,7 @@ export function DocumentViewer(props: Props) {
     cancelHold();
     if (
       tap.current &&
+      latest.current.tool === "pin" &&
       !latest.current.addPinMode &&
       stopTouch.current !== e.pointerId
     ) {
@@ -745,6 +947,7 @@ export function DocumentViewer(props: Props) {
   }
 
   function onPointerMove(e: React.PointerEvent) {
+    if (ink.current?.pointerId === e.pointerId) return moveInk(e);
     const h = hold.current;
     if (h?.pointerId === e.pointerId) {
       if (h.held) return holdMove(local(e));
@@ -779,6 +982,11 @@ export function DocumentViewer(props: Props) {
   }
 
   function onPointerUp(e: React.PointerEvent) {
+    if (ink.current?.pointerId === e.pointerId) {
+      // A cancelled pointer still keeps what was drawn (Safari can cancel
+      // one mid-stroke); a pinch drops it before this (touchstart).
+      return endInk(false);
+    }
     const h = hold.current;
     if (h?.pointerId === e.pointerId) {
       if (!h.held) {
@@ -812,7 +1020,7 @@ export function DocumentViewer(props: Props) {
     );
     if (latest.current.addPinMode) {
       if (hit) latest.current.onPlacePin(hit.page, hit.at);
-    } else if (second) {
+    } else if (second && latest.current.tool === "pin") {
       latest.current.onDoubleTap({ hit });
     } else {
       // A tap on the drawing itself (pins, arrow tips and the notes box
@@ -1031,6 +1239,9 @@ export function DocumentViewer(props: Props) {
     };
     const onTouchStart = (e: TouchEvent) => {
       const list = fingers(e.touches);
+      // A second finger while drawing with one: a pinch, not a stroke.
+      if (list.length >= 2 && ink.current?.pointerType === "touch")
+        endInk(true);
       if (list.length < 2) {
         // A new touch works on the real document (a scroll, a tap): show it.
         if (!pinch.current) hideSnapshot();
@@ -1043,6 +1254,11 @@ export function DocumentViewer(props: Props) {
       if (!pinch.current) startPinch(list);
     };
     const onTouchMove = (e: TouchEvent) => {
+      // Drawing or erasing owns the touch: the document stays still.
+      if (ink.current) {
+        if (e.cancelable) e.preventDefault();
+        return;
+      }
       // After a hold the viewer owns the touch: the arrow follows it and
       // the document stays still.
       if (hold.current?.held) {
@@ -1165,7 +1381,11 @@ export function DocumentViewer(props: Props) {
     };
     // Pressed again just after a tap: holding makes it an observation with
     // an arrow (moving first still drags the pin).
-    if (!arrowId && nearLastTap(local(e), e.timeStamp)) {
+    if (
+      !arrowId &&
+      latest.current.tool === "pin" &&
+      nearLastTap(local(e), e.timeStamp)
+    ) {
       latest.current.onSecondPress({ pinId: id });
       startPinHold(e.pointerId, id, local(e));
     }
@@ -1218,7 +1438,7 @@ export function DocumentViewer(props: Props) {
     if (drag.moved && drag.last) {
       latest.current.onMovePinEnd(drag.id, drag.last);
     } else if (!drag.moved) {
-      if (isSecondTap(local(e), e.timeStamp))
+      if (latest.current.tool === "pin" && isSecondTap(local(e), e.timeStamp))
         latest.current.onDoubleTap({ pinId: drag.id });
       else latest.current.onSelectPin(drag.id);
     }
@@ -1257,7 +1477,7 @@ export function DocumentViewer(props: Props) {
     <>
       <div
         ref={containerRef}
-        className={`viewer${addPinMode ? " viewer-add-pin" : ""}`}
+        className={`viewer${addPinMode ? " viewer-add-pin" : ""}${isInkTool(props.tool) ? " viewer-inking" : ""}`}
         data-testid="drawing-viewer"
         data-ready={ready}
         onPointerDownCapture={onPointerDownCapture}
@@ -1376,6 +1596,7 @@ export function DocumentViewer(props: Props) {
           </div>
         </div>
       </div>
+      <canvas ref={inkRef} className="viewer-ink" aria-hidden="true" />
       {/* The pinch snapshot, over the viewer (pinchSnapshot.ts). */}
       <div
         ref={snapshotHostRef}

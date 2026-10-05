@@ -12,6 +12,7 @@ import {
   startInspection,
   touchTap,
   waitForServiceWorker,
+  pinToolOn,
 } from "./helpers";
 import { syntheticJpeg } from "./photoFixtures";
 
@@ -59,7 +60,7 @@ async function typicalPdf(name = "S-101 Level 3.pdf") {
  * showing (e.g. after a failed upload), else from the Pages view (its first
  * page).
  */
-async function openDrawing(page: Page, name: string) {
+async function openDrawing(page: Page, name: string, pin = true) {
   const pattern = new RegExp(`^${name}`);
   const inList = page
     .locator(".drawings-empty")
@@ -70,6 +71,8 @@ async function openDrawing(page: Page, name: string) {
   ).toBeVisible({
     timeout: 20_000,
   });
+  // Most tests place pins with taps: the Pin tool on, as before slice 2.
+  if (pin) await pinToolOn(page);
   const indicator = page.getByTestId("page-indicator");
   await expect(indicator).not.toHaveAttribute("data-label", "");
   if (pattern.test((await indicator.getAttribute("data-label")) ?? "")) return;
@@ -89,12 +92,24 @@ async function openPages(page: Page) {
   await expect(page.getByRole("dialog", { name: "Pages" })).toBeVisible();
 }
 
-/** Add pin, then tap at a fraction of a page. Returns the tap point. */
+/**
+ * With the Pin tool on, taps at a fraction of a page (closing any open
+ * item or panel first). Returns the tap point.
+ */
 async function addPinAt(page: Page, fx: number, fy: number, pageIndex = 0) {
+  await pinToolOn(page);
   const box = await stageBox(page, pageIndex);
   const before = await page.getByTestId("viewer-pin").count();
-  await page.getByRole("button", { name: "Add pin" }).click();
   const at = { x: box.x + box.width * fx, y: box.y + box.height * fy };
+  // A tap closes what's open beside the drawing, one layer at a time.
+  for (let i = 0; i < 3; i++) {
+    const open = page
+      .getByTestId("item-sheet")
+      .or(page.getByTestId("items-panel"));
+    if ((await open.count()) === 0) break;
+    await page.mouse.click(at.x, at.y);
+    await page.waitForTimeout(400);
+  }
   await page.mouse.click(at.x, at.y);
   // Wait for the new pin's own sheet (a previous sheet may still be open).
   await expect(page.getByTestId("viewer-pin")).toHaveCount(before + 1);
@@ -673,7 +688,7 @@ test("a tap on the drawing with nothing open places an instruction pin", async (
   await openDrawing(page, "S-101 Level 3");
   const box = await stageBox(page);
 
-  // No Add pin: the tap places an instruction and opens it, ready to type.
+  // With the Pin tool on, a tap places an instruction and opens it.
   await page.mouse.click(box.x + box.width * 0.4, box.y + box.height * 0.5);
   await expect(pinByLetter(page, "A")).toBeVisible();
   await expect(sheet(page).getByRole("textbox")).toBeFocused();
@@ -862,7 +877,7 @@ test("tapping the drawing closes the item editor and keeps the text", async ({
   );
 });
 
-test("a lost finger-up doesn't stop Add pin working", async ({ page }) => {
+test("a lost finger-up doesn't stop the Pin tool working", async ({ page }) => {
   await setupInspection(page);
   await uploadDrawings(page, [await typicalPdf()]);
   await openDrawing(page, "S-101 Level 3");
@@ -907,7 +922,6 @@ test("a lost finger-up doesn't stop Add pin working", async ({ page }) => {
     document.body.dispatchEvent(end);
   });
 
-  await page.getByRole("button", { name: "Add pin" }).click();
   await touchTap(page, at);
   await expect(page.getByTestId("viewer-pin")).toHaveCount(1);
 });
@@ -919,7 +933,6 @@ test("a touch while the document scrolls doesn't place a pin", async ({
   await uploadDrawings(page, [await typicalPdf()]);
   await openDrawing(page, "S-101 Level 3");
   const viewer = page.getByTestId("drawing-viewer");
-  await page.getByRole("button", { name: "Add pin" }).click();
   const at = await centre(viewer);
 
   // The tap lands straight after a scroll (as when stopping momentum).
@@ -1838,4 +1851,85 @@ test("copy pin: the same item at several spots, removable one by one", async ({
     .getByRole("button", { name: "Observation", exact: true })
     .click();
   await expect(pinByLetter(page, "A", "observation")).toHaveCount(3);
+});
+
+/** A drag across a fraction of the first page (a mouse draws like a Pencil). */
+async function drawLine(
+  page: Page,
+  from: [number, number],
+  to: [number, number],
+) {
+  const box = await stageBox(page);
+  const at = ([fx, fy]: [number, number]) => ({
+    x: box.x + box.width * fx,
+    y: box.y + box.height * fy,
+  });
+  const a = at(from);
+  const b = at(to);
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  await page.mouse.move(b.x, b.y, { steps: 12 });
+  await page.mouse.up();
+}
+
+test("markup: no tool places nothing; pen draws, eraser erases, both undo", async ({
+  page,
+}) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openDrawing(page, "S-101 Level 3", false);
+  const toolbar = page.getByRole("toolbar", { name: "Markup tools" });
+  const tool = (name: string) =>
+    toolbar.getByRole("button", { name, exact: true });
+  const marks = page.getByTestId("mark");
+  await expect(tool("Pin")).toHaveAttribute("aria-pressed", "false");
+
+  // With no tool on, a tap places no pin and a drag draws nothing.
+  const box = await stageBox(page);
+  await page.mouse.click(box.x + box.width * 0.4, box.y + box.height * 0.5);
+  await page.waitForTimeout(500);
+  await expect(page.getByTestId("viewer-pin")).toHaveCount(0);
+  await drawLine(page, [0.2, 0.3], [0.5, 0.35]);
+  await expect(marks).toHaveCount(0);
+
+  // The pen draws in its colour; the weights and colours show for it.
+  await tool("Pen").click();
+  await expect(tool("Pen")).toHaveAttribute("aria-pressed", "true");
+  await toolbar.getByRole("button", { name: "Colour #0165FC" }).click();
+  await drawLine(page, [0.2, 0.3], [0.5, 0.35]);
+  await expect(marks).toHaveCount(1);
+  await expect(marks.first()).toHaveAttribute("stroke", "#0165FC");
+  // Taps with the pen don't place pins either.
+  await expect(page.getByTestId("viewer-pin")).toHaveCount(0);
+
+  // The highlighter keeps its own colour.
+  await tool("Highlighter").click();
+  await drawLine(page, [0.2, 0.6], [0.6, 0.6]);
+  await expect(marks).toHaveCount(2);
+  await expect(page.locator('[data-tool="highlighter"]')).toHaveAttribute(
+    "stroke",
+    "#FFD400",
+  );
+
+  // Undo and Redo the highlight.
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(marks).toHaveCount(1);
+  await page.getByRole("button", { name: "Redo" }).click();
+  await expect(marks).toHaveCount(2);
+
+  // The eraser removes the pen line it crosses (one Undo step).
+  await tool("Eraser").click();
+  await drawLine(page, [0.35, 0.2], [0.35, 0.45]);
+  await expect(marks).toHaveCount(1);
+  await expect(page.locator('[data-tool="pen"]')).toHaveCount(0);
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(marks).toHaveCount(2);
+
+  // Tapping the tool again turns it off; Pin places pins.
+  await tool("Eraser").click();
+  await expect(tool("Eraser")).toHaveAttribute("aria-pressed", "false");
+  await tool("Pin").click();
+  await expect(toolbar).toContainText("Tap for an instruction");
+  await page.mouse.click(box.x + box.width * 0.8, box.y + box.height * 0.8);
+  await expect(page.getByTestId("viewer-pin")).toHaveCount(1);
 });
