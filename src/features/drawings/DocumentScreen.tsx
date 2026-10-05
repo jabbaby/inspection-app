@@ -75,6 +75,8 @@ async function backfillPageSizes(drawing: Drawing) {
   }
 }
 
+const NO_MARKS: DocMark[] = [];
+
 /** Milliseconds until a performance.now() time (event handlers only). */
 function msUntil(time: number) {
   return time - performance.now();
@@ -268,16 +270,27 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
     }),
   );
 
-  const docMarks: DocMark[] = (marks ?? [])
-    .filter((m) => !erasing.has(m.id))
-    .map((m) => ({
-      id: m.id,
-      pageKey: pageKey(m.drawingId, m.page),
-      tool: m.tool,
-      points: m.points,
-      colour: m.colour,
-      weight: m.weight,
-    }));
+  const docMarks: DocMark[] = useMemo(
+    () =>
+      (marks ?? [])
+        .filter((m) => !erasing.has(m.id))
+        .map((m) => ({
+          id: m.id,
+          pageKey: pageKey(m.drawingId, m.page),
+          tool: m.tool,
+          points: m.points,
+          colour: m.colour,
+          weight: m.weight,
+        })),
+    [marks, erasing],
+  );
+  // Each page's marks as one list that only changes with them.
+  const marksByPage = useMemo(() => {
+    const byPage = new Map<string, DocMark[]>();
+    for (const mark of docMarks)
+      byPage.set(mark.pageKey, [...(byPage.get(mark.pageKey) ?? []), mark]);
+    return byPage;
+  }, [docMarks]);
   const inkTool = tool === "highlighter" ? "highlighter" : "pen";
 
   async function saveStroke(page: PageLayout, points: Point[]) {
@@ -587,7 +600,7 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
     );
     return (
       <>
-        <MarkupOverlay marks={docMarks.filter((m) => m.pageKey === page.key)} />
+        <MarkupOverlay marks={marksByPage.get(page.key) ?? NO_MARKS} />
         <ArrowsOverlay items={pageSpots} />
         {box && (
           <ObservationBoxOverlay

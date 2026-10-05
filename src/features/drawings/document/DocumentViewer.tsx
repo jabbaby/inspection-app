@@ -830,6 +830,7 @@ export function DocumentViewer(props: Props) {
     const { width, height } = viewSize.current;
     const pw = Math.round(width * dpr);
     const ph = Math.round(height * dpr);
+    canvas.hidden = false;
     if (canvas.width !== pw) canvas.width = pw;
     if (canvas.height !== ph) canvas.height = ph;
     const ctx = canvas.getContext("2d");
@@ -865,9 +866,16 @@ export function DocumentViewer(props: Props) {
     ctx.stroke(new Path2D(strokePath(screen)));
   }
 
+  /**
+   * Hides the live stroke and frees its canvas: a full-screen canvas left
+   * over the document would be blended into every frame of a scroll.
+   */
   function clearInk() {
     const canvas = inkRef.current;
-    canvas?.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+    if (!canvas) return;
+    canvas.hidden = true;
+    canvas.width = 0;
+    canvas.height = 0;
   }
 
   /** The stroke or erase ends: saved, or (cancelled) dropped. */
@@ -1612,7 +1620,7 @@ export function DocumentViewer(props: Props) {
           </div>
         </div>
       </div>
-      <canvas ref={inkRef} className="viewer-ink" aria-hidden="true" />
+      <canvas ref={inkRef} className="viewer-ink" aria-hidden="true" hidden />
       {/* The pinch snapshot, over the viewer (pinchSnapshot.ts). */}
       <div
         ref={snapshotHostRef}
