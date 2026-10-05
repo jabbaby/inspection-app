@@ -20,7 +20,7 @@ import {
   type Size,
   type ViewTransform,
 } from "../viewer/viewTransform";
-import { markStyle, strokePath, toPagePoints } from "../../markup/markGeometry";
+import { markPath, markStyle } from "../../markup/markGeometry";
 import type { DocMark } from "../../markup/tools";
 import type { DocPin } from "./DocumentViewer";
 import { DOC_WIDTH, pagePointToDoc, type PageLayout } from "./documentLayout";
@@ -252,7 +252,7 @@ function drawMarks(
       mark.tool === "highlighter" ? "multiply" : "source-over";
     ctx.strokeStyle = style.colour;
     ctx.lineWidth = style.width;
-    ctx.stroke(new Path2D(strokePath(toPagePoints(mark.points, page.size))));
+    ctx.stroke(new Path2D(markPath(mark, page.size)));
   }
   ctx.restore();
 }

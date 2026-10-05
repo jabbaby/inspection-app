@@ -94,10 +94,9 @@ const fmt = (n: number) => String(Math.round(n * 100) / 100);
  * becomes a dot (a zero-length line with round caps).
  *
  * Each piece is the quadratic curve from one midpoint to the next (bent by
- * the point between), written as the exact cubic equivalent: pdf-lib turns
- * an SVG "Q" into a PDF "v" curve, which isn't the same shape and has no
- * direction at its start, and Apple's PDF renderer then leaves white nicks
- * where the pieces join.
+ * the point between), written as the exact cubic equivalent (pdf-lib turns
+ * an SVG "Q" into a PDF "v" curve, which isn't the same shape). Draw marks
+ * through markPath(), which evens out the points first.
  */
 export function strokePath(points: Point[]): string {
   if (points.length === 0) return "";
@@ -126,6 +125,56 @@ export function strokePath(points: Point[]): string {
   }
   const last = points[points.length - 1];
   return `${d} L ${fmt(last.x)} ${fmt(last.y)}`;
+}
+
+/** Moving-average passes that even out a stroke's line. */
+const SMOOTH_PASSES = 3;
+
+/**
+ * Evens out a stroke drawn by hand before it is drawn. The Pencil reports
+ * up to 240 points a second, often a fraction of a pixel apart and
+ * wobbling back and forth; a thick line that doubles back within its own
+ * width makes Apple's renderer (Safari, PDF viewers) leave white crescents
+ * in it. Points closer than about three quarters of the line's width to the last one
+ * kept are dropped, then the rest are averaged with their neighbours (the
+ * ends stay put). Page units in and out.
+ */
+export function smoothStroke(points: Point[], width: number): Point[] {
+  if (points.length <= 2) return points;
+  const step = width * 0.75;
+  const kept: Point[] = [points[0]];
+  for (const p of points.slice(1, -1)) {
+    const last = kept[kept.length - 1];
+    if (Math.hypot(p.x - last.x, p.y - last.y) >= step) kept.push(p);
+  }
+  const end = points[points.length - 1];
+  const last = kept[kept.length - 1];
+  // The end always stays: it replaces a kept point too close to it.
+  if (kept.length > 1 && Math.hypot(end.x - last.x, end.y - last.y) < step)
+    kept[kept.length - 1] = end;
+  else kept.push(end);
+  let out = kept;
+  for (let pass = 0; pass < SMOOTH_PASSES && out.length > 2; pass++) {
+    out = out.map((p, i) =>
+      i === 0 || i === out.length - 1
+        ? p
+        : {
+            x: (out[i - 1].x + 2 * p.x + out[i + 1].x) / 4,
+            y: (out[i - 1].y + 2 * p.y + out[i + 1].y) / 4,
+          },
+    );
+  }
+  return out;
+}
+
+/** A mark's path data in page units: evened out, then smoothed curves. */
+export function markPath(
+  mark: Pick<Markup, "points" | "weight">,
+  page: Size,
+): string {
+  return strokePath(
+    smoothStroke(toPagePoints(mark.points, page), markWidth(mark.weight, page)),
+  );
 }
 
 /** How a mark is stroked, in page units. */

@@ -21,7 +21,7 @@ import type { Item, Markup } from "../../db/types";
 import { arrowMetrics, arrowShape } from "../drawings/arrows";
 import { defaultBoxPosition, type BoxLine } from "../drawings/observationBox";
 import type { Point } from "../drawings/viewer/viewTransform";
-import { markStyle, strokePath, toPagePoints } from "../markup/markGeometry";
+import { markPath, markStyle } from "../markup/markGeometry";
 import { toEncodable } from "../memo/pdf/text";
 import { layoutNotesBox, pageView, pinMetrics } from "./markupGeometry";
 import type { PagePin } from "./packContents";
@@ -146,7 +146,7 @@ function drawMarks(
   for (const mark of marks) {
     const style = markStyle(mark, size);
     // y-down page units, flipped by drawing from the top-left corner.
-    page.drawSvgPath(strokePath(toPagePoints(mark.points, size)), {
+    page.drawSvgPath(markPath(mark, size), {
       x: 0,
       y: size.height,
       borderColor: hex(style.colour),

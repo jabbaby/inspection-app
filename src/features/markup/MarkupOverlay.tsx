@@ -1,5 +1,5 @@
 import { useViewerCoords } from "../drawings/viewer/viewerCoords";
-import { markStyle, strokePath, toPagePoints } from "./markGeometry";
+import { markPath, markStyle } from "./markGeometry";
 import type { DocMark } from "./tools";
 
 /**
@@ -26,7 +26,7 @@ export function MarkupOverlay({ marks }: { marks: DocMark[] }) {
             key={mark.id}
             data-testid="mark"
             data-tool={mark.tool}
-            d={strokePath(toPagePoints(mark.points, pageSize))}
+            d={markPath(mark, pageSize)}
             fill="none"
             stroke={style.colour}
             strokeOpacity={style.opacity}

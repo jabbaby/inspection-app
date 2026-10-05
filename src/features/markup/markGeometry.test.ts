@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vitest";
 import {
+  markPath,
   markWidth,
+  smoothStroke,
   simplify,
   strokePath,
   toPagePoints,
@@ -67,6 +69,41 @@ describe("mark geometry", () => {
     );
     expect(d).not.toMatch(/[QqTtVv]/);
     expect(d.match(/C /g)).toHaveLength(18);
+  });
+
+  test("Pencil jitter is evened out: the line never doubles back", () => {
+    // 240 Hz samples along a gentle curve, wobbling by up to 0.6 pt.
+    let seed = 7;
+    const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const raw = Array.from({ length: 400 }, (_, i) => ({
+      x: 100 + i * 0.5 + (random() - 0.5) * 1.2,
+      y: 200 + Math.sin(i / 60) * 30 + (random() - 0.5) * 1.2,
+    }));
+    const width = 4;
+    const even = smoothStroke(raw, width);
+    expect(even[0]).toEqual(raw[0]);
+    expect(even.at(-1)).toEqual(raw.at(-1));
+    expect(even.length).toBeLessThan(raw.length / 3);
+    for (let i = 2; i < even.length; i++) {
+      const a = {
+        x: even[i - 1].x - even[i - 2].x,
+        y: even[i - 1].y - even[i - 2].y,
+      };
+      const b = { x: even[i].x - even[i - 1].x, y: even[i].y - even[i - 1].y };
+      const cos =
+        (a.x * b.x + a.y * b.y) / (Math.hypot(a.x, a.y) * Math.hypot(b.x, b.y));
+      // Turns of more than 60 degrees would be a wobble, not the curve.
+      expect(cos).toBeGreaterThan(0.5);
+    }
+  });
+
+  test("a mark's path is drawn from its evened-out points", () => {
+    const d = markPath(
+      { points: [0.1, 0.1, 0.1001, 0.1, 0.2, 0.2], weight: 0.0025 },
+      A3,
+    );
+    expect(d.startsWith("M 119.1 84.2")).toBe(true);
+    expect(d).not.toMatch(/[QqTtVv]/);
   });
 
   test("the eraser touches a mark within reach of its line", () => {

@@ -22,6 +22,7 @@ import { kindName } from "../../items/letters";
 import {
   markWidth,
   simplify,
+  smoothStroke,
   strokePath,
   toPagePoints,
   touchesMark,
@@ -150,7 +151,7 @@ const HOLD_MS = 500;
 /** The eraser removes marks within this many screen px of it. */
 const ERASER_REACH = 10;
 /** A stroke is simplified to within this many screen px when saved. */
-const STROKE_TOLERANCE = 0.6;
+const STROKE_TOLERANCE = 0.25;
 /** Released closer to the pin than this, the hold places just the pin. */
 const ARROW_MIN = 24;
 /** The hold ring shows only once a press has lasted this long. */
@@ -836,10 +837,25 @@ export function DocumentViewer(props: Props) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width, height);
     const t = currentTransform();
-    const screen = stroke.points.map((n) =>
-      pageToScreen(t, pagePointToDoc(stroke.page, n)),
-    );
     const style = latest.current.ink;
+    // Evened out in page units, as the saved mark will be (markPath).
+    const size = stroke.page.size;
+    const even = smoothStroke(
+      toPagePoints(
+        stroke.points.flatMap((p) => [p.x, p.y]),
+        size,
+      ),
+      markWidth(style.weight, size),
+    );
+    const screen = even.map((p) =>
+      pageToScreen(
+        t,
+        pagePointToDoc(stroke.page, {
+          x: p.x / size.width,
+          y: p.y / size.height,
+        }),
+      ),
+    );
     ctx.globalAlpha = style.opacity;
     ctx.strokeStyle = style.colour;
     ctx.lineWidth =
