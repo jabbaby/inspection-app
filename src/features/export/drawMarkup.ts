@@ -1,9 +1,14 @@
 /**
- * Burns a drawing page's pins, arrows and notes box into the PDF page, the
- * same size and place as the viewer draws them (SPEC sections 5 and 7).
+ * Burns a drawing page's markup, pins, arrows and notes box into the PDF
+ * page, the same size and place as the viewer draws them (SPEC sections 5,
+ * 5a and 7).
  */
 import {
+  BlendMode,
+  LineCapStyle,
+  LineJoinStyle,
   concatTransformationMatrix,
+  setLineJoin,
   popGraphicsState,
   pushGraphicsState,
   rgb,
@@ -12,10 +17,11 @@ import {
   type PDFPage,
 } from "pdf-lib";
 import { northrop } from "../../brand/northrop";
-import type { Item } from "../../db/types";
+import type { Item, Markup } from "../../db/types";
 import { arrowMetrics, arrowShape } from "../drawings/arrows";
 import { defaultBoxPosition, type BoxLine } from "../drawings/observationBox";
 import type { Point } from "../drawings/viewer/viewTransform";
+import { markStyle, strokePath, toPagePoints } from "../markup/markGeometry";
 import { toEncodable } from "../memo/pdf/text";
 import { layoutNotesBox, pageView, pinMetrics } from "./markupGeometry";
 import type { PagePin } from "./packContents";
@@ -28,6 +34,8 @@ export interface MarkupFonts {
 export interface PageMarkup {
   /** Every pin on this page (copies included). */
   pins: PagePin[];
+  /** Pen and highlighter marks, drawn first (under everything else). */
+  marks: Markup[];
   /** The notes box's top-left, normalised on the page (null: default spot). */
   box: Point | null;
   /** From boxLines(): what the notes box says. */
@@ -66,7 +74,9 @@ export function drawPageMarkup(
     y: size.height - p.y * size.height,
   });
 
-  drawNotesBox(page, markup, size, fonts);
+  drawMarks(page, markup.marks, size);
+  // A page with only markup has no notes box (it lists the page's pins).
+  if (markup.pins.length > 0) drawNotesBox(page, markup, size, fonts);
 
   const am = arrowMetrics(size);
   for (const item of markup.pins) {
@@ -121,6 +131,32 @@ export function drawPageMarkup(
     });
   }
 
+  page.pushOperators(popGraphicsState());
+}
+
+/** Marks as vector strokes, in the same smoothed shape as the viewer's. */
+function drawMarks(
+  page: PDFPage,
+  marks: Markup[],
+  size: { width: number; height: number },
+) {
+  if (marks.length === 0) return;
+  // drawSvgPath sets no line join: round, like the viewer.
+  page.pushOperators(pushGraphicsState(), setLineJoin(LineJoinStyle.Round));
+  for (const mark of marks) {
+    const style = markStyle(mark, size);
+    // y-down page units, flipped by drawing from the top-left corner.
+    page.drawSvgPath(strokePath(toPagePoints(mark.points, size)), {
+      x: 0,
+      y: size.height,
+      borderColor: hex(style.colour),
+      borderWidth: style.width,
+      borderOpacity: style.opacity,
+      borderLineCap: LineCapStyle.Round,
+      blendMode:
+        mark.tool === "highlighter" ? BlendMode.Multiply : BlendMode.Normal,
+    });
+  }
   page.pushOperators(popGraphicsState());
 }
 

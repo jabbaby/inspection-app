@@ -39,7 +39,7 @@ export async function buildPack(
   onProgress: (progress: PackProgress) => void = () => {},
 ): Promise<Pack> {
   const { inspection, memo } = data;
-  const pinned = pinnedPages(data.drawings, data.items);
+  const pinned = pinnedPages(data.drawings, data.items, data.marks);
   const appendix = appendixPages(data);
   const photoCount = appendix
     .flatMap((p) => p.rows)

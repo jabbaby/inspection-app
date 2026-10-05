@@ -1,8 +1,8 @@
 /**
  * The export pack's marked-up drawing pages (SPEC section 7): every page
- * with pins, in document order, each the original PDF page at its own size
- * with the pins, arrows and notes box burned in. Hidden pages are left out;
- * a duplicated page with pins exports as its own page.
+ * with pins or markup, in document order, each the original PDF page at its
+ * own size with the markup, pins, arrows and notes box burned in. Hidden
+ * pages are left out; a duplicated page with pins exports as its own page.
  */
 import { PDFDocument } from "pdf-lib";
 import type { Drawing, ObservationBox } from "../../db/types";
@@ -71,6 +71,7 @@ export async function appendDrawingPages(
         page,
         {
           pins: pinned.pins,
+          marks: pinned.marks,
           box: box ? { x: box.x, y: box.y } : null,
           boxLines: boxLines({
             header: input.header,

@@ -1,7 +1,7 @@
 import { PDFDocument, StandardFonts } from "pdf-lib";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import { beforeAll, describe, expect, test } from "vitest";
-import type { Drawing, Item } from "../../db/types";
+import type { Drawing, Item, Markup } from "../../db/types";
 import {
   SHEET_SIZES,
   buildSyntheticDrawing,
@@ -179,6 +179,54 @@ describe("appendDrawingPages", () => {
     expect(texts[1]).toContain("S-501");
     expect(texts[1]).toContain("B. INCREASE COVER");
     expect(texts[1]).not.toContain("EXISTING CRACK");
+  });
+
+  test("a page with only markup goes in, without a notes box", async () => {
+    const d1 = drawing("d1", [{ source: 1 }, { source: 2 }, { source: 3 }]);
+    const mark = (over: Partial<Markup>): Markup => ({
+      id: crypto.randomUUID(),
+      inspectionId: "i1",
+      drawingId: "d1",
+      page: 2,
+      tool: "pen",
+      points: [0.1, 0.1, 0.3, 0.2, 0.5, 0.1],
+      colour: "#DA1A32",
+      weight: 0.0025,
+      createdAt: 1,
+      ...over,
+    });
+    const marks = [
+      mark({}),
+      mark({ tool: "highlighter", colour: "#FFD400", weight: 0.012 }),
+    ];
+    const pages = pinnedPages([d1], [item({ page: 1 })], marks);
+    expect(pages.map((p) => [p.position, p.marks.length])).toEqual([
+      [1, 0],
+      [2, 2],
+    ]);
+    const doc = await PDFDocument.create();
+    const fonts = {
+      regular: await doc.embedFont(StandardFonts.Helvetica),
+      bold: await doc.embedFont(StandardFonts.HelveticaBold),
+    };
+    await appendDrawingPages(
+      doc,
+      {
+        pages,
+        boxes: [],
+        header: "NORTHROP INSPECTION | SLAB | T. ENGINEER | 01/10/2026",
+        observationHeading: "Noted for information:",
+        loadPdf: async () => pdf,
+      },
+      fonts,
+    );
+    const bytes = await doc.save({ useObjectStreams: false });
+    const texts = await pageTexts(bytes);
+    expect(texts[0]).toContain("NORTHROP INSPECTION");
+    expect(texts[1]).toContain("S-501");
+    expect(texts[1]).not.toContain("NORTHROP INSPECTION");
+    // The highlighter is see-through, multiplied over the drawing.
+    expect(new TextDecoder("latin1").decode(bytes)).toContain("/Multiply");
   });
 
   test("names the drawing when its PDF can't be read", async () => {

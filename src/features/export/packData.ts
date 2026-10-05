@@ -1,5 +1,6 @@
 /** Loads what the export pack is built from (see buildPack.ts). */
 import { listDrawings } from "../../db/drawings";
+import { listMarkups } from "../../db/markups";
 import { getMemo } from "../../db/memos";
 import { loadJobInspection } from "../../db/projects";
 import type { InspectionDb } from "../../db/schema";
@@ -11,13 +12,15 @@ export async function loadPackData(
   db: InspectionDb,
   inspectionId: string,
 ): Promise<PackData | null> {
-  const [inspection, memo, items, drawings, snippets] = await Promise.all([
-    loadJobInspection(db, inspectionId),
-    getMemo(db, inspectionId),
-    db.items.where("inspectionId").equals(inspectionId).toArray(),
-    listDrawings(db, inspectionId),
-    db.snippets.toArray(),
-  ]);
+  const [inspection, memo, items, drawings, snippets, marks] =
+    await Promise.all([
+      loadJobInspection(db, inspectionId),
+      getMemo(db, inspectionId),
+      db.items.where("inspectionId").equals(inspectionId).toArray(),
+      listDrawings(db, inspectionId),
+      db.snippets.toArray(),
+      listMarkups(db, inspectionId),
+    ]);
   if (!inspection || !memo) return null;
   const drawingIds = new Set(drawings.map((d) => d.id));
   const [boxes, photoList, signature] = await Promise.all([
@@ -36,6 +39,7 @@ export async function loadPackData(
     items,
     drawings,
     boxes,
+    marks,
     conditionSnippets: snippets.filter((s) => s.kind === "condition"),
     observationHeading: observationHeading(
       snippets.filter((s) => s.kind === "heading"),

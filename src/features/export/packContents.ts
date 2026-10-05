@@ -6,6 +6,7 @@ import type {
   Drawing,
   Item,
   JobInspection,
+  Markup,
   Memo,
   ObservationBox,
   Photo,
@@ -27,6 +28,8 @@ export interface PackData {
   /** In document order. */
   drawings: Drawing[];
   boxes: ObservationBox[];
+  /** Pen and highlighter marks (slice 2). */
+  marks: Markup[];
   conditionSnippets: Snippet[];
   observationHeading: string;
   photos: Map<string, Photo>;
@@ -55,6 +58,8 @@ export interface PinnedPage {
   items: Item[];
   /** Every pin on the page, copies included, with its item's letter. */
   pins: PagePin[];
+  /** Pen and highlighter marks on the page, oldest first. */
+  marks: Markup[];
 }
 
 /** A pin to burn in: its item's kind and letter at one spot. */
@@ -66,8 +71,12 @@ export interface PagePin {
   arrows: Item["arrows"];
 }
 
-/** The pages that go in the pack, in document order. */
-export function pinnedPages(drawings: Drawing[], items: Item[]): PinnedPage[] {
+/** The pages that go in the pack (with pins or markup), in document order. */
+export function pinnedPages(
+  drawings: Drawing[],
+  items: Item[],
+  marks: Markup[] = [],
+): PinnedPage[] {
   return drawings.flatMap((drawing) =>
     drawing.pages.flatMap((entry, i) => {
       const position = i + 1;
@@ -86,8 +95,20 @@ export function pinnedPages(drawings: Drawing[], items: Item[]): PinnedPage[] {
             arrows: s.arrows,
           })),
       );
-      return onPage.length > 0
-        ? [{ drawing, position, source: entry.source, items: onPage, pins }]
+      const pageMarks = marks
+        .filter((m) => m.drawingId === drawing.id && m.page === position)
+        .sort((a, b) => a.createdAt - b.createdAt);
+      return onPage.length > 0 || pageMarks.length > 0
+        ? [
+            {
+              drawing,
+              position,
+              source: entry.source,
+              items: onPage,
+              pins,
+              marks: pageMarks,
+            },
+          ]
         : [];
     }),
   );
@@ -103,7 +124,7 @@ export function appendixPages(data: PackData): AppendixPage[] {
 export function packSummary(data: PackData): PackSummary {
   const pages = appendixPages(data);
   return {
-    drawingPages: pinnedPages(data.drawings, data.items).length,
+    drawingPages: pinnedPages(data.drawings, data.items, data.marks).length,
     photos: pages
       .flatMap((p) => p.rows)
       .reduce((n, row) => n + row.photos.length, 0),
