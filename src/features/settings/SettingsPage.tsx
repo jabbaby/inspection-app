@@ -20,7 +20,12 @@ import { MyDetailsForm, MySignature } from "./MyDetailsForm";
 import { SnippetsEditor } from "./SnippetsEditor";
 import { BackupAll } from "../backup/BackupAll";
 
-const KINDS: SnippetKind[] = ["body", "condition", "heading"];
+const KINDS: [SnippetKind, string][] = [
+  ["body", "body"],
+  ["condition", "condition"],
+  ["heading", "heading"],
+  ["photoNote", "photo note"],
+];
 
 const SECTIONS = [
   { id: "my-details", label: "My details", Icon: User },
@@ -97,8 +102,8 @@ export function SettingsPage() {
               {snippets === undefined
                 ? "Loading…"
                 : `${snippets.length} snippets (${KINDS.map(
-                    (kind) =>
-                      `${snippets.filter((s) => s.kind === kind).length} ${kind}`,
+                    ([kind, name]) =>
+                      `${snippets.filter((s) => s.kind === kind).length} ${name}`,
                   ).join(", ")})`}
             </p>
             <SnippetsEditor />
