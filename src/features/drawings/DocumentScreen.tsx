@@ -10,7 +10,7 @@ import { listDrawings, setPageSizes } from "../../db/drawings";
 import { listMarkups } from "../../db/markups";
 import { HIGHLIGHTER_OPACITY, toStoredPoints } from "../markup/markGeometry";
 import { drawWithUndo, eraseWithUndo } from "../markup/markupActions";
-import { useMarkupPrefs } from "../markup/markupPrefs";
+import { toolColour, useMarkupPrefs } from "../markup/markupPrefs";
 import { MarkupOverlay } from "../markup/MarkupOverlay";
 import { MarkupToolbar } from "../markup/MarkupToolbar";
 import type { DocMark, ViewerTool } from "../markup/tools";
@@ -289,7 +289,7 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
       tool,
       // Already normalised: stored rounded.
       points: toStoredPoints(points, { width: 1, height: 1 }),
-      colour: prefs.colour[tool],
+      colour: toolColour(prefs, tool),
       weight: prefs.weight[tool],
     });
   }
@@ -653,7 +653,7 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
               fingerDraw={prefs.fingerDraw}
               marks={docMarks}
               ink={{
-                colour: prefs.colour[inkTool],
+                colour: toolColour(prefs, inkTool),
                 weight: prefs.weight[inkTool],
                 opacity: inkTool === "highlighter" ? HIGHLIGHTER_OPACITY : 1,
               }}

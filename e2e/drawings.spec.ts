@@ -1933,3 +1933,34 @@ test("markup: no tool places nothing; pen draws, eraser erases, both undo", asyn
   await page.mouse.click(box.x + box.width * 0.8, box.y + box.height * 0.8);
   await expect(page.getByTestId("viewer-pin")).toHaveCount(1);
 });
+
+test("markup colours: the chosen colour's panel recolours it; Add colour goes at the end", async ({
+  page,
+}) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openDrawing(page, "S-101 Level 3", false);
+  const toolbar = page.getByRole("toolbar", { name: "Markup tools" });
+  await toolbar.getByRole("button", { name: "Pen", exact: true }).click();
+  // The row's colours (the panel has its own).
+  const swatches = toolbar.locator(".markup-toolbar-row > .markup-swatch");
+  await expect(swatches).toHaveCount(6);
+
+  // Choose blue, then tap it again: its panel opens.
+  await toolbar.getByRole("button", { name: "Colour #0165FC" }).click();
+  await toolbar.getByRole("button", { name: "Colour #0165FC" }).click();
+  const panel = page.getByRole("group", { name: "Pen colour" });
+  await expect(panel).toBeVisible();
+
+  // Add colour: a new slot at the end, chosen; blue stays where it was.
+  await panel.getByRole("button", { name: "Add colour" }).click();
+  await expect(swatches).toHaveCount(7);
+  await expect(swatches.nth(6)).toHaveAttribute("aria-pressed", "true");
+  await panel.getByRole("button", { name: "Use #E64C9A" }).click();
+  await expect(swatches.nth(6)).toHaveAttribute("aria-label", "Colour #E64C9A");
+  await expect(swatches.nth(1)).toHaveAttribute("aria-label", "Colour #0165FC");
+
+  // Remove takes the chosen one away again.
+  await panel.getByRole("button", { name: "Remove" }).click();
+  await expect(swatches).toHaveCount(6);
+});

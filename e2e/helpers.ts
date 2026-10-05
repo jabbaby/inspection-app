@@ -71,7 +71,6 @@ export async function pinch(
   );
 }
 
-/** A quick one-finger tap from synthetic touch pointer events. */
 /** Turns the Pin tool on (taps place pins only while it is; SPEC 5a). */
 export async function pinToolOn(page: Page) {
   const pin = page
@@ -81,6 +80,7 @@ export async function pinToolOn(page: Page) {
   await expect(pin).toHaveAttribute("aria-pressed", "true");
 }
 
+/** A quick one-finger tap from synthetic touch pointer events. */
 export async function touchTap(page: Page, at: { x: number; y: number }) {
   await page.evaluate((at) => {
     const target = document.elementFromPoint(at.x, at.y)!;

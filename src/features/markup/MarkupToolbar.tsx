@@ -4,15 +4,19 @@ import {
   Highlighter,
   MapPin,
   Pen,
-  Plus,
   Pointer,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { MarkupTool } from "../../db/types";
 import { WEIGHT_PRESETS, WEIGHT_RANGE } from "./markGeometry";
 import {
-  addColour,
-  removeColour,
+  MAX_SLOTS,
+  PRESET_COLOURS,
+  addSlot,
+  recolourSlot,
+  removeSlot,
+  selectSlot,
+  toolColour,
   updatePrefs,
   useMarkupPrefs,
 } from "./markupPrefs";
@@ -26,19 +30,19 @@ const TOOLS = [
 ] as const;
 
 const WEIGHT_NAMES = ["Thin", "Medium", "Thick"];
-/** Inline colours before the ⌄ for the rest. */
-const INLINE_COLOURS = 6;
-/** Holding a saved colour this long removes it. */
-const HOLD_MS = 600;
+const TOOL_NAMES: Record<MarkupTool, string> = {
+  pen: "Pen",
+  highlighter: "Highlighter",
+};
 
 const HINTS: Partial<Record<ViewerTool, string>> = {
   pin: "Tap for an instruction · double-tap for an observation · hold and drag for an arrow",
   eraser: "Touch a mark to remove it",
 };
 
-/** An open slider or palette, under the button that opened it (screen px). */
+/** An open slider or colour panel, under the button that opened it (screen px). */
 interface Open {
-  which: "weight" | "palette";
+  which: "weight" | "colour";
   left: number;
   top: number;
 }
@@ -51,7 +55,8 @@ interface Props {
 /**
  * The markup toolbar (SPEC section 5a): a full-width bar under the screen
  * header, GoodNotes style. Every tool is a toggle (one on at a time); the
- * pen and highlighter show three weights and their saved colours inline.
+ * pen and highlighter show three weights and their colour slots inline.
+ * The slot in use shows a ⌄: tapping it again opens its colour panel.
  */
 export function MarkupToolbar({ tool, onTool }: Props) {
   const prefs = useMarkupPrefs();
@@ -82,62 +87,69 @@ export function MarkupToolbar({ tool, onTool }: Props) {
       role="toolbar"
       aria-label="Markup tools"
     >
-      {TOOLS.map(({ id, label, Icon }) => (
+      {/* Centred; re-centres as a tool's options come and go. */}
+      <div className="markup-toolbar-row">
+        {TOOLS.map(({ id, label, Icon }) => (
+          <button
+            key={id}
+            type="button"
+            className={`markup-tool${id === "pin" ? " markup-tool-pin" : ""}`}
+            aria-label={label}
+            aria-pressed={tool === id}
+            title={label}
+            onClick={() => choose(id)}
+          >
+            <Icon aria-hidden="true" strokeWidth={2.25} />
+          </button>
+        ))}
         <button
-          key={id}
           type="button"
-          className={`markup-tool${id === "pin" ? " markup-tool-pin" : ""}`}
-          aria-label={label}
-          aria-pressed={tool === id}
-          title={label}
-          onClick={() => choose(id)}
+          className="markup-tool"
+          aria-label="Draw with finger"
+          aria-pressed={prefs.fingerDraw}
+          title={
+            prefs.fingerDraw
+              ? "Draw with finger: one finger draws, two scroll"
+              : "Draw with finger"
+          }
+          onClick={() =>
+            updatePrefs((p) => {
+              p.fingerDraw = !p.fingerDraw;
+            })
+          }
         >
-          <Icon aria-hidden="true" strokeWidth={2.25} />
+          <Pointer aria-hidden="true" strokeWidth={2.25} />
         </button>
-      ))}
-      <button
-        type="button"
-        className="markup-tool"
-        aria-label="Draw with finger"
-        aria-pressed={prefs.fingerDraw}
-        title={
-          prefs.fingerDraw
-            ? "Draw with finger: one finger draws, two scroll"
-            : "Draw with finger"
-        }
-        onClick={() =>
-          updatePrefs((p) => {
-            p.fingerDraw = !p.fingerDraw;
-          })
-        }
-      >
-        <Pointer aria-hidden="true" strokeWidth={2.25} />
-      </button>
 
-      {inkTool && (
-        <InkOptions
-          tool={inkTool}
-          open={open}
-          onOpen={(which, button) => {
-            const r = button.getBoundingClientRect();
-            setOpen((o) =>
-              o?.which === which
-                ? null
-                : {
-                    which,
-                    left: Math.max(8, Math.min(r.left - 12, innerWidth - 260)),
-                    top: r.bottom + 6,
-                  },
-            );
-          }}
-        />
-      )}
-      {tool && HINTS[tool] && (
-        <>
-          <span className="markup-divider" aria-hidden="true" />
-          <span className="markup-hint">{HINTS[tool]}</span>
-        </>
-      )}
+        {inkTool && (
+          <InkOptions
+            tool={inkTool}
+            open={open}
+            onClose={() => setOpen(null)}
+            onOpen={(which, button) => {
+              const r = button.getBoundingClientRect();
+              setOpen((o) =>
+                o?.which === which
+                  ? null
+                  : {
+                      which,
+                      left: Math.max(
+                        8,
+                        Math.min(r.left - 12, innerWidth - 260),
+                      ),
+                      top: r.bottom + 6,
+                    },
+              );
+            }}
+          />
+        )}
+        {tool && HINTS[tool] && (
+          <>
+            <span className="markup-divider" aria-hidden="true" />
+            <span className="markup-hint">{HINTS[tool]}</span>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -145,19 +157,17 @@ export function MarkupToolbar({ tool, onTool }: Props) {
 function InkOptions({
   tool,
   open,
+  onClose,
   onOpen,
 }: {
   tool: MarkupTool;
   open: Open | null;
+  onClose: () => void;
   onOpen: (which: Open["which"], button: HTMLElement) => void;
 }) {
   const prefs = useMarkupPrefs();
   const weight = prefs.weight[tool];
-  const colour = prefs.colour[tool];
-  const palette = prefs.palettes[tool];
-  // The chosen colour always shows inline, even from deep in the palette.
-  const inline = palette.slice(0, INLINE_COLOURS);
-  if (!inline.includes(colour)) inline[inline.length - 1] = colour;
+  const selected = prefs.selected[tool];
   const [min, max] = WEIGHT_RANGE[tool];
 
   return (
@@ -188,30 +198,26 @@ function InkOptions({
         );
       })}
       <span className="markup-divider" aria-hidden="true" />
-      {inline.map((c) => (
+      {prefs.palettes[tool].map((c, i) => (
         <button
-          key={c}
+          // Slots can share a colour: the position is the identity.
+          key={i}
           type="button"
-          className="markup-swatch"
+          className={`markup-swatch${light(c) ? " markup-swatch-light" : ""}`}
           style={{ backgroundColor: c }}
           aria-label={`Colour ${c}`}
-          aria-pressed={c === colour}
-          onClick={() =>
-            updatePrefs((p) => {
-              p.colour[tool] = c;
-            })
-          }
-        />
+          aria-pressed={i === selected}
+          aria-expanded={i === selected ? open?.which === "colour" : undefined}
+          title={i === selected ? "Tap again to change this colour" : c}
+          onClick={(e) => {
+            if (i === selected) return onOpen("colour", e.currentTarget);
+            onClose();
+            updatePrefs((p) => selectSlot(p, tool, i));
+          }}
+        >
+          {i === selected && <ChevronDown aria-hidden="true" strokeWidth={3} />}
+        </button>
       ))}
-      <button
-        type="button"
-        className="markup-more"
-        aria-label="All colours"
-        aria-expanded={open?.which === "palette"}
-        onClick={(e) => onOpen("palette", e.currentTarget)}
-      >
-        <ChevronDown aria-hidden="true" strokeWidth={2.25} />
-      </button>
 
       {open?.which === "weight" && (
         <div
@@ -237,15 +243,26 @@ function InkOptions({
           </label>
         </div>
       )}
-      {open?.which === "palette" && (
-        <Palette tool={tool} at={{ left: open.left, top: open.top }} />
+      {open?.which === "colour" && (
+        <ColourPanel tool={tool} at={{ left: open.left, top: open.top }} />
       )}
     </>
   );
 }
 
-/** Every saved colour: tap to use, hold to remove, + to add one. */
-function Palette({
+/** Whether a colour is light enough to need a dark ⌄ on it. */
+function light(colour: string) {
+  const n = parseInt(colour.slice(1), 16);
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  return 0.299 * r + 0.587 * g + 0.114 * b > 170;
+}
+
+/**
+ * The slot in use, GoodNotes style: pick a colour for it (the iPad's
+ * picker recolours it as it moves and never adds one), add a colour at the
+ * end of the row, or remove this one.
+ */
+function ColourPanel({
   tool,
   at,
 }: {
@@ -253,68 +270,71 @@ function Palette({
   at: { left: number; top: number };
 }) {
   const prefs = useMarkupPrefs();
-  const picker = useRef<HTMLInputElement>(null);
-  const hold = useRef(0);
-  /** Set when a hold removed a colour: the click that follows is ignored. */
-  const held = useRef(false);
-
-  // The colour picker's "change" (not React's onChange, which fires on
-  // every drag in the picker) adds the colour once it closes.
-  useEffect(() => {
-    const input = picker.current;
-    if (!input) return;
-    const add = () => addColour(tool, input.value);
-    input.addEventListener("change", add);
-    return () => input.removeEventListener("change", add);
-  }, [tool]);
-
+  const colour = toolColour(prefs, tool);
+  const slots = prefs.palettes[tool].length;
   return (
     <div
-      className="markup-popover"
+      className="markup-popover markup-colour-panel"
       role="group"
-      aria-label="Saved colours"
+      aria-label={`${TOOL_NAMES[tool]} colour`}
       style={at}
     >
+      <p className="markup-panel-title">
+        <span
+          className="markup-swatch"
+          style={{ backgroundColor: colour }}
+          aria-hidden="true"
+        />
+        {TOOL_NAMES[tool]} colour
+      </p>
       <div className="markup-palette">
-        {prefs.palettes[tool].map((c) => (
+        {PRESET_COLOURS[tool].map((c) => (
           <button
             key={c}
             type="button"
             className="markup-swatch"
             style={{ backgroundColor: c }}
-            aria-label={`Colour ${c}`}
-            aria-pressed={c === prefs.colour[tool]}
-            onPointerDown={() => {
-              window.clearTimeout(hold.current);
-              held.current = false;
-              hold.current = window.setTimeout(() => {
-                held.current = true;
-                removeColour(tool, c);
-              }, HOLD_MS);
-            }}
-            onPointerUp={() => window.clearTimeout(hold.current)}
-            onPointerCancel={() => window.clearTimeout(hold.current)}
-            onPointerLeave={() => window.clearTimeout(hold.current)}
-            onContextMenu={(e) => e.preventDefault()}
-            onClick={() => {
-              if (held.current) return;
-              updatePrefs((p) => {
-                p.colour[tool] = c;
-              });
-            }}
+            aria-label={`Use ${c}`}
+            aria-pressed={c.toUpperCase() === colour.toUpperCase()}
+            onClick={() => updatePrefs((p) => recolourSlot(p, tool, c))}
           />
         ))}
-        <label className="markup-add" title="Add a colour">
-          <Plus aria-hidden="true" strokeWidth={2.25} />
-          <input
-            ref={picker}
-            type="color"
-            aria-label="Add a colour"
-            defaultValue={prefs.colour[tool]}
-          />
-        </label>
       </div>
-      <p className="markup-note">Hold a colour to remove it.</p>
+      <label className="markup-custom">
+        Custom…
+        <input
+          type="color"
+          aria-label="Custom colour"
+          value={colour.toLowerCase()}
+          // Fires as the picker moves: it only ever recolours this slot.
+          onChange={(e) =>
+            updatePrefs((p) => recolourSlot(p, tool, e.target.value))
+          }
+        />
+      </label>
+      <div className="markup-panel-actions">
+        <button
+          type="button"
+          onClick={() => updatePrefs((p) => addSlot(p, tool))}
+          title={slots >= MAX_SLOTS ? `Up to ${MAX_SLOTS} colours` : undefined}
+        >
+          Add colour
+        </button>
+        {slots > 1 && (
+          <button
+            type="button"
+            className="danger-outline"
+            onClick={() => updatePrefs((p) => removeSlot(p, tool))}
+          >
+            Remove
+          </button>
+        )}
+      </div>
+      {slots >= MAX_SLOTS && (
+        <p className="markup-note">
+          The row is full ({MAX_SLOTS} colours): remove one to add another.
+        </p>
+      )}
     </div>
   );
 }

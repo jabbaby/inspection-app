@@ -4067,6 +4067,15 @@ h1 {
   display: none;
 }
 
+/* Auto margins centre the row but, unlike justify-content: center, never
+   push a too-wide row off the left edge (it scrolls instead). */
+.markup-toolbar-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin: 0 auto;
+}
+
 @media (prefers-color-scheme: dark) {
   .markup-toolbar {
     --tool-ink: var(--ink);
@@ -4147,14 +4156,15 @@ h1 {
   border: 1.5px solid var(--ink-muted);
 }
 
-.markup-more {
-  width: 26px;
-  height: 30px;
+/* The slot in use shows a ⌄ (tap it again for its colour panel). */
+.markup-swatch .lucide {
+  width: 12px;
+  height: 12px;
+  color: #fff;
 }
 
-.markup-more .lucide {
-  width: 16px;
-  height: 16px;
+.markup-swatch-light .lucide {
+  color: #111;
 }
 
 .markup-hint {
@@ -4196,33 +4206,56 @@ h1 {
   user-select: none;
 }
 
-.markup-add {
+.markup-colour-panel {
+  width: 236px;
+}
+
+.markup-panel-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  font-weight: 600;
+}
+
+.markup-panel-title .markup-swatch {
+  margin: 0;
+}
+
+/* The iPad colour picker, opened from a full-width row. */
+.markup-custom {
   position: relative;
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
+  min-height: 36px;
+  margin-top: var(--space-3);
+  border-radius: var(--radius-pill);
   background: var(--sunken);
-  color: var(--tool-ink);
+  font-size: var(--text-sm);
   overflow: hidden;
 }
 
-.markup-add .lucide {
-  width: 16px;
-  height: 16px;
-}
-
-/* The native colour picker opens from the + itself. */
-.markup-add input {
+.markup-custom input {
   position: absolute;
   inset: 0;
-  opacity: 0;
   width: 100%;
   height: 100%;
   border: 0;
   padding: 0;
+  opacity: 0;
+}
+
+.markup-panel-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.markup-panel-actions button {
+  flex: 1;
+  min-height: 36px;
+  font-size: var(--text-sm);
 }
 
 .markup-note {
