@@ -148,7 +148,7 @@ Stored locally in IndexedDB. File bytes (PDFs, photos) are stored in a `blobs` t
 Project        { id, jobNumber, jobName, client{ name, company, address1, address2 },
                  contacts[]: { id, company, attn }, createdAt, updatedAt }
                // a job: its details are shared by all its inspections and their memos
-Inspection     { id, projectId|null, itemInspected, date, inspector, status,
+Inspection     { id, projectId|null, itemInspected, date, inspector, status, backedUpAt?,
                  photoIds[],   // general photos (not tied to a pin)
                  unsorted?{ jobName, client },   // details from before projects, when it had no job number
                  createdAt, updatedAt }
@@ -195,18 +195,24 @@ Pin coordinates are stored relative to the page (0..1), so they stay correct at 
 
 ## 9. Inspection file (move between devices)
 
-A single zip with a custom extension (e.g. `.inspection`) containing:
-- `inspection.json` (all records above for that inspection, including its project, plus a `schemaVersion`)
-- `drawings/` original PDFs
-- `photos/` compressed photos
+A single zip with the extension `.inspection` (built step 9, 2026-10-05), named `{jobNumber}_{itemInspected}_{YYYY-MM-DD}.inspection`, containing:
+- `inspection.json`: `schemaVersion` (1), the app build that wrote it, when, and the records for that inspection: its project, the inspection, drawings (with their `pages` lists), items (with arrows and copies), notes boxes, photo records, the memo (with its export record) and the prefilled messages (snippets).
+- `drawings/` the original PDFs, `photos/` the working copies, `originals/` the full-size camera photos (only when **Include full-size camera photos** is on; off by default, since they're saved to Photos with Save to iPad), `signature/` the memo's signature.
 
-Rules: import never silently overwrites; if the same inspection id exists, ask (keep both / replace). Desktop uses the same app and its own local storage: import, edit, export PDF, optionally export the file back.
+Zipped with fflate (bundled; works offline); PDFs and photos are stored as they are. Export then import is round-trip tested.
+
+**Import** (Inspections page, **Import inspection…**, any file from Files): shows what the file holds (project, drawings and pages, pins, photos, memo), then:
+- never silently overwrites: if the same inspection is already on the device it asks **Replace** (in one step, so a failed import leaves the old copy) or **Keep both** (the file's copy gets new ids);
+- the project: if it's already here (same id, else the same job number, ignoring case and spaces) the inspection joins it and the device's project details are kept; otherwise the file's project is added;
+- prefilled messages the device doesn't have are added (existing ones are left alone);
+- the job's memo counter moves up to the memo's SIM number, so references aren't reused;
+- a file from a newer app version is refused with a message to update; anything else gets "This isn't an inspection file." Desktop uses the same app and its own local storage: import, edit, export PDF, optionally export the file back.
 
 ## 10. Offline and storage
 
 - Service worker precaches the app shell; the app loads and works with no connection.
 - Request **persistent storage** (`navigator.storage.persist()`) on first run.
-- Show a storage meter and a clear **Back up now** action (exports the inspection file).
+- Show a storage meter and a clear **Back up now** action (exports the inspection file). Built step 9: each inspection's Pre-inspection step has a **Backup** card ("Not backed up yet", "Backed up" or "Changed since last backup" with the time; **Back up now** builds the file, then **Share…** opens the Share sheet, Save to Files; a desktop downloads it). It counts as backed up once the file is shared or saved (`Inspection.backedUpAt`); any edit after that (pins, photos, memo, drawings, job details) makes it "changed". Settings, **Storage and backup** has **Back up all** (one file per inspection, working copies only, shared together). The Dashboard's Needs attention tile lists inspections with drawings or items that aren't backed up, linking to their Pre-inspection.
 - iOS may evict a web app's stored data if it is unused for a long time. Mitigations: home-screen install, persistent storage request, prominent backup prompt after each inspection.
 - Never store anything only in memory.
 
