@@ -14,7 +14,8 @@ export function memoFilename(
   return `${base}.pdf`;
 }
 
-function sanitise(part: string): string {
+/** Makes text safe in a file name (iOS Files, Windows, email). */
+export function sanitise(part: string): string {
   return part
     .normalize("NFKD")
     .replace(/[̀-ͯ]/g, "")

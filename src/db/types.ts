@@ -48,6 +48,8 @@ export interface Inspection {
   unsorted?: { jobName: string; client: Client };
   createdAt: number;
   updatedAt: number;
+  /** When it was last saved to an inspection file (Back up now); edits after it need a new backup. */
+  backedUpAt?: number;
 }
 
 /** An inspection with its project's job details, as screens and the memo read them. */
