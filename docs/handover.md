@@ -23,10 +23,13 @@ STATUS (SPEC section 13 build steps)
 
 - Step 8 (PDF export pack) is BUILT (2026-10-04), waiting for the iPad test (docs/test-plans/step8-export.md). Code in src/features/export: markupGeometry.ts (pin size, rotated/cropped pages, notes box layout), drawMarkup.ts, drawingPages.ts, appendixLayout.ts + renderAppendix.ts, packContents.ts (pure: what goes in, warnings; no pdf-lib so the memo screen stays light), buildPack.ts (pdf-lib, loaded on demand), packData.ts (loads from Dexie), exportedLetters.ts, ExportCard.tsx, ExportedLettersNotice.tsx. The memo renderer exposes writeMemo() and drawFooter() for the pack.
 
+- Since step 8 (2026-10-05, all pushed, CI green, waiting for iPad tests): memo recipients up to 10; reorder drawings (Pre-inspection drag handles via src/app/useRowDrag.ts; Pages view menu + ReorderDrawingsDialog) and move pages within a drawing (src/db/pages.ts movePage; drawing order is still createdAt, swapped by reorderDrawings); Copy pin (Item.copies; src/features/items/spots.ts gives each pin a spot key "itemId" or "itemId~copyId"; the original decides the letter); step 9 inspection file and backups (src/db/backup.ts collect/import, src/features/backup: inspectionFile.ts zip via fflate, BackupCard, ImportInspection, BackupAll; Inspection.backedUpAt).
+- iPad test plans waiting: docs/test-plans/step8-export.md, step8b-reorder-recipients.md, step8c-copy-pins.md, step9-backup.md.
+
 NEXT (agreed order; plan + mockup each before building)
-1. Fix anything from the step 8 iPad test.
-2. Step 9: inspection file export/import + backups (must carry the project, and the Drawing.pages lists).
-3. Slice 2: the markup editor (freehand Pencil, shapes/clouds, arrows, text callouts) in its own mode so it doesn't clash with tap-to-pin; its tools go on the right. Agreed to keep it after step 9; the export draws markup in drawPageMarkup(), so it plugs in there.
+1. Fix anything from the waiting iPad tests.
+2. Slice 2: the markup editor (freehand Pencil, shapes/clouds, arrows, text callouts) in its own mode so it doesn't clash with tap-to-pin; its tools go on the right. The export draws page extras in drawPageMarkup() (src/features/export/drawMarkup.ts) and the inspection file has schemaVersion 1: markup bumps it and must round-trip.
+3. Step 10 hardening (offline tests, large drawings, storage limits).
 
 HOW THE UI IS BUILT
 - One stylesheet: src/app/styles.css. Tokens at the top: colours (--page warm grey, --surface, --surface-2, --sunken, --ink, --ink-strong maroon titles, --ink-muted, --line/--line-soft/--line-strong, --chrome* (rail), --selected charcoal, --accent red, --ok/--todo/--danger and -bg, --observation, --viewer-bg, --focus), spacing (--space-1..8), radius (--radius-sm 8 / --radius 12 / --radius-lg 18 / --radius-pill; tiles use 22px), type (--text-xs..2xl), --control 44px; a dark set under prefers-color-scheme: dark. Brand values only from src/brand/northrop.ts via applyBrandTokens() (assets: wordmarkRed, icon roundel). Drawing pages, the notes box, the memo preview and the signature pad stay white in both modes.
