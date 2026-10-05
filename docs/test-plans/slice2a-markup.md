@@ -51,3 +51,13 @@ Reply with the step number and what you saw (no need to edit this file).
 
 ## Speed (real drawing)
 28. **Big sheet.** On a large real A1 drawing, zoom right in and draw for a while: is the line still smooth at the Pencil tip? If not, a Safari Timeline recording on the synthetic drawing would help (Screenshots off).
+
+## Follow-up (2026-10-06): colour slots and a centred toolbar
+29. **Reset.** After updating, the pen has its six starting colours again (red, blue, black, green, orange, purple) and the highlighter its three.
+30. **Centred.** With no tool on, the tools sit in the middle of the bar. Tap Pen: the row grows and stays centred. Tap Pen again: it shrinks back to the middle.
+31. **Chosen colour.** Tap blue: a small ⌄ shows inside it. Tap blue again: the **Pen colour** panel opens under it.
+32. **Recolour.** In the panel, tap a preset colour: the blue slot becomes that colour (no new slot). Tap **Custom…** and drag around the picker: only that slot changes, live, and no colours are added.
+33. **Add colour.** Tap **Add colour**: a new slot appears at the end of the row and is chosen; the slot you were on keeps its colour. Pick a colour for the new one.
+34. **Remove.** With a slot chosen, open its panel and tap **Remove**: it goes and its neighbour is chosen. With one slot left, Remove isn't offered.
+35. **Highlighter.** The highlighter's slots work the same way, with lighter preset colours, and don't affect the pen's.
+36. **Remembered.** Close and reopen the app: the slots and the chosen one are as you left them.
