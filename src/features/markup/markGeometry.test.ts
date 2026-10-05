@@ -58,7 +58,15 @@ describe("mark geometry", () => {
         { x: 10, y: 0 },
         { x: 10, y: 10 },
       ]),
-    ).toBe("M 0 0 Q 10 0 10 5 L 10 10");
+    ).toBe("M 0 0 C 6.67 0 10 1.67 10 5 L 10 10");
+  });
+
+  test("curves are plain cubics, which every PDF viewer strokes cleanly", () => {
+    const d = strokePath(
+      Array.from({ length: 20 }, (_, i) => ({ x: i * 10, y: (i % 3) * 7 })),
+    );
+    expect(d).not.toMatch(/[QqTtVv]/);
+    expect(d.match(/C /g)).toHaveLength(18);
   });
 
   test("the eraser touches a mark within reach of its line", () => {

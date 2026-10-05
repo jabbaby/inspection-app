@@ -89,9 +89,15 @@ export function simplify(points: Point[], tolerance: number): Point[] {
 const fmt = (n: number) => String(Math.round(n * 100) / 100);
 
 /**
- * SVG path data for a stroke through `points`: smoothed with quadratic
- * curves through the midpoints, so a simplified stroke still looks drawn.
- * A single point becomes a dot (a zero-length line with round caps).
+ * SVG path data for a stroke through `points`: smoothed with curves through
+ * the midpoints, so a simplified stroke still looks drawn. A single point
+ * becomes a dot (a zero-length line with round caps).
+ *
+ * Each piece is the quadratic curve from one midpoint to the next (bent by
+ * the point between), written as the exact cubic equivalent: pdf-lib turns
+ * an SVG "Q" into a PDF "v" curve, which isn't the same shape and has no
+ * direction at its start, and Apple's PDF renderer then leaves white nicks
+ * where the pieces join.
  */
 export function strokePath(points: Point[]): string {
   if (points.length === 0) return "";
@@ -101,10 +107,22 @@ export function strokePath(points: Point[]): string {
   if (points.length === 2)
     return `M ${fmt(first.x)} ${fmt(first.y)} L ${fmt(points[1].x)} ${fmt(points[1].y)}`;
   let d = `M ${fmt(first.x)} ${fmt(first.y)}`;
+  let from = first;
   for (let i = 1; i < points.length - 1; i++) {
-    const p = points[i];
+    const q = points[i];
     const next = points[i + 1];
-    d += ` Q ${fmt(p.x)} ${fmt(p.y)} ${fmt((p.x + next.x) / 2)} ${fmt((p.y + next.y) / 2)}`;
+    const to = { x: (q.x + next.x) / 2, y: (q.y + next.y) / 2 };
+    // Quadratic (from, q, to) as a cubic: control points 2/3 of the way to q.
+    const c1 = {
+      x: from.x + (2 / 3) * (q.x - from.x),
+      y: from.y + (2 / 3) * (q.y - from.y),
+    };
+    const c2 = {
+      x: to.x + (2 / 3) * (q.x - to.x),
+      y: to.y + (2 / 3) * (q.y - to.y),
+    };
+    d += ` C ${fmt(c1.x)} ${fmt(c1.y)} ${fmt(c2.x)} ${fmt(c2.y)} ${fmt(to.x)} ${fmt(to.y)}`;
+    from = to;
   }
   const last = points[points.length - 1];
   return `${d} L ${fmt(last.x)} ${fmt(last.y)}`;
