@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { markPath, markStyle } from "../../markup/markGeometry";
+import { TileCache, type Tile } from "./tileCache";
 import type { DocMark } from "../../markup/tools";
 import type { PDFDocumentProxy, PDFPageProxy, RenderTask } from "../pdf/pdfjs";
 import type { Rect } from "../viewer/viewTransform";
@@ -8,8 +9,19 @@ import { visiblePart, type PageLayout } from "./documentLayout";
 
 // iPad Safari limits total canvas memory, and several pages can be live.
 const MAX_BASE_PIXELS = 4_000_000;
-/** Pixels for the sharp part on screen, shared by the pages showing. */
-const TILE_PIXELS = 12_000_000;
+/**
+ * Pixels for a sharp render of the part on screen, shared by the pages
+ * showing (the iPad screen itself is about 4 MP; the rest is a margin so
+ * short scrolls stay sharp). A page with marks has a second layer this size.
+ */
+const SHARP_PIXELS = 6_000_000;
+/** The margin around the screen, at most, as a fraction of its size. */
+const MAX_MARGIN = 0.25;
+/** A kept render this close to the sharpness wanted is used as it is. */
+const GOOD_ENOUGH = 0.9;
+
+/** Sharp renders kept across the document (tileCache.ts). */
+const tiles = new TileCache<HTMLCanvasElement>(12_000_000, releaseCanvas);
 
 export interface SettledView {
   /** Visible document rectangle (document units). */
@@ -252,12 +264,13 @@ export function DocPage({
   useEffect(() => {
     if (active) return;
     clearHost(baseHost.current);
-    clearHost(tileHost.current);
+    detachTile();
+    tiles.dropPage(page.key);
     clearHost(markBaseHost.current);
     clearHost(markTileHost.current);
     tileArea.current = null;
     baseScale.current = 0;
-  }, [active]);
+  }, [active, page.key]);
   useEffect(() => {
     const hosts = [
       baseHost.current,
@@ -265,57 +278,112 @@ export function DocPage({
       markBaseHost.current,
       markTileHost.current,
     ];
-    return () => hosts.forEach(clearHost);
-  }, []);
+    const key = page.key;
+    return () => {
+      shownTile.current = null;
+      tiles.dropPage(key);
+      hosts.forEach(clearHost);
+    };
+  }, [page.key]);
 
-  // Sharpen the visible part after each gesture settles.
+  // --- the sharp part on screen ------------------------------------------
+
+  /** The kept render on screen (null: a preview, or none). */
+  const shownTile = useRef<Tile | null>(null);
+
+  /** Takes the sharp render off screen (a kept one stays in the cache). */
+  function detachTile() {
+    const host = tileHost.current;
+    const shown = shownTile.current;
+    shownTile.current = null;
+    if (shown) {
+      shown.canvas.remove();
+      tiles.setShown(shown, false);
+    }
+    // A preview isn't kept.
+    clearHost(host);
+  }
+
+  /** Puts a render on screen: a kept tile, or a preview (not kept). */
+  function showTile(
+    canvas: HTMLCanvasElement,
+    rect: Rect,
+    scale: number,
+    kept: Tile | null,
+  ) {
+    if (kept && shownTile.current === kept) return;
+    detachTile();
+    Object.assign(canvas.style, {
+      left: `${rect.x}px`,
+      top: `${rect.y}px`,
+      width: `${rect.width}px`,
+      height: `${rect.height}px`,
+    });
+    tileHost.current?.appendChild(canvas);
+    if (kept) {
+      shownTile.current = kept;
+      tiles.setShown(kept, true);
+    }
+    tileArea.current = { rect, scale };
+    repaintMarks();
+  }
+
+  // Sharpen the part on screen after each gesture settles: a kept render
+  // that covers it is shown at once; otherwise a quick preview (a quarter of
+  // the pixels), then the sharp render, with a margin when memory allows.
   const tileTask = useRef<RenderTask | null>(null);
   useEffect(() => {
     tileTask.current?.cancel();
     if (!proxy || !view || !rendered) return;
     const part = visiblePart(page, view.docRect);
-    const scale = view.devicePxPerDocUnit * page.scale;
-    if (!part || scale <= baseScale.current * 1.1) {
-      clearHost(tileHost.current);
+    const target = view.devicePxPerDocUnit * page.scale;
+    if (!part || target <= baseScale.current * 1.1) {
       if (tileArea.current) {
+        detachTile();
         tileArea.current = null;
         repaintMarks();
       }
       return;
     }
-    const pad = 40 / (view.devicePxPerDocUnit * page.scale);
+    const budget = SHARP_PIXELS / Math.max(1, view.visibleCount);
+    const partArea = part.width * part.height;
+    // As sharp as wanted, unless even the screen alone is over budget.
+    const want = Math.min(target, Math.sqrt(budget / partArea));
+
+    // Still on screen, or kept from before: no drawing at all.
+    const shown = shownTile.current;
+    const kept = tiles.find(page.key, part, want * GOOD_ENOUGH);
+    if (kept) {
+      showTile(kept.canvas, kept.rect, kept.scale, kept);
+      return;
+    }
+
+    // A margin round the screen, as far as the budget allows.
+    const spare = Math.sqrt(budget / (partArea * want * want));
+    const margin = Math.max(0, Math.min(MAX_MARGIN, (spare - 1) / 2));
     const rect: Rect = {
-      x: Math.max(0, part.x - pad),
-      y: Math.max(0, part.y - pad),
+      x: Math.max(0, part.x - part.width * margin),
+      y: Math.max(0, part.y - part.height * margin),
       width: 0,
       height: 0,
     };
-    rect.width = Math.min(page.size.width, part.x + part.width + pad) - rect.x;
+    rect.width =
+      Math.min(page.size.width, part.x + part.width * (1 + margin)) - rect.x;
     rect.height =
-      Math.min(page.size.height, part.y + part.height + pad) - rect.y;
-    // The sharp layers share one pixel budget (iPad Safari caps total
-    // canvas memory; past it, new canvases silently fail and the page stays
-    // blurry): a page with marks has two, the drawing's and the marks'.
-    // Even halved it is more than the screen's own pixels.
-    const layers = marksRef.current.length > 0 ? 2 : 1;
-    const budget = TILE_PIXELS / layers / Math.max(1, view.visibleCount);
+      Math.min(page.size.height, part.y + part.height * (1 + margin)) - rect.y;
     const area = rect.width * rect.height;
-    const target = scale;
+    const scale = Math.min(want, Math.sqrt(budget / area));
 
+    // A preview first, unless what's on screen is already nearly as sharp.
+    const preview = !(shown && shown.scale >= want * 0.6);
+
+    let stopped = false;
     let task: RenderTask | null = null;
     let unregister = () => {};
-    const start = (pixels: number, retry: boolean) => {
-      const tileScale =
-        area * target * target > pixels ? Math.sqrt(pixels / area) : target;
+    const render = (tileScale: number) => {
       const canvas = document.createElement("canvas");
       canvas.width = Math.ceil(rect.width * tileScale);
       canvas.height = Math.ceil(rect.height * tileScale);
-      Object.assign(canvas.style, {
-        left: `${rect.x}px`,
-        top: `${rect.y}px`,
-        width: `${rect.width}px`,
-        height: `${rect.height}px`,
-      });
       const current = proxy.render({
         canvas,
         viewport: proxy.getViewport({
@@ -328,32 +396,54 @@ export function DocPage({
       tileTask.current = current;
       // A pinch cancels it; the next settled view draws it again.
       unregister = registerRender(() => current.cancel());
-      current.promise.then(
+      return current.promise.then(
         () => {
           unregister();
-          if (tileTask.current !== current) return releaseCanvas(canvas);
-          clearHost(tileHost.current);
-          tileHost.current?.appendChild(canvas);
-          tileTask.current = null;
-          tileArea.current = { rect, scale: tileScale };
-          repaintMarks();
+          if (stopped || tileTask.current !== current) {
+            releaseCanvas(canvas);
+            return null;
+          }
+          return canvas;
         },
         (error: unknown) => {
           unregister();
           releaseCanvas(canvas);
-          if (isCancel(error) || tileTask.current !== current) return;
-          console.error("Tile render failed", error);
-          // Out of canvas memory, most likely: once more, smaller.
-          if (retry) start(pixels / 4, false);
+          if (!isCancel(error) && !stopped)
+            console.error("Tile render failed", error);
+          throw error;
         },
       );
     };
-    start(budget, true);
+    const sharpen = async (tileScale: number, retry: boolean) => {
+      try {
+        if (preview) {
+          const quick = await render(tileScale / 2);
+          if (!quick) return;
+          showTile(quick, rect, tileScale / 2, null);
+        }
+        const canvas = await render(tileScale);
+        if (!canvas) return;
+        tileTask.current = null;
+        const tile = tiles.add({
+          pageKey: page.key,
+          canvas,
+          rect,
+          scale: tileScale,
+        });
+        showTile(canvas, rect, tileScale, tile);
+      } catch (error) {
+        // Out of canvas memory, most likely: once more, smaller.
+        if (!isCancel(error) && !stopped && retry)
+          void sharpen(tileScale / 2, false);
+      }
+    };
+    void sharpen(scale, true);
     return () => {
+      stopped = true;
       unregister();
       task?.cancel();
     };
-    // repaintMarks reads refs (the marks have their own effect).
+    // repaintMarks, detachTile and showTile read refs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [proxy, view, rendered, page, registerRender]);
 
