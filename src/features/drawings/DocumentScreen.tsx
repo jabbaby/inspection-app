@@ -9,11 +9,16 @@ import { db } from "../../db/db";
 import { listDrawings, setPageSizes } from "../../db/drawings";
 import { listMarkups } from "../../db/markups";
 import { HIGHLIGHTER_OPACITY, toStoredPoints } from "../markup/markGeometry";
-import { drawWithUndo, eraseWithUndo } from "../markup/markupActions";
+import {
+  drawWithUndo,
+  eraseWithUndo,
+  unfillWithUndo,
+} from "../markup/markupActions";
 import { toolColour, useMarkupPrefs } from "../markup/markupPrefs";
 import { MarkupOverlay } from "../markup/MarkupOverlay";
 import { MarkupToolbar } from "../markup/MarkupToolbar";
 import type { DocMark, ViewerTool } from "../markup/tools";
+import type { MarkupShape, MarkupTool } from "../../db/types";
 import { moveObservationBox, updateCopy, updateItem } from "../../db/items";
 import {
   createItemWithUndo,
@@ -281,6 +286,7 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
           points: m.points,
           colour: m.colour,
           weight: m.weight,
+          fill: m.fill,
         })),
     [marks, erasing],
   );
@@ -291,20 +297,32 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
       byPage.set(mark.pageKey, [...(byPage.get(mark.pageKey) ?? []), mark]);
     return byPage;
   }, [docMarks]);
-  const inkTool = tool === "highlighter" ? "highlighter" : "pen";
+  const inkTool: MarkupTool =
+    tool === "highlighter" || tool === "shapes" ? tool : "pen";
 
-  async function saveStroke(page: PageLayout, points: Point[]) {
-    if (tool !== "pen" && tool !== "highlighter") return;
+  /** A finished stroke or shape (a pen stroke straightened: a line). */
+  async function saveStroke(
+    page: PageLayout,
+    points: Point[],
+    shape: MarkupShape | null,
+  ) {
+    if (tool !== "pen" && tool !== "highlighter" && tool !== "shapes") return;
     await drawWithUndo({
       inspectionId,
       drawingId: page.drawingId,
       page: page.page,
-      tool,
+      tool: shape ?? (tool === "shapes" ? prefs.shape : tool),
       // Already normalised: stored rounded.
       points: toStoredPoints(points, { width: 1, height: 1 }),
+      // The pen's colour and weight for its straightened lines.
       colour: toolColour(prefs, tool),
       weight: prefs.weight[tool],
     });
+  }
+
+  function unfill(id: string) {
+    const mark = marks?.find((m) => m.id === id);
+    if (mark) void unfillWithUndo(mark);
   }
 
   function erase(ids: string[], done: boolean) {
@@ -670,9 +688,11 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
                 colour: toolColour(prefs, inkTool),
                 weight: prefs.weight[inkTool],
                 opacity: inkTool === "highlighter" ? HIGHLIGHTER_OPACITY : 1,
+                shape: tool === "shapes" ? prefs.shape : null,
               }}
               onStroke={saveStroke}
               onErase={erase}
+              onUnfill={unfill}
               addPinMode={placingArrow !== null || copying !== null}
               onPlacePin={(page, at) =>
                 void (copying

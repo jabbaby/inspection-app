@@ -1,6 +1,11 @@
 import { memo, useMemo } from "react";
 import { useViewerCoords } from "../drawings/viewer/viewerCoords";
-import { markPath, markStyle } from "./markGeometry";
+import {
+  SHAPE_FILL_OPACITY,
+  drawMark,
+  isFilled,
+  markStyle,
+} from "./markGeometry";
 import type { DocMark } from "./tools";
 
 /**
@@ -19,11 +24,15 @@ export const MarkupOverlay = memo(function MarkupOverlay({
   const { width, height } = pageSize;
   const paths = useMemo(
     () =>
-      marks.map((mark) => ({
-        mark,
-        d: markPath(mark, { width, height }),
-        style: markStyle(mark, { width, height }),
-      })),
+      marks.map((mark) => {
+        const drawing = drawMark(mark, { width, height });
+        return {
+          mark,
+          drawing,
+          filled: isFilled(mark, drawing),
+          style: markStyle(mark, { width, height }),
+        };
+      }),
     [marks, width, height],
   );
   if (marks.length === 0) return null;
@@ -35,23 +44,27 @@ export const MarkupOverlay = memo(function MarkupOverlay({
       viewBox={`0 0 ${width} ${height}`}
       aria-hidden="true"
     >
-      {paths.map(({ mark, d, style }) => {
-        return (
+      {paths.map(({ mark, drawing, filled, style }) => (
+        <g
+          key={mark.id}
+          data-testid="mark"
+          data-tool={mark.tool}
+          data-colour={mark.colour}
+          data-filled={filled}
+        >
           <path
-            key={mark.id}
-            data-testid="mark"
-            data-tool={mark.tool}
-            data-colour={mark.colour}
-            d={d}
-            fill="none"
+            d={drawing.d}
+            fill={filled ? style.colour : "none"}
+            fillOpacity={SHAPE_FILL_OPACITY}
             stroke={style.colour}
             strokeOpacity={style.opacity}
             strokeWidth={style.width}
             strokeLinecap="round"
             strokeLinejoin="round"
           />
-        );
-      })}
+          {drawing.head && <path d={drawing.head} fill={style.colour} />}
+        </g>
+      ))}
     </svg>
   );
 });

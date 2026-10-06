@@ -48,6 +48,19 @@ export async function deleteMarkups(
   });
 }
 
+/** Takes a closed shape's fill off (or puts it back). */
+export async function setMarkupFill(
+  db: InspectionDb,
+  mark: Pick<Markup, "id" | "inspectionId">,
+  fill: boolean,
+  now = Date.now(),
+): Promise<void> {
+  await db.transaction("rw", [db.inspections, db.markups], async () => {
+    await db.markups.update(mark.id, { fill });
+    await touchInspection(db, mark.inspectionId, now);
+  });
+}
+
 export function listMarkups(
   db: InspectionDb,
   inspectionId: string,

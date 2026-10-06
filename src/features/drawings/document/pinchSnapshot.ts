@@ -20,7 +20,12 @@ import {
   type Size,
   type ViewTransform,
 } from "../viewer/viewTransform";
-import { markPath, markStyle } from "../../markup/markGeometry";
+import {
+  SHAPE_FILL_OPACITY,
+  drawMark,
+  isFilled,
+  markStyle,
+} from "../../markup/markGeometry";
 import type { DocMark } from "../../markup/tools";
 import type { DocPin } from "./DocumentViewer";
 import { DOC_WIDTH, pagePointToDoc, type PageLayout } from "./documentLayout";
@@ -250,9 +255,17 @@ function drawMarks(
     ctx.globalAlpha = style.opacity;
     ctx.globalCompositeOperation =
       mark.tool === "highlighter" ? "multiply" : "source-over";
-    ctx.strokeStyle = style.colour;
+    ctx.strokeStyle = ctx.fillStyle = style.colour;
     ctx.lineWidth = style.width;
-    ctx.stroke(new Path2D(markPath(mark, page.size)));
+    const drawing = drawMark(mark, page.size);
+    const path = new Path2D(drawing.d);
+    if (isFilled(mark, drawing)) {
+      ctx.globalAlpha = SHAPE_FILL_OPACITY;
+      ctx.fill(path);
+      ctx.globalAlpha = style.opacity;
+    }
+    ctx.stroke(path);
+    if (drawing.head) ctx.fill(new Path2D(drawing.head));
   }
   ctx.restore();
 }

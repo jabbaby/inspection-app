@@ -10,18 +10,28 @@
  */
 import { useSyncExternalStore } from "react";
 import { northrop } from "../../brand/northrop";
-import type { MarkupTool } from "../../db/types";
+import type { MarkupShape, MarkupTool } from "../../db/types";
+import { SHAPES } from "../../db/types";
 import { WEIGHT_PRESETS } from "./markGeometry";
 
 /** Slots per tool: they all fit in the toolbar. */
 export const MAX_SLOTS = 10;
 
+/** Which row of colour slots a tool uses: shapes share the pen's. */
+export type PaletteKey = "pen" | "highlighter";
+
+export function paletteOf(tool: MarkupTool): PaletteKey {
+  return tool === "highlighter" ? "highlighter" : "pen";
+}
+
 export interface MarkupPrefs {
-  /** Colour slots: pen (shapes and text later share it), and highlighter. */
-  palettes: Record<MarkupTool, string[]>;
-  /** The slot in use (an index into the palette). */
+  /** Colour slots: pen (shapes and text share it), and highlighter. */
+  palettes: Record<PaletteKey, string[]>;
+  /** Each tool's slot in use (an index into its palette). */
   selected: Record<MarkupTool, number>;
   weight: Record<MarkupTool, number>;
+  /** The shape the Shapes tool draws (the last one picked). */
+  shape: MarkupShape;
   fingerDraw: boolean;
   /** Draw the stroke on to the iPad's predicted Pencil points (Settings). */
   predict: boolean;
@@ -41,17 +51,19 @@ export const DEFAULT_PREFS: MarkupPrefs = {
     ],
     highlighter: ["#FFD400", "#7CE38B", "#FF9EC4"],
   },
-  selected: { pen: 0, highlighter: 0 },
+  selected: { pen: 0, highlighter: 0, shapes: 0 },
   weight: {
     pen: WEIGHT_PRESETS.pen[1],
     highlighter: WEIGHT_PRESETS.highlighter[1],
+    shapes: WEIGHT_PRESETS.shapes[1],
   },
+  shape: "cloud",
   fingerDraw: false,
   predict: false,
 };
 
 /** The colours the Pen colour (or Highlighter colour) panel offers. */
-export const PRESET_COLOURS: Record<MarkupTool, string[]> = {
+export const PRESET_COLOURS: Record<PaletteKey, string[]> = {
   pen: [
     northrop.colours.red,
     "#FF8A00",
@@ -97,16 +109,18 @@ export function parsePrefs(raw: string | null): MarkupPrefs {
   // Colours saved before slots (no "selected") start again from the
   // defaults: the old palette added a colour for every move of the picker.
   const slotted = typeof stored.selected === "object" && stored.selected;
-  for (const tool of ["pen", "highlighter"] as const) {
-    const palette = stored.palettes?.[tool];
+  for (const key of ["pen", "highlighter"] as const) {
+    const palette = stored.palettes?.[key];
     if (
       slotted &&
       Array.isArray(palette) &&
       palette.length &&
       palette.every(isColour)
     )
-      prefs.palettes[tool] = palette.slice(0, MAX_SLOTS);
-    const slots = prefs.palettes[tool];
+      prefs.palettes[key] = palette.slice(0, MAX_SLOTS);
+  }
+  for (const tool of ["pen", "highlighter", "shapes"] as const) {
+    const slots = prefs.palettes[paletteOf(tool)];
     const selected = slotted ? stored.selected?.[tool] : undefined;
     if (
       typeof selected === "number" &&
@@ -122,25 +136,26 @@ export function parsePrefs(raw: string | null): MarkupPrefs {
   if (typeof stored.fingerDraw === "boolean")
     prefs.fingerDraw = stored.fingerDraw;
   if (typeof stored.predict === "boolean") prefs.predict = stored.predict;
+  if (stored.shape && SHAPES.includes(stored.shape)) prefs.shape = stored.shape;
   return prefs;
 }
 
 /** The colour a tool draws in: its slot in use. */
 export function toolColour(prefs: MarkupPrefs, tool: MarkupTool): string {
-  const slots = prefs.palettes[tool];
+  const slots = prefs.palettes[paletteOf(tool)];
   return slots[prefs.selected[tool]] ?? slots[0];
 }
 
 // --- slot changes (pure, on a copy of the prefs) -------------------------
 
 export function selectSlot(p: MarkupPrefs, tool: MarkupTool, i: number) {
-  if (i >= 0 && i < p.palettes[tool].length) p.selected[tool] = i;
+  if (i >= 0 && i < p.palettes[paletteOf(tool)].length) p.selected[tool] = i;
 }
 
 /** Recolours the slot in use (the colour picker calls this as it moves). */
 export function recolourSlot(p: MarkupPrefs, tool: MarkupTool, colour: string) {
   if (isColour(colour))
-    p.palettes[tool][p.selected[tool]] = colour.toUpperCase();
+    p.palettes[paletteOf(tool)][p.selected[tool]] = colour.toUpperCase();
 }
 
 /**
@@ -148,7 +163,7 @@ export function recolourSlot(p: MarkupPrefs, tool: MarkupTool, colour: string) {
  * slot it came from keeps its colour. Nothing happens once the row is full.
  */
 export function addSlot(p: MarkupPrefs, tool: MarkupTool) {
-  const slots = p.palettes[tool];
+  const slots = p.palettes[paletteOf(tool)];
   if (slots.length >= MAX_SLOTS) return;
   slots.push(toolColour(p, tool));
   p.selected[tool] = slots.length - 1;
@@ -156,10 +171,17 @@ export function addSlot(p: MarkupPrefs, tool: MarkupTool) {
 
 /** Removes the slot in use (a tool keeps at least one); its neighbour takes over. */
 export function removeSlot(p: MarkupPrefs, tool: MarkupTool) {
-  const slots = p.palettes[tool];
+  const key = paletteOf(tool);
+  const slots = p.palettes[key];
   if (slots.length <= 1) return;
-  slots.splice(p.selected[tool], 1);
-  p.selected[tool] = Math.min(p.selected[tool], slots.length - 1);
+  const removed = p.selected[tool];
+  slots.splice(removed, 1);
+  // Tools sharing this row keep pointing at the same colour where they can.
+  for (const other of ["pen", "highlighter", "shapes"] as const) {
+    if (paletteOf(other) !== key) continue;
+    if (other !== tool && p.selected[other] > removed) p.selected[other] -= 1;
+    p.selected[other] = Math.min(p.selected[other], slots.length - 1);
+  }
 }
 
 // --- the stored prefs -----------------------------------------------------

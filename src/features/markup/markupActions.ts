@@ -5,14 +5,25 @@ import {
   addMarkup,
   deleteMarkups,
   restoreMarkups,
+  setMarkupFill,
   type NewMarkup,
 } from "../../db/markups";
 import type { Markup } from "../../db/types";
 
+const LABELS: Record<Markup["tool"], string> = {
+  pen: "Draw",
+  highlighter: "Highlight",
+  line: "Draw line",
+  arrow: "Draw arrow",
+  rect: "Draw rectangle",
+  ellipse: "Draw ellipse",
+  cloud: "Draw cloud",
+};
+
 export async function drawWithUndo(mark: NewMarkup): Promise<Markup> {
   const record = await addMarkup(db, mark);
   pushUndo(mark.inspectionId, {
-    label: mark.tool === "highlighter" ? "Highlight" : "Draw",
+    label: LABELS[mark.tool],
     undo: () => deleteMarkups(db, mark.inspectionId, [record.id]),
     redo: () => restoreMarkups(db, [record]),
   });
@@ -38,5 +49,15 @@ export async function eraseWithUndo(
         inspectionId,
         marks.map((m) => m.id),
       ),
+  });
+}
+
+/** The eraser tapped inside a filled shape: its fill comes off (undoable). */
+export async function unfillWithUndo(mark: Markup): Promise<void> {
+  await setMarkupFill(db, mark, false);
+  pushUndo(mark.inspectionId, {
+    label: "Remove fill",
+    undo: () => setMarkupFill(db, mark, true),
+    redo: () => setMarkupFill(db, mark, false),
   });
 }

@@ -20,12 +20,16 @@ import {
 } from "../viewer/viewTransform";
 import { kindName } from "../../items/letters";
 import {
+  SHAPE_FILL_OPACITY,
+  insideMark,
   markWidth,
+  shapeDrawing,
   simplify,
   strokePath,
   toPagePoints,
   touchesMark,
 } from "../../markup/markGeometry";
+import type { MarkupShape } from "../../../db/types";
 import { isInkTool, type DocMark, type ViewerTool } from "../../markup/tools";
 import { DocPage, type SettledView } from "./DocPage";
 import { DOUBLE_TAP_MS, DOUBLE_TAP_SLOP } from "./gestures";
@@ -78,12 +82,27 @@ interface Props {
   predict: boolean;
   /** Saved pen and highlighter marks (for the eraser and the pinch snapshot). */
   marks: DocMark[];
-  /** The pen or highlighter's look while a stroke is drawn. */
-  ink: { colour: string; weight: number; opacity: number };
-  /** A finished stroke: normalised points on the page it started on. */
-  onStroke: (page: PageLayout, points: Point[]) => Promise<void>;
+  /** The tool's look while drawing; `shape` when the Shapes tool is on. */
+  ink: {
+    colour: string;
+    weight: number;
+    opacity: number;
+    shape: MarkupShape | null;
+  };
+  /**
+   * A finished stroke or shape: normalised points on the page it started on
+   * (a shape: where the drag started and ended). `shape` is set for the
+   * Shapes tool, and "line" for a pen stroke straightened by holding.
+   */
+  onStroke: (
+    page: PageLayout,
+    points: Point[],
+    shape: MarkupShape | null,
+  ) => Promise<void>;
   /** The marks the eraser has touched so far; `done` when it lifts. */
   onErase: (ids: string[], done: boolean) => void;
+  /** The eraser tapped inside a filled shape: take its fill off. */
+  onUnfill: (id: string) => void;
   /** While true, every tap (finger, Pencil or mouse) places an arrow or copy. */
   addPinMode: boolean;
   onPlacePin: (page: PageLayout, at: Point) => void;
@@ -151,6 +170,12 @@ const SCROLL_STOP_MS = 120;
 const HOLD_MS = 500;
 /** The eraser removes marks within this many screen px of it. */
 const ERASER_REACH = 10;
+/** A pen stroke held still this long at its end straightens into a line. */
+const STRAIGHTEN_MS = 500;
+/** "Still" for that: within this many screen px. */
+const STILL_SLOP = 6;
+/** Shapes dragged out less than this (screen px) aren't drawn. */
+const MIN_SHAPE = 6;
 /** A stroke is simplified to within this many screen px when saved. */
 const STROKE_TOLERANCE = 0.25;
 /** Released closer to the pin than this, the hold places just the pin. */
@@ -741,6 +766,17 @@ export function DocumentViewer(props: Props) {
     /** Where the Pencil is about to be (drawn, never saved). */
     predicted: Point[];
     frame: number;
+    /**
+     * A shape being dragged out (points are its two corners): the Shapes
+     * tool's, or "line" once a pen stroke held still has straightened.
+     */
+    shape: MarkupShape | null;
+    /** Where the pointer went down and how far it has gone (screen px). */
+    start: Point;
+    travel: number;
+    /** Where the pen came to rest, and the timer that straightens it. */
+    still: Point;
+    timer: number;
   } | null>(null);
 
   /** Whether this pointer draws (or erases) with the current tool. */
@@ -772,18 +808,49 @@ export function DocumentViewer(props: Props) {
     hideSnapshot();
     cancelHold();
     tap.current = null;
+    const shape =
+      latest.current.tool === "shapes" ? latest.current.ink.shape : null;
     ink.current = {
       pointerId: e.pointerId,
       pointerType: e.pointerType,
       eraser: latest.current.tool === "eraser",
       page: hit.page,
-      points: [hit.at],
+      points: shape ? [hit.at, hit.at] : [hit.at],
       erased: new Set(),
       predicted: [],
       frame: 0,
+      shape,
+      start: p,
+      travel: 0,
+      still: p,
+      timer: 0,
     };
     if (ink.current.eraser) eraseAt(p);
     else requestInkFrame();
+    if (latest.current.tool === "pen") restartStill(p);
+  }
+
+  /** The pen came to rest at `p`: straighten the stroke if it stays there. */
+  function restartStill(p: Point) {
+    const stroke = ink.current;
+    if (!stroke) return;
+    window.clearTimeout(stroke.timer);
+    stroke.still = p;
+    stroke.timer = window.setTimeout(straighten, STRAIGHTEN_MS);
+  }
+
+  /**
+   * GoodNotes style: a pen stroke held still at its end becomes a straight
+   * line from where it started; until the Pencil lifts, the line's end
+   * follows it in any direction.
+   */
+  function straighten() {
+    const stroke = ink.current;
+    if (!stroke || stroke.shape || stroke.travel < MIN_SHAPE * 3) return;
+    stroke.shape = "line";
+    stroke.points = [stroke.points[0], stroke.points[stroke.points.length - 1]];
+    stroke.predicted = [];
+    requestInkFrame();
   }
 
   function moveInk(e: React.PointerEvent) {
@@ -793,10 +860,31 @@ export function DocumentViewer(props: Props) {
     const samples = e.nativeEvent.getCoalescedEvents?.() ?? [];
     for (const sample of samples.length ? samples : [e.nativeEvent]) {
       const p = local(sample);
+      stroke.travel = Math.max(
+        stroke.travel,
+        Math.hypot(p.x - stroke.start.x, p.y - stroke.start.y),
+      );
       if (stroke.eraser) eraseAt(p);
-      else stroke.points.push(clampNormalised(onPagePoint(stroke.page, p)));
+      else {
+        const at = clampNormalised(onPagePoint(stroke.page, p));
+        // A shape (or a straightened line) only moves its end.
+        if (stroke.shape) stroke.points[1] = at;
+        else stroke.points.push(at);
+      }
     }
     if (stroke.eraser) return;
+    // A pen stroke that moves on from where it rested keeps drawing.
+    const last = local(e.nativeEvent);
+    if (
+      !stroke.shape &&
+      latest.current.tool === "pen" &&
+      Math.hypot(last.x - stroke.still.x, last.y - stroke.still.y) > STILL_SLOP
+    )
+      restartStill(last);
+    if (stroke.shape) {
+      requestInkFrame();
+      return;
+    }
     // With the switch on (Settings), the iPad's estimate of the next few
     // positions extends the line toward the tip; never saved.
     stroke.predicted = latest.current.predict
@@ -805,6 +893,20 @@ export function DocumentViewer(props: Props) {
         )
       : [];
     requestInkFrame();
+  }
+
+  /** The newest filled shape under a screen point loses its fill. */
+  function unfillAt(p: Point) {
+    const hit = hitPage(currentLayout(), screenToPage(currentTransform(), p));
+    if (!hit) return;
+    const size = hit.page.size;
+    const at = { x: hit.at.x * size.width, y: hit.at.y * size.height };
+    const marks = latest.current.marks;
+    for (let i = marks.length - 1; i >= 0; i--) {
+      const mark = marks[i];
+      if (mark.pageKey === hit.page.key && insideMark(mark, size, at))
+        return latest.current.onUnfill(mark.id);
+    }
   }
 
   /** Marks the eraser touches at a screen point. */
@@ -851,6 +953,38 @@ export function DocumentViewer(props: Props) {
     ctx.clearRect(0, 0, width, height);
     const t = currentTransform();
     const style = latest.current.ink;
+    if (stroke.shape) {
+      // Drawn in page units, the same shape as the saved mark will be.
+      const size = stroke.page.size;
+      const k = pxPerUnit(stroke.page);
+      ctx.setTransform(
+        dpr * k,
+        0,
+        0,
+        dpr * k,
+        dpr * t.x,
+        dpr * (t.y + stroke.page.top * t.scale),
+      );
+      const [a, b] = toPagePoints(
+        stroke.points.flatMap((p) => [p.x, p.y]),
+        size,
+      );
+      const width = markWidth(style.weight, size);
+      const drawing = shapeDrawing(stroke.shape, a, b, width);
+      const path = new Path2D(drawing.d);
+      ctx.strokeStyle = ctx.fillStyle = style.colour;
+      ctx.lineWidth = width;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      if (drawing.closed) {
+        ctx.globalAlpha = SHAPE_FILL_OPACITY;
+        ctx.fill(path);
+      }
+      ctx.globalAlpha = 1;
+      ctx.stroke(path);
+      if (drawing.head) ctx.fill(new Path2D(drawing.head));
+      return;
+    }
     // Exactly the points the Pencil reported, joined by straight lines.
     const screen = [...stroke.points, ...stroke.predicted].map((n) =>
       pageToScreen(t, pagePointToDoc(stroke.page, n)),
@@ -882,11 +1016,25 @@ export function DocumentViewer(props: Props) {
     if (!stroke) return;
     ink.current = null;
     cancelAnimationFrame(stroke.frame);
+    window.clearTimeout(stroke.timer);
     if (stroke.eraser) {
       latest.current.onErase(cancelled ? [] : [...stroke.erased], true);
+      // A tap inside a filled shape (touching no line) takes its fill off.
+      if (!cancelled && stroke.erased.size === 0 && stroke.travel < TAP_SLOP)
+        unfillAt(stroke.start);
       return;
     }
     if (cancelled) return clearInk();
+    if (stroke.shape) {
+      // Too small to mean anything: dropped.
+      if (stroke.travel < MIN_SHAPE) return clearInk();
+      void latest.current
+        .onStroke(stroke.page, stroke.points, stroke.shape)
+        .finally(() =>
+          requestAnimationFrame(() => requestAnimationFrame(clearInk)),
+        );
+      return;
+    }
     // Simplified in page units to within a fraction of a screen pixel.
     const size = stroke.page.size;
     const units = toPagePoints(
@@ -900,7 +1048,7 @@ export function DocumentViewer(props: Props) {
     }));
     // The live stroke stays until the saved mark has drawn.
     void latest.current
-      .onStroke(stroke.page, points)
+      .onStroke(stroke.page, points, null)
       .finally(() =>
         requestAnimationFrame(() => requestAnimationFrame(clearInk)),
       );

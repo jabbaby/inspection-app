@@ -101,7 +101,11 @@ describe("mark geometry", () => {
   });
 
   test("the eraser touches a mark within reach of its line", () => {
-    const mark = { points: [0.1, 0.5, 0.9, 0.5], weight: 0.0025 };
+    const mark = {
+      tool: "pen" as const,
+      points: [0.1, 0.5, 0.9, 0.5],
+      weight: 0.0025,
+    };
     const y = 0.5 * A3.height;
     expect(touchesMark(mark, A3, { x: 500, y: y + 5 }, 4)).toBe(true);
     expect(touchesMark(mark, A3, { x: 500, y: y + 20 }, 4)).toBe(false);

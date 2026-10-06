@@ -3,19 +3,26 @@
  * snapshot and the PDF export so all three draw a mark the same way. Pure:
  * page units (PDF points, y down) in, numbers and SVG path data out.
  */
-import type { Markup, MarkupTool } from "../../db/types";
+import {
+  SHAPES,
+  type Markup,
+  type MarkupShape,
+  type MarkupTool,
+} from "../../db/types";
 import type { Point, Size } from "../drawings/viewer/viewTransform";
 
 /** Weight presets as a fraction of the sheet's short side (medium = a pin arrow). */
 export const WEIGHT_PRESETS: Record<MarkupTool, [number, number, number]> = {
   pen: [0.0012, 0.0025, 0.005],
   highlighter: [0.006, 0.012, 0.02],
+  shapes: [0.0012, 0.0025, 0.005],
 };
 
 /** The weight slider's range per tool. */
 export const WEIGHT_RANGE: Record<MarkupTool, [number, number]> = {
   pen: [0.0006, 0.01],
   highlighter: [0.003, 0.03],
+  shapes: [0.0006, 0.01],
 };
 
 /** How see-through the highlighter is (drawn with multiply in the PDF). */
@@ -175,16 +182,207 @@ export function markStyle(
 
 /** Whether `p` (page units) is within `reach` of the mark's line. */
 export function touchesMark(
-  mark: Pick<Markup, "points" | "weight">,
+  mark: Pick<Markup, "tool" | "points" | "weight">,
   page: Size,
   p: Point,
   reach: number,
 ): boolean {
-  const points = toPagePoints(mark.points, page);
+  const points = drawMark(mark, page).outline;
   const limit = reach + markWidth(mark.weight, page) / 2;
   if (points.length === 1)
     return Math.hypot(p.x - points[0].x, p.y - points[0].y) <= limit;
   for (let i = 1; i < points.length; i++)
     if (distanceToSegment(p, points[i - 1], points[i]) <= limit) return true;
   return false;
+}
+
+// --- shapes (slice 2b) ------------------------------------------------------
+
+/** How much of a closed shape's colour fills it (engineer decision). */
+export const SHAPE_FILL_OPACITY = 0.1;
+/** Arrowheads keep a pin arrow's proportions, scaled by the line weight. */
+const HEAD_LENGTH = 7;
+const HEAD_WIDTH = 0.8;
+/** A cloud's bumps, as a multiple of the line weight (they grow with it). */
+const BUMP = 10;
+/** Bezier handle length for a quarter ellipse. */
+const KAPPA = 0.5522847498;
+
+export function isShape(kind: Markup["tool"]): kind is MarkupShape {
+  return (SHAPES as readonly string[]).includes(kind);
+}
+
+/** Everything needed to draw a mark, in page units. */
+export interface MarkDrawing {
+  /** Path data to stroke (and, when `closed`, to fill lightly). */
+  d: string;
+  closed: boolean;
+  /** An arrowhead, filled solid. */
+  head: string | null;
+  /** Points along the line, for the eraser. */
+  outline: Point[];
+}
+
+const pathOf = (points: Point[], close = false) =>
+  `M ${points.map((p) => `${fmt(p.x)} ${fmt(p.y)}`).join(" L ")}${close ? " Z" : ""}`;
+
+/** A quadratic curve (from, control, to) as path data for the exact cubic. */
+function quadAsCubic(from: Point, c: Point, to: Point) {
+  const c1 = {
+    x: from.x + (2 / 3) * (c.x - from.x),
+    y: from.y + (2 / 3) * (c.y - from.y),
+  };
+  const c2 = {
+    x: to.x + (2 / 3) * (c.x - to.x),
+    y: to.y + (2 / 3) * (c.y - to.y),
+  };
+  return ` C ${fmt(c1.x)} ${fmt(c1.y)} ${fmt(c2.x)} ${fmt(c2.y)} ${fmt(to.x)} ${fmt(to.y)}`;
+}
+
+function quadPoint(from: Point, c: Point, to: Point, t: number): Point {
+  const u = 1 - t;
+  return {
+    x: u * u * from.x + 2 * u * t * c.x + t * t * to.x,
+    y: u * u * from.y + 2 * u * t * c.y + t * t * to.y,
+  };
+}
+
+/** A shape from its two corners (where the drag started and ended). */
+export function shapeDrawing(
+  shape: MarkupShape,
+  a: Point,
+  b: Point,
+  width: number,
+): MarkDrawing {
+  const x0 = Math.min(a.x, b.x);
+  const x1 = Math.max(a.x, b.x);
+  const y0 = Math.min(a.y, b.y);
+  const y1 = Math.max(a.y, b.y);
+  if (shape === "line")
+    return { d: pathOf([a, b]), closed: false, head: null, outline: [a, b] };
+  if (shape === "arrow") {
+    const length = Math.hypot(b.x - a.x, b.y - a.y);
+    const headLength = Math.min(width * HEAD_LENGTH, length);
+    const half = (headLength * HEAD_WIDTH) / 2;
+    const ux = length ? (b.x - a.x) / length : 1;
+    const uy = length ? (b.y - a.y) / length : 0;
+    const base = { x: b.x - ux * headLength, y: b.y - uy * headLength };
+    return {
+      d: pathOf([a, base]),
+      closed: false,
+      head: pathOf(
+        [
+          b,
+          { x: base.x - uy * half, y: base.y + ux * half },
+          { x: base.x + uy * half, y: base.y - ux * half },
+        ],
+        true,
+      ),
+      outline: [a, b],
+    };
+  }
+  const corners = [
+    { x: x0, y: y0 },
+    { x: x1, y: y0 },
+    { x: x1, y: y1 },
+    { x: x0, y: y1 },
+  ];
+  if (shape === "rect")
+    return {
+      d: pathOf(corners, true),
+      closed: true,
+      head: null,
+      outline: [...corners, corners[0]],
+    };
+  if (shape === "ellipse") {
+    const cx = (x0 + x1) / 2;
+    const cy = (y0 + y1) / 2;
+    const rx = (x1 - x0) / 2;
+    const ry = (y1 - y0) / 2;
+    const kx = rx * KAPPA;
+    const ky = ry * KAPPA;
+    const p = (x: number, y: number) => `${fmt(x)} ${fmt(y)}`;
+    const d =
+      `M ${p(cx + rx, cy)}` +
+      ` C ${p(cx + rx, cy + ky)} ${p(cx + kx, cy + ry)} ${p(cx, cy + ry)}` +
+      ` C ${p(cx - kx, cy + ry)} ${p(cx - rx, cy + ky)} ${p(cx - rx, cy)}` +
+      ` C ${p(cx - rx, cy - ky)} ${p(cx - kx, cy - ry)} ${p(cx, cy - ry)}` +
+      ` C ${p(cx + kx, cy - ry)} ${p(cx + rx, cy - ky)} ${p(cx + rx, cy)} Z`;
+    const outline = Array.from({ length: 49 }, (_, i) => {
+      const t = (i / 48) * Math.PI * 2;
+      return { x: cx + rx * Math.cos(t), y: cy + ry * Math.sin(t) };
+    });
+    return { d, closed: true, head: null, outline };
+  }
+  // Revision cloud: bumps round the box, bulging outwards, sized by the
+  // line weight.
+  const chord = Math.max(width * BUMP, 1);
+  let d = `M ${fmt(x0)} ${fmt(y0)}`;
+  const outline: Point[] = [corners[0]];
+  corners.forEach((from, i) => {
+    const to = corners[(i + 1) % 4];
+    const length = Math.hypot(to.x - from.x, to.y - from.y);
+    const n = Math.max(1, Math.round(length / chord));
+    const ux = (to.x - from.x) / n;
+    const uy = (to.y - from.y) / n;
+    const unit = Math.hypot(ux, uy) || 1;
+    // Clockwise in y-down coordinates, so (uy, -ux) points out of the box.
+    const nx = uy / unit;
+    const ny = -ux / unit;
+    const bulge = unit * 0.55;
+    for (let k = 0; k < n; k++) {
+      const s = { x: from.x + ux * k, y: from.y + uy * k };
+      const e = { x: s.x + ux, y: s.y + uy };
+      const c = {
+        x: (s.x + e.x) / 2 + nx * bulge,
+        y: (s.y + e.y) / 2 + ny * bulge,
+      };
+      d += quadAsCubic(s, c, e);
+      for (let j = 1; j <= 6; j++) outline.push(quadPoint(s, c, e, j / 6));
+    }
+  });
+  return { d: `${d} Z`, closed: true, head: null, outline };
+}
+
+/** Whether a mark is drawn with its light fill (closed shapes, unless taken off). */
+export function isFilled(
+  mark: Pick<Markup, "tool" | "fill">,
+  drawing: MarkDrawing,
+): boolean {
+  return drawing.closed && mark.fill !== false;
+}
+
+/** Whether `p` (page units) is inside a filled shape (its outline, closed). */
+export function insideMark(
+  mark: Pick<Markup, "tool" | "points" | "weight" | "fill">,
+  page: Size,
+  p: Point,
+): boolean {
+  const drawing = drawMark(mark, page);
+  if (!isFilled(mark, drawing)) return false;
+  const poly = drawing.outline;
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i];
+    const b = poly[j];
+    if (
+      a.y > p.y !== b.y > p.y &&
+      p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x
+    )
+      inside = !inside;
+  }
+  return inside;
+}
+
+/** How to draw any mark: a stroke (thinned, evened out) or a shape. */
+export function drawMark(
+  mark: Pick<Markup, "tool" | "points" | "weight">,
+  page: Size,
+): MarkDrawing {
+  const points = toPagePoints(mark.points, page);
+  const width = markWidth(mark.weight, page);
+  if (isShape(mark.tool) && points.length >= 2)
+    return shapeDrawing(mark.tool, points[0], points[points.length - 1], width);
+  const line = smoothLifted(thinStroke(points, width));
+  return { d: strokePath(line), closed: false, head: null, outline: line };
 }

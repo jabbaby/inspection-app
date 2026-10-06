@@ -1964,3 +1964,61 @@ test("markup colours: the chosen colour's panel recolours it; Add colour goes at
   await panel.getByRole("button", { name: "Remove" }).click();
   await expect(swatches).toHaveCount(6);
 });
+
+test("shapes: a filled cloud, the eraser takes the fill off, arrows, and a held pen line straightens", async ({
+  page,
+}) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openDrawing(page, "S-101 Level 3", false);
+  const toolbar = page.getByRole("toolbar", { name: "Markup tools" });
+  const tool = (name: string) =>
+    toolbar.getByRole("button", { name, exact: true });
+  const box = await stageBox(page);
+  const at = (fx: number, fy: number) => ({
+    x: box.x + box.width * fx,
+    y: box.y + box.height * fy,
+  });
+
+  // The Shapes tool starts on the revision cloud: drag out its box.
+  await tool("Shapes").click();
+  await drawLine(page, [0.2, 0.2], [0.45, 0.4]);
+  const cloud = page.locator('[data-testid="mark"][data-tool="cloud"]');
+  await expect(cloud).toHaveAttribute("data-filled", "true");
+
+  // A tap inside it with the eraser takes the fill off; Undo puts it back.
+  await tool("Eraser").click();
+  const middle = at(0.325, 0.3);
+  await page.mouse.click(middle.x, middle.y);
+  await expect(cloud).toHaveAttribute("data-filled", "false");
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(cloud).toHaveAttribute("data-filled", "true");
+
+  // Tapping Shapes again lists the shapes: an arrow, in any direction.
+  await tool("Shapes").click();
+  await tool("Shapes").click();
+  await page
+    .getByRole("group", { name: "Shapes" })
+    .getByRole("button", { name: "Arrow" })
+    .click();
+  await drawLine(page, [0.6, 0.6], [0.75, 0.48]);
+  await expect(
+    page.locator('[data-testid="mark"][data-tool="arrow"]'),
+  ).toHaveCount(1);
+
+  // A pen stroke held still at its end becomes a straight line.
+  await tool("Pen").click();
+  const a = at(0.2, 0.7);
+  const b = at(0.4, 0.75);
+  const c = at(0.5, 0.65);
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  await page.mouse.move(b.x, b.y, { steps: 10 });
+  await page.waitForTimeout(800);
+  await page.mouse.move(c.x, c.y, { steps: 5 });
+  await page.mouse.up();
+  await expect(
+    page.locator('[data-testid="mark"][data-tool="line"]'),
+  ).toHaveCount(1);
+  await expect(page.getByTestId("mark")).toHaveCount(3);
+});

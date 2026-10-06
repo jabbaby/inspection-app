@@ -21,7 +21,12 @@ import type { Item, Markup } from "../../db/types";
 import { arrowMetrics, arrowShape } from "../drawings/arrows";
 import { defaultBoxPosition, type BoxLine } from "../drawings/observationBox";
 import type { Point } from "../drawings/viewer/viewTransform";
-import { markPath, markStyle } from "../markup/markGeometry";
+import {
+  SHAPE_FILL_OPACITY,
+  drawMark,
+  isFilled,
+  markStyle,
+} from "../markup/markGeometry";
 import { toEncodable } from "../memo/pdf/text";
 import { layoutNotesBox, pageView, pinMetrics } from "./markupGeometry";
 import type { PagePin } from "./packContents";
@@ -145,17 +150,29 @@ function drawMarks(
   page.pushOperators(pushGraphicsState(), setLineJoin(LineJoinStyle.Round));
   for (const mark of marks) {
     const style = markStyle(mark, size);
+    const drawing = drawMark(mark, size);
+    const colour = hex(style.colour);
     // y-down page units, flipped by drawing from the top-left corner.
-    page.drawSvgPath(markPath(mark, size), {
+    page.drawSvgPath(drawing.d, {
       x: 0,
       y: size.height,
-      borderColor: hex(style.colour),
+      ...(isFilled(mark, drawing)
+        ? { color: colour, opacity: SHAPE_FILL_OPACITY }
+        : {}),
+      borderColor: colour,
       borderWidth: style.width,
       borderOpacity: style.opacity,
       borderLineCap: LineCapStyle.Round,
       blendMode:
         mark.tool === "highlighter" ? BlendMode.Multiply : BlendMode.Normal,
     });
+    if (drawing.head)
+      page.drawSvgPath(drawing.head, {
+        x: 0,
+        y: size.height,
+        color: colour,
+        borderWidth: 0,
+      });
   }
   page.pushOperators(popGraphicsState());
 }

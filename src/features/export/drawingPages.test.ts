@@ -198,11 +198,15 @@ describe("appendDrawingPages", () => {
     const marks = [
       mark({}),
       mark({ tool: "highlighter", colour: "#FFD400", weight: 0.012 }),
+      // Shapes: two corners each.
+      mark({ tool: "cloud", points: [0.2, 0.2, 0.5, 0.4] }),
+      mark({ tool: "arrow", points: [0.6, 0.6, 0.8, 0.5] }),
+      mark({ tool: "rect", points: [0.1, 0.6, 0.3, 0.8], fill: false }),
     ];
     const pages = pinnedPages([d1], [item({ page: 1 })], marks);
     expect(pages.map((p) => [p.position, p.marks.length])).toEqual([
       [1, 0],
-      [2, 2],
+      [2, 5],
     ]);
     const doc = await PDFDocument.create();
     const fonts = {

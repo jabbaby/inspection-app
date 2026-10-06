@@ -291,8 +291,15 @@ export interface ObservationBox {
   y: number;
 }
 
-/** Slice 2 markup tools that make marks (SPEC section 5a). */
-export type MarkupTool = "pen" | "highlighter";
+/** Shapes (slice 2b), each drawn by a drag from corner to corner. */
+export const SHAPES = ["line", "arrow", "rect", "ellipse", "cloud"] as const;
+export type MarkupShape = (typeof SHAPES)[number];
+
+/** What a mark is: a pen or highlighter stroke, or a shape (SPEC 5a). */
+export type MarkKind = "pen" | "highlighter" | MarkupShape;
+
+/** Toolbar tools with their own colour slot and weight. */
+export type MarkupTool = "pen" | "highlighter" | "shapes";
 
 /** One mark drawn on a drawing page (SPEC section 5a). */
 export interface Markup {
@@ -301,13 +308,21 @@ export interface Markup {
   drawingId: string;
   /** 1-based position in the drawing's pages (Drawing.pages). */
   page: number;
-  tool: MarkupTool;
-  /** Normalised points (0..1 of the page), flat: x0, y0, x1, y1... */
+  tool: MarkKind;
+  /**
+   * Normalised points (0..1 of the page), flat: x0, y0, x1, y1... A shape
+   * has two: where its drag started and ended.
+   */
   points: number[];
   /** "#rrggbb". */
   colour: string;
   /** Line width as a fraction of the sheet's short side. */
   weight: number;
+  /**
+   * Closed shapes (rectangle, ellipse, cloud) are filled lightly in their
+   * colour; false once the eraser took the fill off.
+   */
+  fill?: boolean;
   createdAt: number;
 }
 

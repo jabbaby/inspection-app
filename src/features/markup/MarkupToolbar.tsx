@@ -1,18 +1,25 @@
 import {
   ChevronDown,
+  Circle,
+  Cloud,
   Eraser,
   Highlighter,
   MapPin,
+  MoveUpRight,
   Pen,
   Pointer,
+  Slash,
+  Square,
+  type LucideIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import type { MarkupTool } from "../../db/types";
+import { SHAPES, type MarkupShape, type MarkupTool } from "../../db/types";
 import { WEIGHT_PRESETS, WEIGHT_RANGE } from "./markGeometry";
 import {
   MAX_SLOTS,
   PRESET_COLOURS,
   addSlot,
+  paletteOf,
   recolourSlot,
   removeSlot,
   selectSlot,
@@ -26,23 +33,41 @@ const TOOLS = [
   { id: "pin", label: "Pin", Icon: MapPin },
   { id: "pen", label: "Pen", Icon: Pen },
   { id: "highlighter", label: "Highlighter", Icon: Highlighter },
+  { id: "shapes", label: "Shapes", Icon: Cloud },
   { id: "eraser", label: "Eraser", Icon: Eraser },
 ] as const;
+
+const SHAPE_ICONS: Record<MarkupShape, LucideIcon> = {
+  line: Slash,
+  arrow: MoveUpRight,
+  rect: Square,
+  ellipse: Circle,
+  cloud: Cloud,
+};
+
+const SHAPE_NAMES: Record<MarkupShape, string> = {
+  line: "Line",
+  arrow: "Arrow",
+  rect: "Rectangle",
+  ellipse: "Ellipse",
+  cloud: "Revision cloud",
+};
 
 const WEIGHT_NAMES = ["Thin", "Medium", "Thick"];
 const TOOL_NAMES: Record<MarkupTool, string> = {
   pen: "Pen",
   highlighter: "Highlighter",
+  shapes: "Shape",
 };
 
 const HINTS: Partial<Record<ViewerTool, string>> = {
   pin: "Tap for an instruction · double-tap for an observation · hold and drag for an arrow",
-  eraser: "Touch a mark to remove it",
+  eraser: "Touch a mark to remove it · tap inside a shape to take its fill off",
 };
 
 /** An open slider or colour panel, under the button that opened it (screen px). */
 interface Open {
-  which: "weight" | "colour";
+  which: "weight" | "colour" | "shapes";
   left: number;
   top: number;
 }
@@ -63,7 +88,20 @@ export function MarkupToolbar({ tool, onTool }: Props) {
   const [open, setOpen] = useState<Open | null>(null);
   const barRef = useRef<HTMLDivElement>(null);
   const inkTool: MarkupTool | null =
-    tool === "pen" || tool === "highlighter" ? tool : null;
+    tool === "pen" || tool === "highlighter" || tool === "shapes" ? tool : null;
+
+  function openAt(which: Open["which"], button: HTMLElement) {
+    const r = button.getBoundingClientRect();
+    setOpen((o) =>
+      o?.which === which
+        ? null
+        : {
+            which,
+            left: Math.max(8, Math.min(r.left - 12, innerWidth - 260)),
+            top: r.bottom + 6,
+          },
+    );
+  }
 
   // A tap anywhere else closes the slider or palette.
   useEffect(() => {
@@ -75,7 +113,9 @@ export function MarkupToolbar({ tool, onTool }: Props) {
     return () => document.removeEventListener("pointerdown", close);
   }, [open]);
 
-  function choose(next: ViewerTool) {
+  function choose(next: ViewerTool, button: HTMLElement) {
+    // Shapes, tapped again: its list of shapes (it stays on).
+    if (next === "shapes" && tool === "shapes") return openAt("shapes", button);
     setOpen(null);
     onTool(tool === next ? null : next);
   }
@@ -89,19 +129,62 @@ export function MarkupToolbar({ tool, onTool }: Props) {
     >
       {/* Centred; re-centres as a tool's options come and go. */}
       <div className="markup-toolbar-row">
-        {TOOLS.map(({ id, label, Icon }) => (
-          <button
-            key={id}
-            type="button"
-            className={`markup-tool${id === "pin" ? " markup-tool-pin" : ""}`}
-            aria-label={label}
-            aria-pressed={tool === id}
-            title={label}
-            onClick={() => choose(id)}
+        {TOOLS.map(({ id, label, Icon }) => {
+          // The Shapes button shows the shape it draws.
+          const Shown = id === "shapes" ? SHAPE_ICONS[prefs.shape] : Icon;
+          return (
+            <button
+              key={id}
+              type="button"
+              className={`markup-tool${id === "pin" ? " markup-tool-pin" : ""}`}
+              aria-label={label}
+              aria-pressed={tool === id}
+              aria-expanded={
+                id === "shapes" && tool === "shapes"
+                  ? open?.which === "shapes"
+                  : undefined
+              }
+              title={
+                id === "shapes"
+                  ? `${SHAPE_NAMES[prefs.shape]}${tool === "shapes" ? ": tap again for other shapes" : ""}`
+                  : label
+              }
+              onClick={(e) => choose(id, e.currentTarget)}
+            >
+              <Shown aria-hidden="true" strokeWidth={2.25} />
+            </button>
+          );
+        })}
+        {open?.which === "shapes" && (
+          <div
+            className="markup-popover markup-shapes"
+            role="group"
+            aria-label="Shapes"
+            style={{ left: open.left, top: open.top }}
           >
-            <Icon aria-hidden="true" strokeWidth={2.25} />
-          </button>
-        ))}
+            {SHAPES.map((shape) => {
+              const Icon = SHAPE_ICONS[shape];
+              return (
+                <button
+                  key={shape}
+                  type="button"
+                  className="markup-tool"
+                  aria-label={SHAPE_NAMES[shape]}
+                  aria-pressed={prefs.shape === shape}
+                  title={SHAPE_NAMES[shape]}
+                  onClick={() => {
+                    updatePrefs((p) => {
+                      p.shape = shape;
+                    });
+                    setOpen(null);
+                  }}
+                >
+                  <Icon aria-hidden="true" strokeWidth={2.25} />
+                </button>
+              );
+            })}
+          </div>
+        )}
         <button
           type="button"
           className="markup-tool"
@@ -126,21 +209,7 @@ export function MarkupToolbar({ tool, onTool }: Props) {
             tool={inkTool}
             open={open}
             onClose={() => setOpen(null)}
-            onOpen={(which, button) => {
-              const r = button.getBoundingClientRect();
-              setOpen((o) =>
-                o?.which === which
-                  ? null
-                  : {
-                      which,
-                      left: Math.max(
-                        8,
-                        Math.min(r.left - 12, innerWidth - 260),
-                      ),
-                      top: r.bottom + 6,
-                    },
-              );
-            }}
+            onOpen={openAt}
           />
         )}
         {tool && HINTS[tool] && (
@@ -198,7 +267,7 @@ function InkOptions({
         );
       })}
       <span className="markup-divider" aria-hidden="true" />
-      {prefs.palettes[tool].map((c, i) => (
+      {prefs.palettes[paletteOf(tool)].map((c, i) => (
         <button
           // Slots can share a colour: the position is the identity.
           key={i}
@@ -271,7 +340,7 @@ function ColourPanel({
 }) {
   const prefs = useMarkupPrefs();
   const colour = toolColour(prefs, tool);
-  const slots = prefs.palettes[tool].length;
+  const slots = prefs.palettes[paletteOf(tool)].length;
   return (
     <div
       className="markup-popover markup-colour-panel"
@@ -288,7 +357,7 @@ function ColourPanel({
         {TOOL_NAMES[tool]} colour
       </p>
       <div className="markup-palette">
-        {PRESET_COLOURS[tool].map((c) => (
+        {PRESET_COLOURS[paletteOf(tool)].map((c) => (
           <button
             key={c}
             type="button"
