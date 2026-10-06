@@ -10,18 +10,18 @@ Reply with the step number and what you saw (no need to edit this file).
 - Open the home-screen app and tap **Update now** if offered (or close and reopen it).
 - Use an inspection with a drawing (the synthetic test drawing is fine).
 
-## The Shapes button
-1. **Button.** The toolbar has a **Shapes** button after the highlighter, showing a cloud to start with. Tap it: it turns on, with weights and colours like the pen.
-2. **Shape list.** Tap **Shapes** again: a row of shapes opens under it (line, arrow, rectangle, ellipse, cloud). Pick **Rectangle**: the list closes and the button now shows a rectangle.
-3. **Remembered.** Turn Shapes off and on again, and close and reopen the app: it still draws the last shape picked.
+## The shape buttons
+1. **Buttons.** The toolbar has a button for each shape after the highlighter: line, arrow, rectangle, ellipse, cloud. Tap one: it turns on, with weights and colours like the pen.
+2. **Toggle.** Tap another shape: it switches to that one. Tap the one that's on: it turns off.
+3. **Fits.** In portrait, with a shape on, the whole toolbar fits across the screen (or scrolls sideways if not; tell me).
 
 ## Drawing shapes
-4. **Cloud.** Pick the cloud and drag out a box with the Pencil: the cloud follows the Pencil as you drag and is drawn when you lift, filled lightly in its colour.
+4. **Cloud.** Tap the cloud and drag out a box with the Pencil: the cloud follows the Pencil as you drag and is drawn when you lift, filled lightly in its colour.
 5. **Cloud bumps.** Draw clouds at **Thin** and **Thick**: thicker clouds have bigger bumps.
 6. **Rectangle and ellipse.** Drag out each: both fill the box you dragged, lightly filled.
 7. **Line.** Drag a line at any angle: it goes exactly where you point (no snapping to level).
 8. **Arrow.** Drag an arrow: the head is at the end where you lifted. At **Thick** the head is bigger than at **Thin**.
-9. **Tiny drag.** Tap the drawing with a shape picked (no drag): nothing is drawn.
+9. **Tiny drag.** Tap the drawing with a shape on (no drag): nothing is drawn.
 10. **Colours.** Shapes use the same colour row as the pen, but keep their own chosen colour and weight: change the shape colour, switch to Pen, and the pen's colour is unchanged.
 
 ## Fill and the eraser
