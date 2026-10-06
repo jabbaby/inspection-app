@@ -21,7 +21,7 @@ Reply with the step number and what you saw (no need to edit this file). This re
 6. **Same with the Pencil.** Do step 5 with the Pencil.
 7. **Hold without dragging.** Hold until the ring fills, then lift without moving: just a box, no arrow.
 8. **Quick drags do nothing.** With Text on, a quick finger drag scrolls the page; a quick Pencil drag does nothing. Neither places a callout.
-9. **Tap off.** While typing, tap an empty part of the drawing: the keyboard closes, the callout stays, and no new box starts.
+9. **Tap off.** While typing, tap an empty part of the drawing: the keyboard closes, the callout stays, no new box starts, and the Text button turns off. Tap again: nothing happens (no tool is on).
 10. **Empty.** Tap to place one and finish without typing: nothing is left behind.
 11. **Wrapping.** Type a long sentence: the box stops growing at about two dozen letters and wraps.
 12. **No page zoom.** On an A3 or A4 sheet, placing a callout doesn't make the whole page zoom in.
@@ -34,7 +34,7 @@ Reply with the step number and what you saw (no need to edit this file). This re
 ## Selecting, editing, resizing
 16. **First tap selects.** With no tool on (or Pen on), tap a callout with a finger: the toolbar switches to Text, a dashed outline and a small handle on its right side show, and the keyboard does NOT open.
 17. **Second tap edits.** Tap it again: the keyboard opens with its text. Change it and tap off.
-18. **Let go.** With one selected, tap an empty part of the drawing: the outline goes and no box is placed. The next tap places one.
+18. **Let go.** With Pen on, tap a callout (Text turns on), then tap an empty part of the drawing: the outline goes, no box is placed, and Pen is back on.
 19. **Resize.** Select a callout and drag its side handle left: the box gets narrower and the text wraps onto more lines. Drag it right: wider, fewer lines. It never gets narrower than its longest word.
 20. **Width stays.** Edit a resized callout and add a few words: the width stays and the box grows taller.
 21. **Move and re-point.** Drag a callout's box: it moves, its arrow still pointing at the same spot. Drag its arrowhead: it points somewhere new. Try both with a finger and the Pencil.
@@ -46,3 +46,9 @@ Reply with the step number and what you saw (no need to edit this file). This re
 25. **Sizes and colours.** Place callouts at S, M and L in a couple of colours: M is about the notes box text; the border, text and arrow use the colour.
 26. **PDF pack.** Export: callouts in the same places and widths, the same line breaks, and the dog legs drawn the same, with a rounded elbow.
 27. **Backup.** Back up, delete and import the inspection: the callouts come back, resized ones keeping their width.
+
+## Pin arrows (dog legs)
+28. **To the side.** With Pin on, tap, hold and drag a pin's arrow off to the left or right: the arrow leaves the side of the pin with a short flat piece, then angles to the spot. An existing pin's arrows show the same.
+29. **Above or below.** Drag an arrow straight up or down from a pin: a single straight line.
+30. **Moving.** Drag a pin across its arrow's tip, or drag the tip across the pin: the flat piece swaps sides as it passes.
+31. **PDF pack.** Export: pin arrows are dog legs too, in the same places, with a rounded elbow.

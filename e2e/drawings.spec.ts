@@ -2076,14 +2076,33 @@ test("text callouts: hold and drag for a leader, tap for a box, select then edit
   await boxHit.click();
   await expect(editor).toHaveValue("LAP 600 MIN");
   await editor.fill("lap 900 min");
-  // A tap elsewhere only closes the editor (no new callout).
+  // A tap on open space closes the editor and turns Text off altogether
+  // (no new callout).
   const off = at(0.5, 0.75);
   await page.mouse.click(off.x, off.y);
   await expect(editor).toHaveCount(0);
+  await expect(textTool).toHaveAttribute("aria-pressed", "false");
   await expect(callouts).toHaveCount(1);
   await expect(callouts.first()).toHaveAttribute("aria-label", "LAP 900 MIN");
 
+  // Tapped with Pen on, a callout turns Text on; a tap on open space lets
+  // it go and Pen comes back.
+  const pen = toolbar.getByRole("button", { name: "Pen", exact: true });
+  await pen.click();
+  // A finger (the Pencil and mouse draw with Pen on).
+  const hitBox = (await boxHit.boundingBox())!;
+  await touchTap(page, {
+    x: hitBox.x + hitBox.width / 2,
+    y: hitBox.y + hitBox.height / 2,
+  });
+  await expect(textTool).toHaveAttribute("aria-pressed", "true");
+  await page.mouse.click(off.x, off.y);
+  await expect(callouts.first()).not.toHaveAttribute("data-selected", "true");
+  await expect(pen).toHaveAttribute("aria-pressed", "true");
+  await pen.click();
+
   // The side handle sets the width: the text wraps, the box gets taller.
+  await boxHit.click();
   const height = Number(await boxHit.getAttribute("height"));
   const handle = (await callouts
     .first()
@@ -2148,12 +2167,10 @@ test("text callouts: hold and drag for a leader, tap for a box, select then edit
   await page.mouse.up();
   await expect(leader).not.toHaveAttribute("points", moved);
 
-  // A tap off a selected callout only lets it go; the next places a box
-  // (no leader). A finger tap works too. Left empty, it's dropped.
-  await page.mouse.click(off.x, off.y);
-  await expect(callouts.first()).not.toHaveAttribute("data-selected", "true");
-  await expect(editor).toHaveCount(0);
-  await page.waitForTimeout(700);
+  // With Text on from the toolbar, a finger tap places a box (no leader).
+  // Left empty, it's dropped.
+  await expect(textTool).toHaveAttribute("aria-pressed", "false");
+  await textTool.click();
   await touchTap(page, at(0.2, 0.7));
   await expect(editor).toBeFocused();
   await textTool.click();

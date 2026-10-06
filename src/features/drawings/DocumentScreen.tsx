@@ -156,9 +156,23 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
   const [tool, setTool] = useState<ViewerTool | null>(null);
   // The callout tapped with Text on: a second tap edits it (SPEC 5a).
   const [selectedCallout, setSelectedCallout] = useState<string | null>(null);
+  // The tool on before a tapped callout turned Text on, to go back to.
+  const toolBeforeText = useRef<ViewerTool | null>(null);
   function changeTool(next: ViewerTool | null) {
+    toolBeforeText.current = null;
     setTool(next);
     setSelectedCallout(null);
+  }
+  /**
+   * A tap on open space after making or selecting a callout lets go of it
+   * altogether (engineer, 2026-10-06): Text turns off, back to the tool on
+   * before a tapped callout turned it on (else none).
+   */
+  function releaseText() {
+    const back = toolBeforeText.current;
+    toolBeforeText.current = null;
+    setSelectedCallout(null);
+    setTool(back);
   }
   const prefs = useMarkupPrefs();
   // Marks the eraser is passing over: hidden until it lifts.
@@ -413,7 +427,10 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
     if (draftRef.current) return void commitDraft();
     if (tool === "text" && selectedCallout === mark.id)
       return editCallout(mark);
-    if (tool !== "text") setTool("text");
+    if (tool !== "text") {
+      toolBeforeText.current = tool;
+      setTool("text");
+    }
     setSelectedCallout(mark.id);
   }
 
@@ -651,9 +668,11 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
 
   function tapDrawing(hit: { page: PageLayout; at: Point } | null) {
     placedByTap.current = null;
-    // A callout being typed closes first, like an open item.
+    // A callout being typed closes first, like an open item, and Text
+    // turns off.
     if (draftRef.current) {
       void commitDraft();
+      if (tool === "text") releaseText();
       return;
     }
     // Tapping the drawing closes what's open beside it: an item's editor
@@ -673,10 +692,12 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
       setItemsOpen(false);
       return;
     }
-    // With Text on: a tap off a selected callout only lets it go; otherwise
-    // it places a box (no leader).
+    // With Text on: a tap on open space just after typing (the box lost
+    // focus as the finger went down) or with a callout selected lets go
+    // and turns Text off; otherwise it places a box (no leader).
     if (tool === "text") {
-      if (selectedCallout) setSelectedCallout(null);
+      if (selectedCallout || nowMs() - draftClosed.current < CLOSE_TAP_MS)
+        releaseText();
       else if (hit) placeText(hit.page, hit.at, null);
       return;
     }
