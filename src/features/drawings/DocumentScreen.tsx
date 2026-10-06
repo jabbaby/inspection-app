@@ -154,6 +154,12 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
   const history = useUndo(inspectionId);
   // The markup toolbar's tool: none when the drawings open (SPEC 5a).
   const [tool, setTool] = useState<ViewerTool | null>(null);
+  // The callout tapped with Text on: a second tap edits it (SPEC 5a).
+  const [selectedCallout, setSelectedCallout] = useState<string | null>(null);
+  function changeTool(next: ViewerTool | null) {
+    setTool(next);
+    setSelectedCallout(null);
+  }
   const prefs = useMarkupPrefs();
   // Marks the eraser is passing over: hidden until it lifts.
   const [erasing, setErasing] = useState<Set<string>>(() => new Set());
@@ -304,6 +310,7 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
           weight: m.weight,
           fill: m.fill,
           text: m.text,
+          fixedWidth: m.fixedWidth,
         })),
     [marks, erasing],
   );
@@ -345,7 +352,12 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
       return;
     }
     const size = page.size;
-    const box = calloutSize(text, calloutMetrics(d.size, size), measureArial);
+    const box = calloutSize(
+      text,
+      calloutMetrics(d.size, size),
+      measureArial,
+      d.width === null ? undefined : d.width * size.width,
+    );
     const points = calloutPoints(
       {
         box: {
@@ -380,25 +392,39 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
     // finger goes down, so a tap just after counts too.
     if (draftRef.current) return void commitDraft();
     if (nowMs() - draftClosed.current < CLOSE_TAP_MS) return;
+    setSelectedCallout(null);
     putDraft({
       pageKey: page.key,
       id: null,
       box,
       tip,
+      width: null,
       text: "",
       colour: toolColour(prefs, "text"),
       size: prefs.weight.text,
     });
   }
 
+  /**
+   * A tap on a callout, whatever tool is on: the first selects it (turning
+   * Text on, so it can be moved, re-pointed and resized); a second edits it.
+   */
+  function tapCallout(mark: DocMark) {
+    if (draftRef.current) return void commitDraft();
+    if (tool === "text" && selectedCallout === mark.id)
+      return editCallout(mark);
+    if (tool !== "text") setTool("text");
+    setSelectedCallout(mark.id);
+  }
+
   function editCallout(mark: DocMark) {
-    void commitDraft();
-    const [x, y, , , tx, ty] = mark.points;
+    const [x, y, w, , tx, ty] = mark.points;
     putDraft({
       pageKey: mark.pageKey,
       id: mark.id,
       box: { x, y },
       tip: tx === undefined || ty === undefined ? null : { x: tx, y: ty },
+      width: mark.fixedWidth ? w : null,
       text: mark.text ?? "",
       colour: mark.colour,
       size: mark.weight,
@@ -408,6 +434,16 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
   function moveCallout(mark: DocMark, points: number[]) {
     const existing = marks?.find((m) => m.id === mark.id);
     if (existing) void changeMarkWithUndo(existing, { points }, "Move text");
+  }
+
+  function resizeCallout(mark: DocMark, points: number[]) {
+    const existing = marks?.find((m) => m.id === mark.id);
+    if (existing)
+      void changeMarkWithUndo(
+        existing,
+        { points, fixedWidth: true },
+        "Resize text",
+      );
   }
 
   const marksByPage = useMemo(() => {
@@ -637,6 +673,13 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
       setItemsOpen(false);
       return;
     }
+    // With Text on: a tap off a selected callout only lets it go; otherwise
+    // it places a box (no leader).
+    if (tool === "text") {
+      if (selectedCallout) setSelectedCallout(null);
+      else if (hit) placeText(hit.page, hit.at, null);
+      return;
+    }
     if (hit && tool === "pin") {
       const time = performance.now();
       placedByTap.current = {
@@ -747,12 +790,14 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
           callouts={calloutsByPage.get(page.key) ?? NO_MARKS}
           draft={draft?.pageKey === page.key ? draft : null}
           interactive={tool === "text"}
-          onEdit={editCallout}
+          selectedId={selectedCallout}
+          onTap={tapCallout}
           onDraftText={(text) =>
             putDraft(draftRef.current && { ...draftRef.current, text })
           }
           onDone={() => void commitDraft()}
           onMove={moveCallout}
+          onResize={resizeCallout}
         />
         <ArrowsOverlay items={pageSpots} />
         {box && (
@@ -784,7 +829,7 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
   return (
     <section className="drawing-screen">
       <InspectionHeader inspectionId={inspectionId} current="inspection" />
-      {drawings.length > 0 && <MarkupToolbar tool={tool} onTool={setTool} />}
+      {drawings.length > 0 && <MarkupToolbar tool={tool} onTool={changeTool} />}
       {loadError && (
         <p role="alert" className="error viewer-alert">
           Could not open a drawing: {loadError}

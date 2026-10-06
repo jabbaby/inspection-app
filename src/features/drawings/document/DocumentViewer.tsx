@@ -19,7 +19,6 @@ import {
   type ViewTransform,
 } from "../viewer/viewTransform";
 import { kindName } from "../../items/letters";
-import { calloutMetrics } from "../../markup/calloutGeometry";
 import {
   SHAPE_FILL_OPACITY,
   insideMark,
@@ -105,8 +104,10 @@ interface Props {
   /** The eraser tapped inside a filled shape: take its fill off. */
   onUnfill: (id: string) => void;
   /**
-   * The Text tool placed a callout: its box's top-left, and the point its
-   * leader refers to (null for a tap: no leader). Normalised on `page`.
+   * The Text tool's tap and hold (then drag) placed a callout: its box's
+   * top-left at the press, and the point its leader refers to (null when
+   * not dragged: no leader). Normalised on `page`. A plain tap with Text on
+   * comes through `onTapDrawing`.
    */
   onPlaceText: (page: PageLayout, box: Point, tip: Point | null) => void;
   /** While true, every tap (finger, Pencil or mouse) places an arrow or copy. */
@@ -711,7 +712,8 @@ export function DocumentViewer(props: Props) {
     origin: Point;
     page: PageLayout;
     at: Point;
-    kind: "instruction" | "observation";
+    /** "text": the Text tool's hold, a callout with its leader. */
+    kind: "instruction" | "observation" | "text";
     /** The pin pressed (double-tap and hold on a pin). */
     pinId: string | null;
     timer: number;
@@ -783,14 +785,11 @@ export function DocumentViewer(props: Props) {
     /** Where the pen came to rest, and the timer that straightens it. */
     still: Point;
     timer: number;
-    /** The Text tool: points are the leader's tip, then where the box goes. */
-    callout: boolean;
   } | null>(null);
 
   /** Whether this pointer draws (or erases) with the current tool. */
   function inks(e: { pointerType: string; button: number }) {
-    const tool = latest.current.tool;
-    if (!isInkTool(tool) && tool !== "text") return false;
+    if (!isInkTool(latest.current.tool)) return false;
     if (e.pointerType === "mouse") return e.button === 0;
     return (
       e.pointerType === "pen" ||
@@ -819,13 +818,12 @@ export function DocumentViewer(props: Props) {
     tap.current = null;
     const shape =
       latest.current.tool === "shapes" ? latest.current.ink.shape : null;
-    const callout = latest.current.tool === "text";
     ink.current = {
       pointerId: e.pointerId,
       pointerType: e.pointerType,
       eraser: latest.current.tool === "eraser",
       page: hit.page,
-      points: shape || callout ? [hit.at, hit.at] : [hit.at],
+      points: shape ? [hit.at, hit.at] : [hit.at],
       erased: new Set(),
       predicted: [],
       frame: 0,
@@ -834,7 +832,6 @@ export function DocumentViewer(props: Props) {
       travel: 0,
       still: p,
       timer: 0,
-      callout,
     };
     if (ink.current.eraser) eraseAt(p);
     else requestInkFrame();
@@ -878,8 +875,8 @@ export function DocumentViewer(props: Props) {
       if (stroke.eraser) eraseAt(p);
       else {
         const at = clampNormalised(onPagePoint(stroke.page, p));
-        // A shape (or a straightened line, or a callout) only moves its end.
-        if (stroke.shape || stroke.callout) stroke.points[1] = at;
+        // A shape (or a straightened line) only moves its end.
+        if (stroke.shape) stroke.points[1] = at;
         else stroke.points.push(at);
       }
     }
@@ -892,7 +889,7 @@ export function DocumentViewer(props: Props) {
       Math.hypot(last.x - stroke.still.x, last.y - stroke.still.y) > STILL_SLOP
     )
       restartStill(last);
-    if (stroke.shape || stroke.callout) {
+    if (stroke.shape) {
       requestInkFrame();
       return;
     }
@@ -964,33 +961,6 @@ export function DocumentViewer(props: Props) {
     ctx.clearRect(0, 0, width, height);
     const t = currentTransform();
     const style = latest.current.ink;
-    if (stroke.callout) {
-      // The leader being dragged out: from where the box will go to the tip.
-      if (stroke.travel < TAP_SLOP) return;
-      const size = stroke.page.size;
-      const k = pxPerUnit(stroke.page);
-      ctx.setTransform(
-        dpr * k,
-        0,
-        0,
-        dpr * k,
-        dpr * t.x,
-        dpr * (t.y + stroke.page.top * t.scale),
-      );
-      const [tip, box] = toPagePoints(
-        stroke.points.flatMap((p) => [p.x, p.y]),
-        size,
-      );
-      // As thick as the callout's border (calloutGeometry.ts).
-      const width = calloutMetrics(style.weight, size).border;
-      const drawing = shapeDrawing("arrow", box, tip, width);
-      ctx.strokeStyle = ctx.fillStyle = style.colour;
-      ctx.lineWidth = width;
-      ctx.lineCap = "round";
-      ctx.stroke(new Path2D(drawing.d));
-      if (drawing.head) ctx.fill(new Path2D(drawing.head));
-      return;
-    }
     if (stroke.shape) {
       // Drawn in page units, the same shape as the saved mark will be.
       const size = stroke.page.size;
@@ -1063,15 +1033,6 @@ export function DocumentViewer(props: Props) {
       return;
     }
     if (cancelled) return clearInk();
-    if (stroke.callout) {
-      clearInk();
-      const [tip, end] = stroke.points;
-      // A tap: a box with no leader. A drag: from the tip to the box.
-      if (stroke.travel < TAP_SLOP)
-        latest.current.onPlaceText(stroke.page, tip, null);
-      else latest.current.onPlaceText(stroke.page, end, tip);
-      return;
-    }
     if (stroke.shape) {
       // Too small to mean anything: dropped.
       if (stroke.travel < MIN_SHAPE) return clearInk();
@@ -1105,15 +1066,8 @@ export function DocumentViewer(props: Props) {
   // while the document is scrolling only stops it: on a pin or the box it
   // is swallowed; on the drawing it never places a pin.
   function onPointerDownCapture(e: React.PointerEvent) {
-    // Drawing and erasing take the pointer before pins and the notes box
-    // (with the Text tool, a callout handles its own touches).
-    if (
-      inks(e) &&
-      !(
-        latest.current.tool === "text" &&
-        (e.target as Element).closest(".callout")
-      )
-    ) {
+    // Drawing and erasing take the pointer before pins and the notes box.
+    if (inks(e)) {
       e.stopPropagation();
       // One stroke at a time; a second finger is a pinch.
       if (!ink.current && !(e.pointerType === "touch" && !e.isPrimary))
@@ -1156,17 +1110,21 @@ export function DocumentViewer(props: Props) {
     cancelHold();
     if (
       tap.current &&
-      latest.current.tool === "pin" &&
       !latest.current.addPinMode &&
       stopTouch.current !== e.pointerId
     ) {
-      const second = nearLastTap(p, e.timeStamp);
-      if (second) {
-        latest.current.onSecondPress({
-          hit: hitPage(currentLayout(), screenToPage(currentTransform(), p)),
-        });
+      if (latest.current.tool === "pin") {
+        const second = nearLastTap(p, e.timeStamp);
+        if (second) {
+          latest.current.onSecondPress({
+            hit: hitPage(currentLayout(), screenToPage(currentTransform(), p)),
+          });
+        }
+        startHold(e.pointerId, p, second ? "observation" : "instruction");
+      } else if (latest.current.tool === "text") {
+        // Like a pin (any finger or the Pencil): hold, then drag a leader.
+        startHold(e.pointerId, p, "text");
       }
-      startHold(e.pointerId, p, second);
     }
   }
 
@@ -1301,6 +1259,10 @@ export function DocumentViewer(props: Props) {
     layer.style.setProperty("--hold-x", `${c.x}px`);
     layer.style.setProperty("--hold-y", `${c.y}px`);
     layer.dataset.kind = h.kind;
+    // A callout's hold shows in the Text tool's colour.
+    if (h.kind === "text")
+      layer.style.setProperty("--hold-colour", latest.current.ink.colour);
+    else layer.style.removeProperty("--hold-colour");
     if (state === "pending") holdLine(c, c);
     layer.dataset.state = state;
   }
@@ -1311,7 +1273,7 @@ export function DocumentViewer(props: Props) {
     origin: Point,
     page: PageLayout,
     at: Point,
-    kind: "instruction" | "observation",
+    kind: "instruction" | "observation" | "text",
     pinId: string | null,
   ) {
     hold.current = {
@@ -1329,14 +1291,20 @@ export function DocumentViewer(props: Props) {
     };
   }
 
-  /** A press on the drawing; after a tap (`second`) it makes an observation. */
-  function startHold(pointerId: number, start: Point, second: boolean) {
+  /**
+   * A press on the drawing: a pin (an observation after a tap) or, with
+   * the Text tool, a callout.
+   */
+  function startHold(
+    pointerId: number,
+    start: Point,
+    kind: "instruction" | "observation" | "text",
+  ) {
     const hit = hitPage(
       currentLayout(),
       screenToPage(currentTransform(), start),
     );
     if (!hit) return;
-    const kind = second ? "observation" : "instruction";
     beginHold(pointerId, start, start, hit.page, hit.at, kind, null);
   }
 
@@ -1401,7 +1369,8 @@ export function DocumentViewer(props: Props) {
     if (!h?.held) return;
     holdMove(p);
     cancelHold();
-    latest.current.onHoldPlace(h.page, h.at, h.tip, h.kind, h.pinId);
+    if (h.kind === "text") latest.current.onPlaceText(h.page, h.at, h.tip);
+    else latest.current.onHoldPlace(h.page, h.at, h.tip, h.kind, h.pinId);
   }
 
   // Native scrolling, touch pinch, Pencil and wheel zoom.

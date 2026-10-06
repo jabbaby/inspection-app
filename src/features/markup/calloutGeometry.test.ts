@@ -54,25 +54,59 @@ describe("text callouts", () => {
     ).toBeNull();
   });
 
-  test("the leader runs from the box's nearest edge to the tip", () => {
+  /** A callout's layout with its box at (300, 300) 100 x 40 and `tip`. */
+  function withTip(tip: { x: number; y: number }) {
     const points = calloutPoints(
-      {
-        box: { x: 300, y: 300, width: 100, height: 40 },
-        tip: { x: 100, y: 320 },
-      },
+      { box: { x: 300, y: 300, width: 100, height: 40 }, tip },
       A3,
     );
-    const layout = layoutCallout(
+    return layoutCallout(
       { points, weight: TEXT_SIZES[1], text: "lap 600" },
       A3,
       measure,
     );
+  }
+
+  test("a leader to the side dog-legs out of the middle of that side", () => {
+    const layout = withTip({ x: 100, y: 200 });
+    const leader = layout.leader!;
+    const shoulder = layout.metrics.fontSize * 1.5;
     // As thick as the box's border.
-    expect(layout.leader!.width).toBe(layout.metrics.border);
-    expect(layout.leader!.from.x).toBeCloseTo(300, 1);
-    expect(layout.leader!.from.y).toBeCloseTo(320, 1);
-    expect(layout.leader!.head[0].x).toBeCloseTo(100, 1);
-    expect(layout.leader!.head[0].y).toBeCloseTo(320, 1);
+    expect(leader.width).toBe(layout.metrics.border);
+    // Out of the left side's middle, a horizontal shoulder, then the tip.
+    expect(leader.points).toHaveLength(3);
+    expect(leader.points[0].x).toBeCloseTo(300, 1);
+    expect(leader.points[0].y).toBeCloseTo(320, 1);
+    expect(leader.points[1].x).toBeCloseTo(300 - shoulder, 1);
+    expect(leader.points[1].y).toBeCloseTo(320, 1);
+    expect(leader.head[0].x).toBeCloseTo(100, 1);
+    expect(leader.head[0].y).toBeCloseTo(200, 1);
     expect(layout.lines.map((l) => l.text)).toEqual(["LAP 600"]);
+    // To the right: out of the right side.
+    const right = withTip({ x: 600, y: 500 }).leader!;
+    expect(right.points[0].x).toBeCloseTo(400, 1);
+    expect(right.points[1].x).toBeCloseTo(400 + shoulder, 1);
+  });
+
+  test("a leader above or below the box is straight from the nearest edge", () => {
+    const leader = withTip({ x: 350, y: 500 }).leader!;
+    expect(leader.points).toHaveLength(2);
+    expect(leader.points[0].x).toBeCloseTo(350, 1);
+    expect(leader.points[0].y).toBeCloseTo(340, 1);
+    expect(leader.head[0].y).toBeCloseTo(500, 1);
+  });
+
+  test("a resized box keeps its width; its height follows the text", () => {
+    const m = calloutMetrics(TEXT_SIZES[1], A3);
+    const narrow = calloutSize("check column starter bars", m, measure, 80);
+    const wide = calloutSize("check column starter bars", m, measure, 400);
+    expect(wide.width).toBe(400);
+    expect(narrow.height).toBeGreaterThan(wide.height);
+    // Never narrower than its longest word.
+    const tiny = calloutSize("starter", m, measure, 1);
+    expect(tiny.width).toBeCloseTo(
+      measure("STARTER", m.fontSize) + 2 * m.inset,
+      5,
+    );
   });
 });

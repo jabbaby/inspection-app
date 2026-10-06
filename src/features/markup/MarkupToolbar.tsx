@@ -10,7 +10,7 @@ import {
   Pointer,
   Slash,
   Square,
-  Type,
+  createLucideIcon,
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -29,6 +29,22 @@ import {
   useMarkupPrefs,
 } from "./markupPrefs";
 import type { ViewerTool } from "./tools";
+
+/**
+ * Text callout: a box of text with a dog-leg leader to an arrowhead, drawn
+ * on Lucide's 24 px grid in its style (engineer: "show it's a callout, not
+ * just a T").
+ */
+const Callout = createLucideIcon("callout", [
+  [
+    "rect",
+    { x: "10", y: "3", width: "11", height: "9", rx: "1.5", key: "box" },
+  ],
+  ["path", { d: "M13 6.5h5", key: "line1" }],
+  ["path", { d: "M13 9h3", key: "line2" }],
+  ["path", { d: "M10 7.5H7L3.5 20", key: "leader" }],
+  ["path", { d: "M2.4 16.6 3.5 20l2.7-2.3", key: "head" }],
+]);
 
 /** The toolbar's buttons: tools, with each shape a button of its own. */
 const BUTTONS: {
@@ -54,7 +70,7 @@ const BUTTONS: {
     tool: "shapes" as const,
     shape,
   })),
-  { id: "text", label: "Text", Icon: Type, tool: "text" },
+  { id: "text", label: "Text", Icon: Callout, tool: "text" },
 ];
 
 const SHAPE_ICONS: Record<MarkupShape, LucideIcon> = {
@@ -86,6 +102,7 @@ const TOOL_NAMES: Record<MarkupTool, string> = {
 const HINTS: Partial<Record<ViewerTool, string>> = {
   pin: "Tap for an instruction · double-tap for an observation · hold and drag for an arrow",
   eraser: "Touch a mark to remove it · tap inside a shape to take its fill off",
+  text: "Tap for a text box · hold and drag for an arrow",
 };
 
 /** An open slider or colour panel, under the button that opened it (screen px). */
@@ -209,10 +226,14 @@ export function MarkupToolbar({ tool, onTool }: Props) {
           />
         )}
         {tool && HINTS[tool] && (
-          <>
+          // Beside a tool's options (Text) the hint shows only where it
+          // fits: not in portrait.
+          <span
+            className={`markup-hint-group${inkTool ? " beside-options" : ""}`}
+          >
             <span className="markup-divider" aria-hidden="true" />
             <span className="markup-hint">{HINTS[tool]}</span>
-          </>
+          </span>
         )}
       </div>
     </div>

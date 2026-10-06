@@ -24,6 +24,8 @@ export interface DocMark {
   fill?: boolean;
   /** Text callouts: what they say. */
   text?: string;
+  /** Text callouts: the box was resized by hand (its width stays). */
+  fixedWidth?: boolean;
   /** Normalised points, flat: x0, y0, x1, y1... */
   points: number[];
   colour: string;

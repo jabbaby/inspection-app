@@ -197,12 +197,16 @@ function drawCallout(
   const colour = hex(mark.colour);
   const flip = (y: number) => size.height - y;
   if (leader) {
-    page.drawLine({
-      start: { x: leader.from.x, y: flip(leader.from.y) },
-      end: { x: leader.to.x, y: flip(leader.to.y) },
-      thickness: leader.width,
-      color: colour,
-      lineCap: 1,
+    // Each leg with round caps, so a dog leg's elbow is rounded too.
+    leader.points.slice(1).forEach((to, i) => {
+      const from = leader.points[i];
+      page.drawLine({
+        start: { x: from.x, y: flip(from.y) },
+        end: { x: to.x, y: flip(to.y) },
+        thickness: leader.width,
+        color: colour,
+        lineCap: 1,
+      });
     });
     const [a, b, c] = leader.head;
     page.drawSvgPath(`M ${a.x} ${a.y} L ${b.x} ${b.y} L ${c.x} ${c.y} Z`, {

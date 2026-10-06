@@ -64,13 +64,17 @@ export async function unfillWithUndo(mark: Markup): Promise<void> {
   });
 }
 
-/** A callout typed again or moved (undoable). */
+/** A callout typed again, moved or resized (undoable). */
 export async function changeMarkWithUndo(
   mark: Markup,
-  patch: Partial<Pick<Markup, "points" | "text">>,
+  patch: Partial<Pick<Markup, "points" | "text" | "fixedWidth">>,
   label: string,
 ): Promise<void> {
-  const before = { points: mark.points, text: mark.text };
+  const before = {
+    points: mark.points,
+    text: mark.text,
+    fixedWidth: mark.fixedWidth,
+  };
   await updateMarkup(db, mark, patch);
   pushUndo(mark.inspectionId, {
     label,

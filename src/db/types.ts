@@ -329,6 +329,11 @@ export interface Markup {
    * the text size.
    */
   text?: string;
+  /**
+   * Text callouts: the box's width was set by hand (resized), so its text
+   * wraps to it; otherwise the box grows with the text.
+   */
+  fixedWidth?: boolean;
   createdAt: number;
 }
 

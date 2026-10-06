@@ -48,11 +48,11 @@ export async function deleteMarkups(
   });
 }
 
-/** Changes a mark's points or text (a callout typed again or moved). */
+/** Changes a mark's points or text (a callout typed again, moved or resized). */
 export async function updateMarkup(
   db: InspectionDb,
   mark: Pick<Markup, "id" | "inspectionId">,
-  patch: Partial<Pick<Markup, "points" | "text">>,
+  patch: Partial<Pick<Markup, "points" | "text" | "fixedWidth">>,
   now = Date.now(),
 ): Promise<void> {
   await db.transaction("rw", [db.inspections, db.markups], async () => {

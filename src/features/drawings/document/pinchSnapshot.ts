@@ -293,8 +293,9 @@ function drawCallout(
   if (leader) {
     ctx.lineWidth = leader.width;
     ctx.beginPath();
-    ctx.moveTo(leader.from.x, leader.from.y);
-    ctx.lineTo(leader.to.x, leader.to.y);
+    leader.points.forEach((p, i) =>
+      i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y),
+    );
     ctx.stroke();
     ctx.beginPath();
     leader.head.forEach((p, i) =>

@@ -75,12 +75,35 @@ export function wrapText(
   return lines;
 }
 
-/** The box a text needs: it grows to the widest line, up to the maximum. */
+/** The narrowest a box can be: its longest word fits. */
+export function minCalloutWidth(
+  text: string,
+  m: CalloutMetrics,
+  measure: MeasureText,
+): number {
+  const words = calloutText(text).split(/\s+/).filter(Boolean);
+  return (
+    Math.max(m.fontSize * 2, ...words.map((w) => measure(w, m.fontSize))) +
+    2 * m.inset
+  );
+}
+
+/**
+ * The box a text needs: it grows to the widest line, up to the maximum.
+ * With `width` (a box resized by hand) it keeps that width, never narrower
+ * than its longest word, and only its height follows the text.
+ */
 export function calloutSize(
   text: string,
   m: CalloutMetrics,
   measure: MeasureText,
+  width?: number,
 ): { width: number; height: number } {
+  if (width !== undefined) {
+    const w = Math.max(width, minCalloutWidth(text, m, measure));
+    const lines = wrapText(text, m.fontSize, w - 2 * m.inset + 0.5, measure);
+    return { width: w, height: lines.length * m.lineHeight + 2 * m.inset };
+  }
   const lines = wrapText(text, m.fontSize, m.maxWidth - 2 * m.inset, measure);
   const widest = Math.max(
     m.fontSize * 2,
@@ -136,8 +159,11 @@ export interface CalloutLayout {
   metrics: CalloutMetrics;
   /** Text lines with their baseline (page units, y down). */
   lines: { text: string; x: number; baseline: number }[];
-  /** The leader (as thick as the box's border): from its edge to the tip. */
-  leader: { from: Point; to: Point; width: number; head: Point[] } | null;
+  /**
+   * The leader (as thick as the box's border): a line from the box to the
+   * base of its head, through the dog leg's elbow when it has one.
+   */
+  leader: { points: Point[]; width: number; head: Point[] } | null;
 }
 
 /** The point on a rectangle's edge closest to `p` (outside it). */
@@ -145,6 +171,48 @@ function nearestOnBox(box: Rect, p: Point): Point {
   return {
     x: Math.min(box.x + box.width, Math.max(box.x, p.x)),
     y: Math.min(box.y + box.height, Math.max(box.y, p.y)),
+  };
+}
+
+/** A dog leg's horizontal shoulder, in font sizes (about two letters). */
+const SHOULDER_EM = 1.5;
+
+/**
+ * The leader's line from the box towards `tip` (engineer, 2026-10-06): a
+ * dog leg, drafting style, with a short horizontal shoulder out of the
+ * middle of the side facing the tip, then straight to it. A tip above or
+ * below the box (within a shoulder of its sides) gets a straight line from
+ * the nearest edge instead.
+ */
+function leaderLine(box: Rect, tip: Point, shoulder: number): Point[] {
+  const left = tip.x < box.x - shoulder;
+  const right = tip.x > box.x + box.width + shoulder;
+  if (!left && !right) return [nearestOnBox(box, tip), tip];
+  const y = box.y + box.height / 2;
+  const x = left ? box.x : box.x + box.width;
+  return [{ x, y }, { x: left ? x - shoulder : x + shoulder, y }, tip];
+}
+
+/** The arrowhead on the end of `line`, or null when it's too short for one. */
+function withHead(line: Point[], width: number): CalloutLayout["leader"] {
+  const tip = line[line.length - 1];
+  const from = line[line.length - 2];
+  const length = Math.hypot(tip.x - from.x, tip.y - from.y);
+  // Head proportions as the arrow shape's, scaled by the border.
+  const headLength = width * HEAD_LENGTH;
+  if (length <= headLength) return null;
+  const ux = (tip.x - from.x) / length;
+  const uy = (tip.y - from.y) / length;
+  const base = { x: tip.x - ux * headLength, y: tip.y - uy * headLength };
+  const half = (headLength * HEAD_WIDTH) / 2;
+  return {
+    points: [...line.slice(0, -1), base],
+    width,
+    head: [
+      tip,
+      { x: base.x - uy * half, y: base.y + ux * half },
+      { x: base.x + uy * half, y: base.y - ux * half },
+    ],
   };
 }
 
@@ -174,38 +242,23 @@ export function layoutCallout(
   }));
   let leader: CalloutLayout["leader"] = null;
   if (tip) {
-    const from = nearestOnBox(box, tip);
-    const width = metrics.border;
-    const length = Math.hypot(tip.x - from.x, tip.y - from.y);
-    // Head proportions as the arrow shape's, scaled by the border. A tip
+    const line = leaderLine(box, tip, metrics.fontSize * SHOULDER_EM);
+    // A last leg too short for its head goes straight from the side; a tip
     // inside the box (or right by it) has no leader to draw.
-    const headLength = width * HEAD_LENGTH;
-    if (length > headLength) {
-      const ux = (tip.x - from.x) / length;
-      const uy = (tip.y - from.y) / length;
-      const base = { x: tip.x - ux * headLength, y: tip.y - uy * headLength };
-      const half = (headLength * HEAD_WIDTH) / 2;
-      leader = {
-        from,
-        to: base,
-        width,
-        head: [
-          tip,
-          { x: base.x - uy * half, y: base.y + ux * half },
-          { x: base.x + uy * half, y: base.y - ux * half },
-        ],
-      };
-    }
+    leader =
+      withHead(line, metrics.border) ??
+      (line.length > 2 ? withHead([line[0], tip], metrics.border) : null);
   }
   return { box, metrics, lines, leader };
 }
 
 /** Points along a callout's box and leader, for the eraser. */
 export function calloutOutline(
-  mark: Pick<Markup, "points">,
+  mark: Pick<Markup, "points" | "weight">,
   page: Size,
 ): Point[] {
   const { box, tip } = calloutPlace(mark, page);
+  const fontSize = calloutMetrics(mark.weight, page).fontSize;
   const corners = [
     { x: box.x, y: box.y },
     { x: box.x + box.width, y: box.y },
@@ -213,7 +266,9 @@ export function calloutOutline(
     { x: box.x, y: box.y + box.height },
     { x: box.x, y: box.y },
   ];
-  return tip ? [tip, nearestOnBox(box, tip), ...corners] : corners;
+  return tip
+    ? [...leaderLine(box, tip, fontSize * SHOULDER_EM).reverse(), ...corners]
+    : corners;
 }
 
 /** Whether `p` (page units) is on a callout's box. */

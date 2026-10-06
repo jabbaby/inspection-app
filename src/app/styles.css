@@ -835,6 +835,17 @@ dl.facts dd {
   display: block;
 }
 
+/* The Text tool's hold: a box, its top-left at the press, as the callout
+   will be placed. */
+.hold-layer[data-kind="text"] .hold-pin {
+  width: 44px;
+  height: 26px;
+  margin: 0;
+  border: 2px solid var(--hold-colour);
+  border-radius: 2px;
+  background: #fff;
+}
+
 .viewer-pin {
   position: absolute;
   left: 0;
@@ -4223,6 +4234,16 @@ h1 {
 
 .markup-swatch-light .lucide {
   color: #111;
+}
+
+.markup-hint-group {
+  display: contents;
+}
+
+@media (orientation: portrait) {
+  .markup-hint-group.beside-options {
+    display: none;
+  }
 }
 
 .markup-hint {

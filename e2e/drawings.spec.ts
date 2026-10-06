@@ -2021,7 +2021,7 @@ test("shapes: a filled cloud, the eraser takes the fill off, arrows, and a held 
   await expect(tool("Pen")).toHaveAttribute("aria-pressed", "false");
 });
 
-test("text callouts: drag to place with a leader, type capitals, edit, empty removes", async ({
+test("text callouts: hold and drag for a leader, tap for a box, select then edit, resize", async ({
   page,
 }) => {
   await setupInspection(page);
@@ -2031,11 +2031,23 @@ test("text callouts: drag to place with a leader, type capitals, edit, empty rem
   const textTool = toolbar.getByRole("button", { name: "Text", exact: true });
   const editor = page.getByRole("textbox", { name: "Callout text" });
   const callouts = page.getByTestId("callout");
+  const box = await stageBox(page);
+  const at = (fx: number, fy: number) => ({
+    x: box.x + box.width * fx,
+    y: box.y + box.height * fy,
+  });
 
-  // Drag from the point referred to, lift where the box goes, and type.
+  // Hold where the box goes, drag to the point referred to, and type.
   await textTool.click();
   await expect(toolbar.getByRole("button", { name: "Medium" })).toBeVisible();
-  await drawLine(page, [0.3, 0.3], [0.5, 0.42]);
+  await expect(toolbar).toContainText("hold and drag for an arrow");
+  const press = at(0.5, 0.42);
+  await page.mouse.move(press.x, press.y);
+  await page.mouse.down();
+  await page.waitForTimeout(700);
+  const point = at(0.25, 0.3);
+  await page.mouse.move(point.x, point.y, { steps: 8 });
+  await page.mouse.up();
   await expect(editor).toBeFocused();
   await editor.pressSequentially("lap 600 min");
   // Turning the tool off finishes typing.
@@ -2043,30 +2055,74 @@ test("text callouts: drag to place with a leader, type capitals, edit, empty rem
   await expect(editor).toHaveCount(0);
   await expect(callouts).toHaveCount(1);
   await expect(callouts.first()).toHaveAttribute("aria-label", "LAP 600 MIN");
-  await expect(callouts.first().locator("line")).toHaveCount(1);
+  // The point is to the left: a dog leg out of the box's left side.
+  const leader = callouts.first().locator("polyline");
+  await expect(leader).toHaveCount(1);
+  expect((await leader.getAttribute("points"))!.split(" ")).toHaveLength(3);
 
-  // With Text on, tapping it edits it.
+  // A quick drag with Text on (no hold) places nothing.
   await textTool.click();
-  await callouts.first().getByTestId("callout-box").click();
+  await drawLine(page, [0.2, 0.6], [0.3, 0.65]);
+  await expect(editor).toHaveCount(0);
+  await expect(callouts).toHaveCount(1);
+  await textTool.click();
+
+  // With no tool on, a tap selects it and turns Text on; a second tap edits.
+  const boxHit = callouts.first().getByTestId("callout-box");
+  await boxHit.click();
+  await expect(textTool).toHaveAttribute("aria-pressed", "true");
+  await expect(callouts.first()).toHaveAttribute("data-selected", "true");
+  await expect(editor).toHaveCount(0);
+  await boxHit.click();
   await expect(editor).toHaveValue("LAP 600 MIN");
   await editor.fill("lap 900 min");
   // A tap elsewhere only closes the editor (no new callout).
-  const box = await stageBox(page);
-  await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.75);
+  const off = at(0.5, 0.75);
+  await page.mouse.click(off.x, off.y);
   await expect(editor).toHaveCount(0);
   await expect(callouts).toHaveCount(1);
   await expect(callouts.first()).toHaveAttribute("aria-label", "LAP 900 MIN");
 
-  // Dragging the box moves it; dragging the tip re-points the arrow.
-  const before = (await callouts.first().locator("line").getAttribute("x2"))!;
-  const boxX = (await callouts
+  // The side handle sets the width: the text wraps, the box gets taller.
+  const height = Number(await boxHit.getAttribute("height"));
+  const handle = (await callouts
     .first()
-    .getByTestId("callout-box")
-    .getAttribute("x"))!;
-  const grab = (await callouts
-    .first()
-    .getByTestId("callout-box")
+    .getByTestId("callout-resize")
     .boundingBox())!;
+  await page.mouse.move(
+    handle.x + handle.width / 2,
+    handle.y + handle.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    handle.x + handle.width / 2 - 200,
+    handle.y + handle.height / 2,
+    { steps: 8 },
+  );
+  await page.mouse.up();
+  await expect
+    .poll(async () => Number(await boxHit.getAttribute("height")))
+    .toBeGreaterThan(height);
+  // Its width stays when the text changes.
+  const width = await boxHit.getAttribute("width");
+  await boxHit.click();
+  await editor.fill("lap 900 min c/c");
+  await page.mouse.click(off.x, off.y);
+  await expect(callouts.first()).toHaveAttribute(
+    "aria-label",
+    "LAP 900 MIN C/C",
+  );
+  await expect(boxHit).toHaveAttribute("width", width!);
+  await page.getByRole("button", { name: "Undo" }).click();
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect
+    .poll(async () => Number(await boxHit.getAttribute("height")))
+    .toBe(height);
+
+  // Dragging the box moves it; dragging the tip re-points the arrow.
+  const before = (await leader.getAttribute("points"))!;
+  const boxX = (await boxHit.getAttribute("x"))!;
+  const grab = (await boxHit.boundingBox())!;
   await page.mouse.move(grab.x + grab.width / 2, grab.y + grab.height / 2);
   await page.mouse.down();
   await page.mouse.move(
@@ -2075,10 +2131,9 @@ test("text callouts: drag to place with a leader, type capitals, edit, empty rem
     { steps: 8 },
   );
   await page.mouse.up();
-  await expect(callouts.first().getByTestId("callout-box")).not.toHaveAttribute(
-    "x",
-    boxX,
-  );
+  await expect(boxHit).not.toHaveAttribute("x", boxX);
+  const moved = (await leader.getAttribute("points"))!;
+  expect(moved).not.toBe(before);
   const tip = (await callouts
     .first()
     .getByTestId("callout-tip")
@@ -2091,53 +2146,40 @@ test("text callouts: drag to place with a leader, type capitals, edit, empty rem
     { steps: 8 },
   );
   await page.mouse.up();
-  await expect(callouts.first().locator("line")).not.toHaveAttribute(
-    "x2",
-    before,
-  );
-  await textTool.click();
+  await expect(leader).not.toHaveAttribute("points", moved);
 
-  // A tap (no drag) places a box without a leader; left empty, it's dropped.
-  await textTool.click();
-  await page.mouse.click(box.x + box.width * 0.2, box.y + box.height * 0.7);
+  // A tap off a selected callout only lets it go; the next places a box
+  // (no leader). A finger tap works too. Left empty, it's dropped.
+  await page.mouse.click(off.x, off.y);
+  await expect(callouts.first()).not.toHaveAttribute("data-selected", "true");
+  await expect(editor).toHaveCount(0);
+  await page.waitForTimeout(700);
+  await touchTap(page, at(0.2, 0.7));
   await expect(editor).toBeFocused();
   await textTool.click();
   await expect(callouts).toHaveCount(1);
 
   // Emptied, a callout goes; Undo brings it back.
   await textTool.click();
-  await callouts.first().getByTestId("callout-box").click();
+  await boxHit.click();
+  await boxHit.click();
   await editor.fill("");
   await textTool.click();
   await expect(callouts).toHaveCount(0);
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(callouts).toHaveCount(1);
 
-  // Like a pin, with no tool on: tap to edit, drag to move.
+  // Like a pin, with no tool on: drag to move.
   await expect(textTool).toHaveAttribute("aria-pressed", "false");
-  await callouts.first().getByTestId("callout-box").click();
-  await expect(editor).toBeFocused();
-  const stage = await stageBox(page);
-  await page.mouse.click(
-    stage.x + stage.width * 0.5,
-    stage.y + stage.height * 0.75,
-  );
-  await expect(editor).toHaveCount(0);
-  const x = (await callouts
-    .first()
-    .getByTestId("callout-box")
-    .getAttribute("x"))!;
-  const r = (await callouts.first().getByTestId("callout-box").boundingBox())!;
+  const x = (await boxHit.getAttribute("x"))!;
+  const r = (await boxHit.boundingBox())!;
   await page.mouse.move(r.x + r.width / 2, r.y + r.height / 2);
   await page.mouse.down();
   await page.mouse.move(r.x + r.width / 2 + 60, r.y + r.height / 2 + 30, {
     steps: 8,
   });
   await page.mouse.up();
-  await expect(callouts.first().getByTestId("callout-box")).not.toHaveAttribute(
-    "x",
-    x,
-  );
+  await expect(boxHit).not.toHaveAttribute("x", x);
   // No pin was placed by any of that.
   await expect(page.getByTestId("viewer-pin")).toHaveCount(0);
 });
