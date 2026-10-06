@@ -43,6 +43,8 @@ interface Props {
   draft: CalloutDraft | null;
   /** The Text tool is on: the arrow tips show their handles. */
   interactive: boolean;
+  /** Select is on: callouts are picked like other marks, not tapped or dragged. */
+  passive?: boolean;
   /** The callout tapped with the Text tool on: it shows its resize handle. */
   selectedId: string | null;
   onTap: (mark: DocMark) => void;
@@ -79,6 +81,7 @@ export const CalloutsOverlay = memo(function CalloutsOverlay({
   callouts,
   draft,
   interactive,
+  passive = false,
   selectedId,
   onTap,
   onDraftText,
@@ -216,7 +219,7 @@ export const CalloutsOverlay = memo(function CalloutsOverlay({
   return (
     <>
       <svg
-        className={`callouts-overlay${interactive ? " callouts-live" : ""}`}
+        className={`callouts-overlay${interactive ? " callouts-live" : ""}${passive ? " callouts-passive" : ""}`}
         width={width}
         height={height}
         viewBox={`0 0 ${width} ${height}`}

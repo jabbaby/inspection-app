@@ -8,12 +8,26 @@ import { redoLast, undoLast, useUndo } from "../../app/undo";
 import { db } from "../../db/db";
 import { listDrawings, setPageSizes } from "../../db/drawings";
 import { listMarkups } from "../../db/markups";
-import { HIGHLIGHTER_OPACITY, toStoredPoints } from "../markup/markGeometry";
+import {
+  HIGHLIGHTER_OPACITY,
+  WEIGHT_PRESETS,
+  toStoredPoints,
+} from "../markup/markGeometry";
+import {
+  clampMove,
+  movedPoints,
+  resizedPoints,
+  selectionBounds,
+  weightToolOf,
+} from "../markup/selectGeometry";
+import { SelectionOverlay } from "../markup/SelectionOverlay";
 import {
   changeMarkWithUndo,
   drawWithUndo,
   eraseWithUndo,
   unfillWithUndo,
+  changeMarksWithUndo,
+  duplicateWithUndo,
 } from "../markup/markupActions";
 import { toolColour, useMarkupPrefs } from "../markup/markupPrefs";
 import { MarkupOverlay } from "../markup/MarkupOverlay";
@@ -54,7 +68,9 @@ import { ItemsPanel } from "../items/ItemsPanel";
 import {
   DocumentViewer,
   type DocPin,
+  type MarkSelection,
   type ScrollTarget,
+  type SelectDrag,
 } from "./document/DocumentViewer";
 import {
   layoutDocument,
@@ -162,7 +178,11 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
     toolBeforeText.current = null;
     setTool(next);
     setSelectedCallout(null);
+    setSelection(null);
   }
+  // The Select tool's picked marks, and a drag of them under way (slice 2d).
+  const [selection, setSelection] = useState<MarkSelection | null>(null);
+  const [selectDrag, setSelectDrag] = useState<SelectDrag | null>(null);
   /**
    * A tap on open space after making or selecting a callout lets go of it
    * altogether (engineer, 2026-10-06): Text turns off, back to the tool on
@@ -469,6 +489,150 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
       byPage.set(mark.pageKey, [...(byPage.get(mark.pageKey) ?? []), mark]);
     return byPage;
   }, [docMarks]);
+
+  // The selected marks, and (while dragged) where they're shown: only the
+  // selection's page gets new lists, so the other pages don't redraw.
+  const selectedMarks = useMemo(
+    () =>
+      selection
+        ? (marksByPage.get(selection.pageKey) ?? []).filter((m) =>
+            selection.ids.includes(m.id),
+          )
+        : [],
+    [selection, marksByPage],
+  );
+  const selectionPage = selection
+    ? layout.pages.find((p) => p.key === selection.pageKey)
+    : undefined;
+  const preview = useMemo(() => {
+    if (!selection || !selectDrag) return null;
+    const moved = new Map<string, number[]>();
+    for (const mark of selectedMarks) {
+      if (selectDrag.kind === "move")
+        moved.set(mark.id, movedPoints(mark, selectDrag.dx, selectDrag.dy));
+      else if (selectedMarks.length === 1)
+        moved.set(
+          mark.id,
+          resizedPoints(mark, selectDrag.handle, selectDrag.to),
+        );
+    }
+    const apply = (list: DocMark[]) =>
+      list.map((m) => {
+        const points = moved.get(m.id);
+        return points ? { ...m, points } : m;
+      });
+    return {
+      pageKey: selection.pageKey,
+      marks: apply(marksByPage.get(selection.pageKey) ?? []),
+      callouts: apply(calloutsByPage.get(selection.pageKey) ?? []),
+      selected: apply(selectedMarks),
+    };
+  }, [selection, selectDrag, selectedMarks, marksByPage, calloutsByPage]);
+
+  /** The saved records of the selected marks. */
+  const selectedRecords = () =>
+    (marks ?? []).filter((m) => selection?.ids.includes(m.id));
+
+  /** A drag of the selection (or a shape's handle) moved, or lifted. */
+  function dragSelection(drag: SelectDrag | null, done: boolean) {
+    if (!done) return setSelectDrag(drag);
+    const records = selectedRecords();
+    if (!drag || records.length === 0) return setSelectDrag(null);
+    const label =
+      drag.kind === "move"
+        ? records.length === 1
+          ? "Move"
+          : `Move ${records.length} marks`
+        : "Resize";
+    // The dragged spot stays shown until the saved one arrives.
+    void changeMarksWithUndo(
+      records,
+      (m) => ({
+        points:
+          drag.kind === "move"
+            ? movedPoints(m, drag.dx, drag.dy)
+            : resizedPoints(m, drag.handle, drag.to),
+      }),
+      label,
+    ).finally(() => setSelectDrag(null));
+  }
+
+  /** Recolour: highlights only from the highlighter's colours, the rest from the pen's. */
+  function recolourSelection(colour: string, palette: "pen" | "highlighter") {
+    const records = selectedRecords().filter(
+      (m) => (m.tool === "highlighter") === (palette === "highlighter"),
+    );
+    void changeMarksWithUndo(records, () => ({ colour }), "Change colour");
+  }
+
+  /** A weight preset; callouts keep their size unless they're all that's picked. */
+  function reweightSelection(index: number) {
+    const all = selectedRecords();
+    const onlyText = all.every((m) => m.tool === "text");
+    const records = onlyText ? all : all.filter((m) => m.tool !== "text");
+    void changeMarksWithUndo(
+      records,
+      (m) => {
+        const weight = WEIGHT_PRESETS[weightToolOf(m)][index];
+        // A callout's box follows its new text size.
+        if (m.tool !== "text") return { weight };
+        const page = layout.pages.find(
+          (p) => p.drawingId === m.drawingId && p.page === m.page,
+        );
+        if (!page) return { weight };
+        const size = page.size;
+        const [x, y, w, , ...tip] = m.points;
+        const box = calloutSize(
+          m.text ?? "",
+          calloutMetrics(weight, size),
+          measureArial,
+          m.fixedWidth ? w * size.width : undefined,
+        );
+        return {
+          weight,
+          points: [
+            x,
+            y,
+            Math.round((box.width / size.width) * 1e5) / 1e5,
+            Math.round((box.height / size.height) * 1e5) / 1e5,
+            ...tip,
+          ],
+        };
+      },
+      "Change weight",
+    );
+  }
+
+  /** Copies a little down and right; the copies become the selection. */
+  async function duplicateSelection() {
+    const records = selectedRecords();
+    if (!selectionPage || records.length === 0) return;
+    const size = selectionPage.size;
+    const offset = 0.02 * Math.min(size.width, size.height);
+    const { dx, dy } = clampMove(
+      selectionBounds(selectedMarks, size),
+      size,
+      offset / size.width,
+      offset / size.height,
+    );
+    const copies = await duplicateWithUndo(records, (m) =>
+      movedPoints(m, dx, dy),
+    );
+    setSelection({
+      pageKey: selectionPage.key,
+      ids: copies.map((c) => c.id),
+    });
+  }
+
+  function deleteSelection() {
+    const records = selectedRecords();
+    setSelection(null);
+    void eraseWithUndo(
+      inspectionId,
+      records,
+      records.length === 1 ? "Delete" : `Delete ${records.length} marks`,
+    );
+  }
   const inkTool: MarkupTool =
     tool === "highlighter" || tool === "shapes" ? tool : "pen";
 
@@ -806,9 +970,20 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
     );
     return (
       <>
-        <MarkupOverlay marks={marksByPage.get(page.key) ?? NO_MARKS} />
+        <MarkupOverlay
+          marks={
+            preview?.pageKey === page.key
+              ? preview.marks
+              : (marksByPage.get(page.key) ?? NO_MARKS)
+          }
+        />
         <CalloutsOverlay
-          callouts={calloutsByPage.get(page.key) ?? NO_MARKS}
+          callouts={
+            preview?.pageKey === page.key
+              ? preview.callouts
+              : (calloutsByPage.get(page.key) ?? NO_MARKS)
+          }
+          passive={tool === "select"}
           draft={draft?.pageKey === page.key ? draft : null}
           interactive={tool === "text"}
           selectedId={selectedCallout}
@@ -821,6 +996,16 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
           onResize={resizeCallout}
         />
         <ArrowsOverlay items={pageSpots} />
+        {tool === "select" && selection?.pageKey === page.key && (
+          <SelectionOverlay
+            marks={preview?.selected ?? selectedMarks}
+            dragging={selectDrag !== null}
+            onColour={recolourSelection}
+            onWeight={reweightSelection}
+            onDuplicate={() => void duplicateSelection()}
+            onDelete={deleteSelection}
+          />
+        )}
         {box && (
           <ObservationBoxOverlay
             box={box}
@@ -895,6 +1080,9 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
               onErase={erase}
               onUnfill={unfill}
               onPlaceText={placeText}
+              selection={tool === "select" ? selection : null}
+              onSelectMarks={setSelection}
+              onSelectDrag={dragSelection}
               addPinMode={placingArrow !== null || copying !== null}
               onPlacePin={(page, at) =>
                 void (copying

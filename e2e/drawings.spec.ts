@@ -2200,3 +2200,111 @@ test("text callouts: hold and drag for a leader, tap for a box, select then edit
   // No pin was placed by any of that.
   await expect(page.getByTestId("viewer-pin")).toHaveCount(0);
 });
+
+test("select: tap or loop to pick marks, move, recolour, weight, resize, duplicate, delete", async ({
+  page,
+}) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openDrawing(page, "S-101 Level 3", false);
+  const toolbar = page.getByRole("toolbar", { name: "Markup tools" });
+  const tool = (name: string) =>
+    toolbar.getByRole("button", { name, exact: true });
+  const marks = page.getByTestId("mark");
+  const selection = page.getByTestId("selection");
+  const bar = page.getByRole("toolbar", { name: "Selection" });
+  const box = await stageBox(page);
+  const at = (fx: number, fy: number) => ({
+    x: box.x + box.width * fx,
+    y: box.y + box.height * fy,
+  });
+  const undo = page.getByRole("button", { name: "Undo" });
+
+  // A pen stroke and a rectangle.
+  await tool("Pen").click();
+  await drawLine(page, [0.2, 0.4], [0.3, 0.45]);
+  await tool("Rectangle").click();
+  await drawLine(page, [0.4, 0.4], [0.5, 0.5]);
+  await expect(marks).toHaveCount(2);
+
+  // Select: a tap on the stroke picks it alone.
+  await tool("Select").click();
+  await expect(toolbar).toContainText("draw a loop round several");
+  const onStroke = at(0.25, 0.425);
+  await page.mouse.click(onStroke.x, onStroke.y);
+  await expect(selection).toHaveAttribute("data-count", "1");
+  // A tap on open space lets go; Select stays on.
+  const off = at(0.8, 0.8);
+  await page.mouse.click(off.x, off.y);
+  await expect(selection).toHaveCount(0);
+  await expect(tool("Select")).toHaveAttribute("aria-pressed", "true");
+
+  // A loop round part of each picks both.
+  const loop = [at(0.27, 0.35), at(0.45, 0.35), at(0.45, 0.47), at(0.27, 0.47)];
+  await page.mouse.move(loop[0].x, loop[0].y);
+  await page.mouse.down();
+  for (const p of [...loop.slice(1), loop[0]])
+    await page.mouse.move(p.x, p.y, { steps: 6 });
+  await page.mouse.up();
+  await expect(selection).toHaveAttribute("data-count", "2");
+  await expect(bar).toBeVisible();
+
+  // Dragging inside the box moves both; Undo puts them back.
+  const before = await marks.locator("path").first().getAttribute("d");
+  const inside = at(0.45, 0.45);
+  await page.mouse.move(inside.x, inside.y);
+  await page.mouse.down();
+  await page.mouse.move(inside.x + 60, inside.y + 40, { steps: 8 });
+  await page.mouse.up();
+  await expect(marks.locator("path").first()).not.toHaveAttribute("d", before!);
+  await undo.click();
+  await expect(marks.locator("path").first()).toHaveAttribute("d", before!);
+
+  // Recolour and thicken both (one Undo step each).
+  await bar.getByRole("button", { name: "Colour" }).click();
+  await page.getByRole("button", { name: "Use #1E9E4A" }).click();
+  await expect(marks.nth(0)).toHaveAttribute("data-colour", "#1E9E4A");
+  await expect(marks.nth(1)).toHaveAttribute("data-colour", "#1E9E4A");
+  const width = await marks
+    .locator("path")
+    .first()
+    .getAttribute("stroke-width");
+  await bar.getByRole("button", { name: "Thick" }).click();
+  await expect(marks.locator("path").first()).not.toHaveAttribute(
+    "stroke-width",
+    width!,
+  );
+  await undo.click();
+  await undo.click();
+  await expect(marks.nth(0)).not.toHaveAttribute("data-colour", "#1E9E4A");
+
+  // Duplicate: copies become the selection; Delete removes them.
+  await bar.getByRole("button", { name: "Duplicate" }).click();
+  await expect(marks).toHaveCount(4);
+  await expect(selection).toHaveAttribute("data-count", "2");
+  await bar.getByRole("button", { name: "Delete" }).click();
+  await expect(marks).toHaveCount(2);
+  await expect(selection).toHaveCount(0);
+
+  // One shape: its corner handle resizes it.
+  const onRect = at(0.45, 0.45);
+  await page.mouse.click(onRect.x, onRect.y);
+  await expect(selection).toHaveAttribute("data-count", "1");
+  const rect = marks.nth(1).locator("path").first();
+  const shape = await rect.getAttribute("d");
+  const corner = (await page.getByTestId("handle-se").boundingBox())!;
+  await page.mouse.move(
+    corner.x + corner.width / 2,
+    corner.y + corner.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(corner.x + 80, corner.y + 60, { steps: 8 });
+  await page.mouse.up();
+  await expect(rect).not.toHaveAttribute("d", shape!);
+  await undo.click();
+  await expect(rect).toHaveAttribute("d", shape!);
+
+  // Turning Select off lets go.
+  await tool("Select").click();
+  await expect(selection).toHaveCount(0);
+});

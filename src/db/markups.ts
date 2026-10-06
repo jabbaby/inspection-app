@@ -48,11 +48,49 @@ export async function deleteMarkups(
   });
 }
 
+/** What can change on a saved mark. */
+export type MarkupPatch = Partial<
+  Pick<Markup, "points" | "text" | "fixedWidth" | "colour" | "weight">
+>;
+
+/** Adds several marks in one go (a duplicated selection). */
+export async function addMarkups(
+  db: InspectionDb,
+  marks: NewMarkup[],
+  now = Date.now(),
+): Promise<Markup[]> {
+  const records: Markup[] = marks.map((mark) => ({
+    ...mark,
+    id: crypto.randomUUID(),
+    createdAt: now,
+  }));
+  if (records.length === 0) return records;
+  await db.transaction("rw", [db.inspections, db.markups], async () => {
+    await db.markups.bulkAdd(records);
+    await touchInspection(db, records[0].inspectionId, now);
+  });
+  return records;
+}
+
+/** Changes several marks in one go (a selection moved or restyled). */
+export async function updateMarkups(
+  db: InspectionDb,
+  inspectionId: string,
+  changes: { id: string; patch: MarkupPatch }[],
+  now = Date.now(),
+): Promise<void> {
+  if (changes.length === 0) return;
+  await db.transaction("rw", [db.inspections, db.markups], async () => {
+    for (const { id, patch } of changes) await db.markups.update(id, patch);
+    await touchInspection(db, inspectionId, now);
+  });
+}
+
 /** Changes a mark's points or text (a callout typed again, moved or resized). */
 export async function updateMarkup(
   db: InspectionDb,
   mark: Pick<Markup, "id" | "inspectionId">,
-  patch: Partial<Pick<Markup, "points" | "text" | "fixedWidth">>,
+  patch: MarkupPatch,
   now = Date.now(),
 ): Promise<void> {
   await db.transaction("rw", [db.inspections, db.markups], async () => {

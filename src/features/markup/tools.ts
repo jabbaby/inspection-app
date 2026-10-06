@@ -2,7 +2,7 @@ import type { MarkKind } from "../../db/types";
 
 /** The markup toolbar's tools (SPEC section 5a); null means none is on. */
 export type ViewerTool =
-  "pin" | "pen" | "highlighter" | "shapes" | "text" | "eraser";
+  "pin" | "pen" | "highlighter" | "shapes" | "text" | "eraser" | "select";
 
 /** Tools that draw or erase with the Pencil (or a finger, with the toggle). */
 export function isInkTool(tool: ViewerTool | null): boolean {

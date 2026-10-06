@@ -1262,6 +1262,107 @@ dl.facts dd {
   touch-action: none;
 }
 
+/* With Select on, callouts are picked like other marks (the viewer does it). */
+.callouts-passive .callout-hit {
+  pointer-events: none;
+}
+
+/* Select (slice 2d): a dashed box round the picked marks, and a floating
+   bar scaled by the viewer to stay screen-sized. */
+.selection-overlay {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.select-bar {
+  position: absolute;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px;
+  border-radius: var(--radius-pill);
+  background: #1c1817;
+  box-shadow: var(--shadow-float);
+  color: #fff;
+  transform-origin: 0 0;
+  white-space: nowrap;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+
+.select-bar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: #fff;
+  font-size: var(--text-sm);
+}
+
+.select-bar button svg {
+  width: 18px;
+  height: 18px;
+}
+
+.select-bar .select-colour .markup-swatch {
+  margin: 0;
+  box-shadow: 0 0 0 2px #fff;
+}
+
+.select-bar button[aria-pressed="true"] {
+  background: rgb(255 255 255 / 0.18);
+}
+
+.select-weight-line {
+  display: block;
+  width: 18px;
+  border-radius: 4px;
+  background: #fff;
+}
+
+.select-bar .select-delete {
+  color: #ff8a8a;
+}
+
+.select-divider {
+  width: 1px;
+  height: 22px;
+  margin: 0 4px;
+  background: rgb(255 255 255 / 0.25);
+}
+
+.select-colours {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  display: grid;
+  grid-template-columns: repeat(6, 28px);
+  gap: 8px;
+  padding: 10px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-float);
+}
+
+.select-colours .markup-swatch {
+  width: 28px;
+  height: 28px;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+}
+
 /* The callout being typed, laid out at 16 px or more (iOS zooms into
    smaller text boxes) and scaled down to the callout's size. */
 .callout-editor {

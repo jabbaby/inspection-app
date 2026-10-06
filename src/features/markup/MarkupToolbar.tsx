@@ -46,6 +46,23 @@ const Callout = createLucideIcon("callout", [
   ["path", { d: "M2.4 16.6 3.5 20l2.7-2.3", key: "head" }],
 ]);
 
+/**
+ * Select: a lasso with a dotted loop (engineer, 2026-10-07), on Lucide's
+ * 24 px grid in its style.
+ */
+const DottedLasso = createLucideIcon("dotted-lasso", [
+  ["path", { d: "M7 22a5 5 0 0 1-2-4", key: "tail" }],
+  [
+    "path",
+    {
+      d: "M3.3 14A6.8 6.8 0 0 1 2 10c0-4.4 4.5-8 10-8s10 3.6 10 8-4.5 8-10 8a12 12 0 0 1-5-1",
+      strokeDasharray: "2 2.6",
+      key: "loop",
+    },
+  ],
+  ["path", { d: "M5 18a2 2 0 1 0 0-4 2 2 0 0 0 0 4z", key: "knot" }],
+]);
+
 /** The toolbar's buttons: tools, with each shape a button of its own. */
 const BUTTONS: {
   id: string;
@@ -71,6 +88,7 @@ const BUTTONS: {
     shape,
   })),
   { id: "text", label: "Text", Icon: Callout, tool: "text" },
+  { id: "select", label: "Select", Icon: DottedLasso, tool: "select" },
 ];
 
 const SHAPE_ICONS: Record<MarkupShape, LucideIcon> = {
@@ -103,6 +121,8 @@ const HINTS: Partial<Record<ViewerTool, string>> = {
   pin: "Tap for an instruction · double-tap for an observation · hold and drag for an arrow",
   eraser: "Touch a mark to remove it · tap inside a shape to take its fill off",
   text: "Tap for a text box · hold and drag for an arrow",
+  select:
+    "Tap a mark or draw a loop round several · tap open space to deselect",
 };
 
 /** An open slider or colour panel, under the button that opened it (screen px). */

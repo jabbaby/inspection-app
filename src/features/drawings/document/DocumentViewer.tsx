@@ -30,6 +30,14 @@ import {
   touchesMark,
 } from "../../markup/markGeometry";
 import type { MarkupShape } from "../../../db/types";
+import {
+  clampMove,
+  marksInLoop,
+  pickMark,
+  selectionBounds,
+  shapeHandles,
+  type HandleId,
+} from "../../markup/selectGeometry";
 import { isInkTool, type DocMark, type ViewerTool } from "../../markup/tools";
 import { DocPage, type SettledView } from "./DocPage";
 import { DOUBLE_TAP_MS, DOUBLE_TAP_SLOP } from "./gestures";
@@ -43,6 +51,17 @@ import {
   type DocumentLayout,
   type PageLayout,
 } from "./documentLayout";
+
+/** The marks the Select tool has picked, all on one page. */
+export interface MarkSelection {
+  pageKey: string;
+  ids: string[];
+}
+
+/** A selection being dragged (normalised on its page). */
+export type SelectDrag =
+  | { kind: "move"; dx: number; dy: number }
+  | { kind: "handle"; handle: HandleId; to: Point };
 
 export interface DocPin {
   id: string;
@@ -110,6 +129,15 @@ interface Props {
    * comes through `onTapDrawing`.
    */
   onPlaceText: (page: PageLayout, box: Point, tip: Point | null) => void;
+  /** The Select tool's picked marks (SPEC section 5a, slice 2d). */
+  selection: MarkSelection | null;
+  /** A tap or loop picked these marks (none: let go). */
+  onSelectMarks: (selection: MarkSelection | null) => void;
+  /**
+   * The selection (or one shape's handle) is being dragged; `done` when
+   * it lifts (`drag` null: it didn't move).
+   */
+  onSelectDrag: (drag: SelectDrag | null, done: boolean) => void;
   /** While true, every tap (finger, Pencil or mouse) places an arrow or copy. */
   addPinMode: boolean;
   onPlacePin: (page: PageLayout, at: Point) => void;
@@ -185,6 +213,9 @@ const STILL_SLOP = 6;
 const MIN_SHAPE = 6;
 /** A stroke is simplified to within this many screen px when saved. */
 const STROKE_TOLERANCE = 0.25;
+/** Screen px of grab round a selected shape's handles and its box. */
+const HANDLE_REACH = 22;
+const SELECT_MARGIN = 8;
 /** Released closer to the pin than this, the hold places just the pin. */
 const ARROW_MIN = 24;
 /** The hold ring shows only once a press has lasted this long. */
@@ -1062,10 +1093,240 @@ export function DocumentViewer(props: Props) {
       );
   }
 
+  // --- select (slice 2d) ----------------------------------------------------
+
+  const select = useRef<{
+    pointerId: number;
+    pointerType: string;
+    kind: "loop" | "move" | "handle";
+    page: PageLayout;
+    start: Point;
+    travel: number;
+    /** The loop drawn so far (screen px). */
+    loop: Point[];
+    handle: HandleId | null;
+    last: SelectDrag | null;
+    frame: number;
+  } | null>(null);
+
+  /** A page-unit point on `page` on the screen (viewer px). */
+  function unitsToScreen(page: PageLayout, u: Point): Point {
+    return pageToScreen(
+      currentTransform(),
+      pagePointToDoc(page, {
+        x: u.x / page.size.width,
+        y: u.y / page.size.height,
+      }),
+    );
+  }
+
+  /** The selected marks and their page, if any are still there. */
+  function selected() {
+    const sel = latest.current.selection;
+    const page = sel && pagesRef.current.get(sel.pageKey);
+    if (!sel || !page) return null;
+    const marks = latest.current.marks.filter(
+      (m) => m.pageKey === sel.pageKey && sel.ids.includes(m.id),
+    );
+    return marks.length ? { page, marks } : null;
+  }
+
+  /** The mark under `p` (viewer px) on `page`, if any. */
+  function markAt(page: PageLayout, p: Point) {
+    const size = page.size;
+    const n = onPagePoint(page, p);
+    return pickMark(
+      latest.current.marks.filter((m) => m.pageKey === page.key),
+      size,
+      { x: n.x * size.width, y: n.y * size.height },
+      ERASER_REACH / pxPerUnit(page),
+    );
+  }
+
+  /** A tap at `p` (viewer px): the mark under it, else nothing selected. */
+  function selectAt(p: Point) {
+    const hit = hitPage(currentLayout(), screenToPage(currentTransform(), p));
+    const mark = hit && markAt(hit.page, p);
+    latest.current.onSelectMarks(
+      hit && mark ? { pageKey: hit.page.key, ids: [mark.id] } : null,
+    );
+  }
+
+  /**
+   * A press with Select on: on a single shape's handle it resizes; inside
+   * the selection's box it moves it (finger too); otherwise the Pencil or
+   * mouse (or a finger with Draw with finger) draws a loop, or taps to pick.
+   * A plain finger elsewhere scrolls (its tap picks, in onPointerUp).
+   */
+  function startSelect(e: React.PointerEvent): boolean {
+    const p = local(e);
+    const begin = (
+      kind: "loop" | "move" | "handle",
+      page: PageLayout,
+      handle: HandleId | null = null,
+    ) => {
+      if (e.pointerType === "mouse") e.preventDefault();
+      capture(e);
+      hideSnapshot();
+      cancelHold();
+      tap.current = null;
+      select.current = {
+        pointerId: e.pointerId,
+        pointerType: e.pointerType,
+        kind,
+        page,
+        start: p,
+        travel: 0,
+        loop: [p],
+        handle,
+        last: null,
+        frame: 0,
+      };
+      return true;
+    };
+    const current = selected();
+    if (current) {
+      const { page, marks } = current;
+      if (marks.length === 1)
+        for (const h of shapeHandles(marks[0], page.size)) {
+          const at = unitsToScreen(page, h.at);
+          if (Math.hypot(at.x - p.x, at.y - p.y) <= HANDLE_REACH)
+            return begin("handle", page, h.id);
+        }
+      const b = selectionBounds(marks, page.size);
+      const tl = unitsToScreen(page, b);
+      const br = unitsToScreen(page, {
+        x: b.x + b.width,
+        y: b.y + b.height,
+      });
+      if (
+        p.x >= tl.x - SELECT_MARGIN &&
+        p.x <= br.x + SELECT_MARGIN &&
+        p.y >= tl.y - SELECT_MARGIN &&
+        p.y <= br.y + SELECT_MARGIN
+      )
+        return begin("move", page);
+    }
+    if (e.pointerType === "touch" && !latest.current.fingerDraw) return false;
+    const hit = hitPage(currentLayout(), screenToPage(currentTransform(), p));
+    if (!hit) return false;
+    return begin("loop", hit.page);
+  }
+
+  function moveSelect(e: React.PointerEvent) {
+    const s = select.current;
+    if (!s) return;
+    const p = local(e);
+    s.travel = Math.max(s.travel, Math.hypot(p.x - s.start.x, p.y - s.start.y));
+    if (s.kind === "loop") {
+      s.loop.push(p);
+      if (!s.frame) s.frame = requestAnimationFrame(drawLoop);
+      return;
+    }
+    if (s.travel < TAP_SLOP) return;
+    if (s.kind === "handle" && s.handle) {
+      s.last = {
+        kind: "handle",
+        handle: s.handle,
+        to: clampNormalised(onPagePoint(s.page, p)),
+      };
+    } else {
+      const current = selected();
+      if (!current) return;
+      const a = onPagePoint(s.page, s.start);
+      const b = onPagePoint(s.page, p);
+      s.last = {
+        kind: "move",
+        ...clampMove(
+          selectionBounds(current.marks, s.page.size),
+          s.page.size,
+          b.x - a.x,
+          b.y - a.y,
+        ),
+      };
+    }
+    latest.current.onSelectDrag(s.last, false);
+  }
+
+  function endSelect(cancelled: boolean) {
+    const s = select.current;
+    if (!s) return;
+    select.current = null;
+    cancelAnimationFrame(s.frame);
+    if (s.kind === "loop") {
+      clearInk();
+      if (cancelled) return;
+      if (s.travel < TAP_SLOP) return selectAt(s.start);
+      const size = s.page.size;
+      const loop = s.loop.map((q) => {
+        const n = onPagePoint(s.page, q);
+        return { x: n.x * size.width, y: n.y * size.height };
+      });
+      const ids = marksInLoop(
+        latest.current.marks.filter((m) => m.pageKey === s.page.key),
+        size,
+        loop,
+      ).map((m) => m.id);
+      latest.current.onSelectMarks(
+        ids.length ? { pageKey: s.page.key, ids } : null,
+      );
+      return;
+    }
+    latest.current.onSelectDrag(cancelled ? null : s.last, true);
+    // A tap inside the selection picks the mark under it (if any).
+    if (!s.last && s.kind === "move" && !cancelled) {
+      const mark = markAt(s.page, s.start);
+      if (mark)
+        latest.current.onSelectMarks({ pageKey: s.page.key, ids: [mark.id] });
+    }
+  }
+
+  /** The loop being drawn: a thin dashed line (screen px). */
+  function drawLoop() {
+    const s = select.current;
+    const canvas = inkRef.current;
+    if (!s || !canvas) return;
+    s.frame = 0;
+    const dpr = window.devicePixelRatio || 1;
+    const { width, height } = viewSize.current;
+    const pw = Math.round(width * dpr);
+    const ph = Math.round(height * dpr);
+    canvas.hidden = false;
+    if (canvas.width !== pw) canvas.width = pw;
+    if (canvas.height !== ph) canvas.height = ph;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = "#3b3b3b";
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    s.loop.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)));
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
   // Runs before pins and the notes box see the touch. A touch that lands
   // while the document is scrolling only stops it: on a pin or the box it
   // is swallowed; on the drawing it never places a pin.
   function onPointerDownCapture(e: React.PointerEvent) {
+    // Select takes the pointer before the drawing's own gestures (not on
+    // pins, the notes box or the selection's bar).
+    if (
+      latest.current.tool === "select" &&
+      !select.current &&
+      !(e.pointerType === "touch" && !e.isPrimary) &&
+      !(e.pointerType === "mouse" && e.button !== 0) &&
+      !(e.target as Element).closest(
+        ".viewer-pin, .arrow-handle, .observation-box, .select-bar",
+      ) &&
+      startSelect(e)
+    ) {
+      e.stopPropagation();
+      return;
+    }
     // Drawing and erasing take the pointer before pins and the notes box.
     if (inks(e)) {
       e.stopPropagation();
@@ -1130,6 +1391,7 @@ export function DocumentViewer(props: Props) {
 
   function onPointerMove(e: React.PointerEvent) {
     if (ink.current?.pointerId === e.pointerId) return moveInk(e);
+    if (select.current?.pointerId === e.pointerId) return moveSelect(e);
     const h = hold.current;
     if (h?.pointerId === e.pointerId) {
       if (h.held) return holdMove(local(e));
@@ -1164,6 +1426,7 @@ export function DocumentViewer(props: Props) {
   }
 
   function onPointerUp(e: React.PointerEvent) {
+    if (select.current?.pointerId === e.pointerId) return endSelect(false);
     if (ink.current?.pointerId === e.pointerId) {
       // A cancelled pointer still keeps what was drawn (Safari can cancel
       // one mid-stroke); a pinch drops it before this (touchstart).
@@ -1204,6 +1467,10 @@ export function DocumentViewer(props: Props) {
       if (hit) latest.current.onPlacePin(hit.page, hit.at);
     } else if (second && latest.current.tool === "pin") {
       latest.current.onDoubleTap({ hit });
+    } else if (latest.current.tool === "select") {
+      // A finger's tap with Select on picks the mark under it.
+      latest.current.onTapDrawing(hit);
+      selectAt(local(e));
     } else {
       // A tap on the drawing itself (pins, arrow tips and the notes box
       // handle their own taps).
@@ -1435,6 +1702,8 @@ export function DocumentViewer(props: Props) {
       // A second finger while drawing with one: a pinch, not a stroke.
       if (list.length >= 2 && ink.current?.pointerType === "touch")
         endInk(true);
+      if (list.length >= 2 && select.current?.pointerType === "touch")
+        endSelect(true);
       if (list.length < 2) {
         // A new touch works on the real document (a scroll, a tap): show it.
         if (!pinch.current) hideSnapshot();
@@ -1452,8 +1721,8 @@ export function DocumentViewer(props: Props) {
         if (e.cancelable) e.preventDefault();
         return;
       }
-      // Drawing or erasing owns the touch: the document stays still.
-      if (ink.current) {
+      // Drawing, erasing or selecting owns the touch: the document stays still.
+      if (ink.current || select.current) {
         if (e.cancelable) e.preventDefault();
         return;
       }

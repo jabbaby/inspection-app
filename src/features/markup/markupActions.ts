@@ -3,10 +3,13 @@ import { pushUndo } from "../../app/undo";
 import { db } from "../../db/db";
 import {
   addMarkup,
+  addMarkups,
   deleteMarkups,
   restoreMarkups,
   setMarkupFill,
   updateMarkup,
+  updateMarkups,
+  type MarkupPatch,
   type NewMarkup,
 } from "../../db/markups";
 import type { Markup } from "../../db/types";
@@ -35,6 +38,7 @@ export async function drawWithUndo(mark: NewMarkup): Promise<Markup> {
 export async function eraseWithUndo(
   inspectionId: string,
   marks: Markup[],
+  label = marks.length === 1 ? "Erase" : `Erase ${marks.length} marks`,
 ): Promise<void> {
   if (marks.length === 0) return;
   await deleteMarkups(
@@ -43,7 +47,7 @@ export async function eraseWithUndo(
     marks.map((m) => m.id),
   );
   pushUndo(inspectionId, {
-    label: marks.length === 1 ? "Erase" : `Erase ${marks.length} marks`,
+    label,
     undo: () => restoreMarkups(db, marks),
     redo: () =>
       deleteMarkups(
@@ -81,4 +85,63 @@ export async function changeMarkWithUndo(
     undo: () => updateMarkup(db, mark, before),
     redo: () => updateMarkup(db, mark, patch),
   });
+}
+
+/**
+ * Several marks changed at once (a selection moved, resized, recoloured or
+ * given a new weight): one Undo step.
+ */
+export async function changeMarksWithUndo(
+  marks: Markup[],
+  patchOf: (mark: Markup) => MarkupPatch,
+  label: string,
+): Promise<void> {
+  if (marks.length === 0) return;
+  const inspectionId = marks[0].inspectionId;
+  const after = marks.map((m) => ({ id: m.id, patch: patchOf(m) }));
+  const before = marks.map((m, i) => ({
+    id: m.id,
+    patch: Object.fromEntries(
+      Object.keys(after[i].patch).map((k) => [k, m[k as keyof MarkupPatch]]),
+    ) as MarkupPatch,
+  }));
+  await updateMarkups(db, inspectionId, after);
+  pushUndo(inspectionId, {
+    label,
+    undo: () => updateMarkups(db, inspectionId, before),
+    redo: () => updateMarkups(db, inspectionId, after),
+  });
+}
+
+/** Copies of marks, each moved by (dx, dy) normalised: one Undo step. */
+export async function duplicateWithUndo(
+  marks: Markup[],
+  movedOf: (mark: Markup) => number[],
+): Promise<Markup[]> {
+  if (marks.length === 0) return [];
+  const inspectionId = marks[0].inspectionId;
+  const records = await addMarkups(
+    db,
+    marks.map((m) => {
+      const copy: NewMarkup & { id?: string; createdAt?: number } = {
+        ...m,
+        points: movedOf(m),
+      };
+      delete copy.id;
+      delete copy.createdAt;
+      return copy;
+    }),
+  );
+  pushUndo(inspectionId, {
+    label:
+      records.length === 1 ? "Duplicate" : `Duplicate ${records.length} marks`,
+    undo: () =>
+      deleteMarkups(
+        db,
+        inspectionId,
+        records.map((r) => r.id),
+      ),
+    redo: () => restoreMarkups(db, records),
+  });
+  return records;
 }
