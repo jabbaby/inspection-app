@@ -430,10 +430,11 @@ function drawPins(
       if (!shape) continue;
       const pt = (p: Point) =>
         toScreen(page, { x: p.x / width, y: p.y / height });
-      const [a, b] = shape.line.map(pt);
+      ctx.lineJoin = "round";
       ctx.beginPath();
-      ctx.moveTo(a.x, a.y);
-      ctx.lineTo(b.x, b.y);
+      shape.line
+        .map(pt)
+        .forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
       ctx.stroke();
       const head = shape.head.map(pt);
       ctx.beginPath();

@@ -16,8 +16,9 @@ describe("arrows", () => {
     expect(shape.head[0]).toEqual({ x: 400, y: 100 });
     expect(shape.line[0]).toEqual({ x: 100, y: 100 });
     // The line stops at the head's base.
-    expect(shape.line[1].x).toBeCloseTo(400 - m.headLength);
-    expect(shape.line[1].y).toBeCloseTo(100);
+    const end = shape.line[shape.line.length - 1];
+    expect(end.x).toBeCloseTo(400 - m.headLength);
+    expect(end.y).toBeCloseTo(100);
     // The back corners sit either side of the line.
     expect(shape.head[1].x).toBeCloseTo(400 - m.headLength);
     expect(Math.abs(shape.head[1].y - shape.head[2].y)).toBeCloseTo(
@@ -34,6 +35,22 @@ describe("arrows", () => {
       expect(Math.hypot(corner.x - tip.x, corner.y - tip.y)).toBeGreaterThan(
         m.headLength,
       );
+  });
+
+  test("to the side: a dog leg out of the pin's side facing the tip", () => {
+    const elbow = 1683.78 * 0.04;
+    const left = arrowShape({ x: 1000, y: 800 }, { x: 600, y: 400 }, A1)!;
+    expect(left.line).toHaveLength(3);
+    expect(left.line[1]).toEqual({ x: 1000 - elbow, y: 800 });
+    expect(left.head[0]).toEqual({ x: 600, y: 400 });
+    const right = arrowShape({ x: 1000, y: 800 }, { x: 1400, y: 1200 }, A1)!;
+    expect(right.line[1]).toEqual({ x: 1000 + elbow, y: 800 });
+  });
+
+  test("above or below the pin: straight", () => {
+    const shape = arrowShape({ x: 1000, y: 800 }, { x: 1030, y: 400 }, A1)!;
+    expect(shape.line).toHaveLength(2);
+    expect(shape.line[0]).toEqual({ x: 1000, y: 800 });
   });
 
   test("are left out when the tip is on top of the pin", () => {

@@ -96,14 +96,17 @@ export function drawPageMarkup(
       );
       if (!shape) continue;
       const flip = (p: Point) => ({ x: p.x, y: size.height - p.y });
-      const [a, b] = shape.line.map(flip);
-      page.drawLine({
-        start: a,
-        end: b,
-        thickness: am.strokeWidth,
-        color: colour,
-        lineCap: 1,
-      });
+      // Each leg with round caps, so a dog leg's elbow is rounded too.
+      const line = shape.line.map(flip);
+      line.slice(1).forEach((end, i) =>
+        page.drawLine({
+          start: line[i],
+          end,
+          thickness: am.strokeWidth,
+          color: colour,
+          lineCap: 1,
+        }),
+      );
       const head = shape.head;
       page.drawSvgPath(
         `M ${head[0].x} ${head[0].y} L ${head[1].x} ${head[1].y} L ${head[2].x} ${head[2].y} Z`,
