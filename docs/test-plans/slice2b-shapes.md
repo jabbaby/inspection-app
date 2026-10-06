@@ -11,7 +11,7 @@ Reply with the step number and what you saw (no need to edit this file).
 - Use an inspection with a drawing (the synthetic test drawing is fine).
 
 ## The shape buttons
-1. **Buttons.** The toolbar has a button for each shape after the highlighter: line, arrow, rectangle, ellipse, cloud. Tap one: it turns on, with weights and colours like the pen.
+1. **Buttons.** The toolbar reads Pin, Pen, **Eraser**, Highlighter, then a button for each shape: line, arrow, rectangle, ellipse, cloud. Tap one: it turns on, with weights and colours like the pen.
 2. **Toggle.** Tap another shape: it switches to that one. Tap the one that's on: it turns off.
 3. **Fits.** In portrait, with a shape on, the whole toolbar fits across the screen (or scrolls sideways if not; tell me).
 

@@ -39,6 +39,7 @@ const BUTTONS: {
 }[] = [
   { id: "pin", label: "Pin", Icon: MapPin, tool: "pin" },
   { id: "pen", label: "Pen", Icon: Pen, tool: "pen" },
+  { id: "eraser", label: "Eraser", Icon: Eraser, tool: "eraser" },
   {
     id: "highlighter",
     label: "Highlighter",
@@ -52,7 +53,6 @@ const BUTTONS: {
     tool: "shapes" as const,
     shape,
   })),
-  { id: "eraser", label: "Eraser", Icon: Eraser, tool: "eraser" },
 ];
 
 const SHAPE_ICONS: Record<MarkupShape, LucideIcon> = {
