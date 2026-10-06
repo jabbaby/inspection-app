@@ -36,3 +36,9 @@ Reply with the step number and what you saw (no need to edit this file).
 ## Export and backup
 18. **PDF pack.** Export: the callouts are in the same places, the same size, with the same line breaks, and the text can be selected or searched in the PDF.
 19. **Backup.** Back up, delete and import the inspection: the callouts come back.
+
+## Follow-up (2026-10-06): moving callouts, tapping off
+20. **Tap off.** While typing a callout, tap an empty part of the drawing: the keyboard closes and the callout is kept, and no new callout starts.
+21. **Move with the Pencil.** With Text on, press on (or just next to) a callout's box and drag: it moves, its arrow still pointing at the same spot.
+22. **Re-point.** With Text on, a small hollow circle shows at each arrow's tip. Drag it: the arrow points at the new spot.
+23. **With a finger.** Do 21 and 22 with a finger: the callout moves and the page doesn't scroll. Away from callouts, a finger still scrolls.

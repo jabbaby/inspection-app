@@ -1478,6 +1478,13 @@ export function DocumentViewer(props: Props) {
       if (!pinch.current) startPinch(list);
     };
     const onTouchMove = (e: TouchEvent) => {
+      // A finger dragging a callout (Text tool on) moves it, not the page.
+      if (
+        (e.target as Element | null)?.closest?.(".callouts-live .callout-hit")
+      ) {
+        if (e.cancelable) e.preventDefault();
+        return;
+      }
       // Drawing or erasing owns the touch: the document stays still.
       if (ink.current) {
         if (e.cancelable) e.preventDefault();

@@ -1240,9 +1240,16 @@ dl.facts dd {
   pointer-events: none;
 }
 
-.callouts-live .callout rect,
-.callouts-live .callout-tip {
+.callout-hit,
+.callout-handle {
+  pointer-events: none;
+}
+
+/* With the Text tool on, the grab areas take the touch, finger included
+   (it would otherwise scroll the page). */
+.callouts-live .callout-hit {
   pointer-events: auto;
+  touch-action: none;
 }
 
 /* The callout being typed, laid out at 16 px or more (iOS zooms into

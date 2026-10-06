@@ -41,6 +41,11 @@ interface Props {
 
 /** iOS zooms the page into any text box under 16 px: type at 16 px or more. */
 const MIN_INPUT_PX = 16;
+/** Screen px of grab area round a callout's box and its arrow tip. */
+const BOX_REACH_PX = 14;
+const TIP_REACH_PX = 22;
+/** Screen px radius of the tip handle shown with the Text tool on. */
+const HANDLE_PX = 7;
 
 /**
  * A page's text callouts (SPEC section 5a): white boxes of capitals with a
@@ -154,6 +159,18 @@ export const CalloutsOverlay = memo(function CalloutsOverlay({
     ).leader;
   }, [draft, width, height]);
 
+  // Page units per screen px at the current zoom, so grab areas stay
+  // finger-sized however far in or out the drawing is.
+  const origin = clientToNormalised(0, 0);
+  const across = clientToNormalised(100, 0);
+  const unitsPerPx = Math.max(
+    1e-6,
+    (Math.hypot(
+      (across.x - origin.x) * width,
+      (across.y - origin.y) * height,
+    ) || 1) / 100,
+  );
+
   if (shown.length === 0 && !draft) return null;
   return (
     <>
@@ -203,11 +220,6 @@ export const CalloutsOverlay = memo(function CalloutsOverlay({
                   <polygon
                     points={leader.head.map((p) => `${p.x},${p.y}`).join(" ")}
                     fill={mark.colour}
-                    className="callout-tip"
-                    onPointerDown={(e) => down(e, mark, "tip")}
-                    onPointerMove={move}
-                    onPointerUp={up}
-                    onPointerCancel={up}
                   />
                 </>
               )}
@@ -219,11 +231,46 @@ export const CalloutsOverlay = memo(function CalloutsOverlay({
                 fill="#fff"
                 stroke={mark.colour}
                 strokeWidth={metrics.border}
+              />
+              {/* Grab areas (Text tool on): round the box, and the tip. */}
+              <rect
+                className="callout-hit"
+                data-testid="callout-box"
+                x={box.x - BOX_REACH_PX * unitsPerPx}
+                y={box.y - BOX_REACH_PX * unitsPerPx}
+                width={box.width + 2 * BOX_REACH_PX * unitsPerPx}
+                height={box.height + 2 * BOX_REACH_PX * unitsPerPx}
+                fill="transparent"
                 onPointerDown={(e) => down(e, mark, "box")}
                 onPointerMove={move}
                 onPointerUp={up}
                 onPointerCancel={up}
               />
+              {leader && interactive && (
+                <circle
+                  className="callout-handle"
+                  cx={leader.head[0].x}
+                  cy={leader.head[0].y}
+                  r={HANDLE_PX * unitsPerPx}
+                  fill="#fff"
+                  stroke={mark.colour}
+                  strokeWidth={2 * unitsPerPx}
+                />
+              )}
+              {leader && (
+                <circle
+                  className="callout-hit"
+                  data-testid="callout-tip"
+                  cx={leader.head[0].x}
+                  cy={leader.head[0].y}
+                  r={TIP_REACH_PX * unitsPerPx}
+                  fill="transparent"
+                  onPointerDown={(e) => down(e, mark, "tip")}
+                  onPointerMove={move}
+                  onPointerUp={up}
+                  onPointerCancel={up}
+                />
+              )}
               {lines.map((line, i) => (
                 <text
                   key={i}

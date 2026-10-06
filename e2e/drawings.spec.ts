@@ -2047,15 +2047,58 @@ test("text callouts: drag to place with a leader, type capitals, edit, empty rem
 
   // With Text on, tapping it edits it.
   await textTool.click();
-  await callouts.first().locator("rect").click();
+  await callouts.first().getByTestId("callout-box").click();
   await expect(editor).toHaveValue("LAP 600 MIN");
   await editor.fill("lap 900 min");
-  await textTool.click();
+  // A tap elsewhere only closes the editor (no new callout).
+  const box = await stageBox(page);
+  await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.75);
+  await expect(editor).toHaveCount(0);
+  await expect(callouts).toHaveCount(1);
   await expect(callouts.first()).toHaveAttribute("aria-label", "LAP 900 MIN");
+
+  // Dragging the box moves it; dragging the tip re-points the arrow.
+  const before = (await callouts.first().locator("line").getAttribute("x2"))!;
+  const boxX = (await callouts
+    .first()
+    .getByTestId("callout-box")
+    .getAttribute("x"))!;
+  const grab = (await callouts
+    .first()
+    .getByTestId("callout-box")
+    .boundingBox())!;
+  await page.mouse.move(grab.x + grab.width / 2, grab.y + grab.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(
+    grab.x + grab.width / 2 + 80,
+    grab.y + grab.height / 2 + 40,
+    { steps: 8 },
+  );
+  await page.mouse.up();
+  await expect(callouts.first().getByTestId("callout-box")).not.toHaveAttribute(
+    "x",
+    boxX,
+  );
+  const tip = (await callouts
+    .first()
+    .getByTestId("callout-tip")
+    .boundingBox())!;
+  await page.mouse.move(tip.x + tip.width / 2, tip.y + tip.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(
+    tip.x + tip.width / 2 - 60,
+    tip.y + tip.height / 2 + 30,
+    { steps: 8 },
+  );
+  await page.mouse.up();
+  await expect(callouts.first().locator("line")).not.toHaveAttribute(
+    "x2",
+    before,
+  );
+  await textTool.click();
 
   // A tap (no drag) places a box without a leader; left empty, it's dropped.
   await textTool.click();
-  const box = await stageBox(page);
   await page.mouse.click(box.x + box.width * 0.2, box.y + box.height * 0.7);
   await expect(editor).toBeFocused();
   await textTool.click();
@@ -2063,7 +2106,7 @@ test("text callouts: drag to place with a leader, type capitals, edit, empty rem
 
   // Emptied, a callout goes; Undo brings it back.
   await textTool.click();
-  await callouts.first().locator("rect").click();
+  await callouts.first().getByTestId("callout-box").click();
   await editor.fill("");
   await textTool.click();
   await expect(callouts).toHaveCount(0);

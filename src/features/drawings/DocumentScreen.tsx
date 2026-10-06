@@ -90,6 +90,14 @@ async function backfillPageSizes(drawing: Drawing) {
 
 const NO_MARKS: DocMark[] = [];
 
+/** Now, in performance.now() time (event handlers only). */
+function nowMs() {
+  return performance.now();
+}
+
+/** A tap this soon after a callout finished only closed it. */
+const CLOSE_TAP_MS = 600;
+
 /** Milliseconds until a performance.now() time (event handlers only). */
 function msUntil(time: number) {
   return time - performance.now();
@@ -319,12 +327,15 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
     draftRef.current = next;
     setDraft(next);
   }
+  /** When a callout being typed last finished (the box lost focus). */
+  const draftClosed = useRef(-Infinity);
 
   /** Saves the callout being typed: empty, it goes (or isn't made). */
   async function commitDraft() {
     const d = draftRef.current;
     if (!d) return;
     putDraft(null);
+    draftClosed.current = nowMs();
     const page = layout.pages.find((p) => p.key === d.pageKey);
     const existing = d.id ? marks?.find((m) => m.id === d.id) : undefined;
     if (!page) return;
@@ -364,7 +375,11 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
   }
 
   function placeText(page: PageLayout, box: Point, tip: Point | null) {
-    void commitDraft();
+    // While one is being typed, a tap elsewhere only finishes it (like
+    // tapping off the Items panel). The box usually loses focus as the
+    // finger goes down, so a tap just after counts too.
+    if (draftRef.current) return void commitDraft();
+    if (nowMs() - draftClosed.current < CLOSE_TAP_MS) return;
     putDraft({
       pageKey: page.key,
       id: null,
