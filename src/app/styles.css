@@ -728,11 +728,6 @@ dl.facts dd {
   inset: 0;
 }
 
-/* Pen and highlighter marks, painted like the drawing (DocPage). */
-.viewer-marks {
-  pointer-events: none;
-}
-
 .viewer-layer canvas {
   position: absolute;
 }
@@ -1225,7 +1220,9 @@ dl.facts dd {
   margin: 0;
 }
 
-/* Arrows from pins (drawn in page units, under the notes box). */
+/* Arrows from pins (drawn in page units, under the notes box), and pen and
+   highlighter marks under them (SPEC section 5a). */
+.markup-overlay,
 .arrows-overlay {
   position: absolute;
   left: 0;

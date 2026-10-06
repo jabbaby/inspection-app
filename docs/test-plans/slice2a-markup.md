@@ -69,11 +69,8 @@ Reply with the step number and what you saw (no need to edit this file).
 40. **Rewording.** Reword A for the memo: the note still follows the reworded text.
 41. **Settings.** Settings, prefilled messages, has a **Photo confirmation note** (one, no Add or Delete). Change its wording: the memo follows. Empty it: no note in the memo.
 
-## Follow-up (2026-10-06): drawing feel, scrolling and zoom
-42. **Drawing feel.** Draw quickly with the Pencil: the line sits on the tip with no drag. When you lift, the line evens out very slightly (no jump).
-43. **Scrolling with markup.** Scroll through pages with lines and highlights: they appear as fast as pages without.
-44. **Sharp when zoomed.** Zoom right in on a page with markup: the drawing and the lines sharpen (not blurry), on every page you try.
-45. **Quick preview.** Zoom into a new area: within a moment it looks nearly sharp, then fully sharp a little after.
-46. **Back to where you were.** Zoom in on an area, zoom out to find your place, then zoom back into the same area: it's sharp straight away, with no pause.
-47. **Small scrolls.** Zoomed in, scroll a little way: it stays sharp (the sharp area reaches a bit past the screen).
-48. **Long session.** Work zoomed in across several pages for a few minutes: nothing turns blurry and stays blurry. If it does, tell me the page and what you did just before.
+## Follow-up (2026-10-06, rollback): zoom back to before, Pencil prediction switch
+42. **Sharp zoom again.** Zoom right in on pages with and without markup: the drawing and the lines sharpen fully, as they did before yesterday's change.
+43. **Drawing.** The line still follows the tip exactly while drawing, evens out very slightly when you lift, and has no white crescents in the PDF.
+44. **Scrolling with markup.** Expected to be slow again on pages with a lot of markup (known; fixed properly next). Tell me how bad it is.
+45. **Pencil prediction.** Settings, **Drawing**, turn on **Pencil prediction**. Draw fast curves and quick zigzags: does the line keep up with the tip better? Does it ever poke past a sharp corner for a moment? Compare with it off and tell me which you prefer.

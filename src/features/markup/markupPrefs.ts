@@ -23,6 +23,8 @@ export interface MarkupPrefs {
   selected: Record<MarkupTool, number>;
   weight: Record<MarkupTool, number>;
   fingerDraw: boolean;
+  /** Draw the stroke on to the iPad's predicted Pencil points (Settings). */
+  predict: boolean;
 }
 
 const KEY = "markup-prefs";
@@ -45,6 +47,7 @@ export const DEFAULT_PREFS: MarkupPrefs = {
     highlighter: WEIGHT_PRESETS.highlighter[1],
   },
   fingerDraw: false,
+  predict: false,
 };
 
 /** The colours the Pen colour (or Highlighter colour) panel offers. */
@@ -118,6 +121,7 @@ export function parsePrefs(raw: string | null): MarkupPrefs {
   }
   if (typeof stored.fingerDraw === "boolean")
     prefs.fingerDraw = stored.fingerDraw;
+  if (typeof stored.predict === "boolean") prefs.predict = stored.predict;
   return prefs;
 }
 

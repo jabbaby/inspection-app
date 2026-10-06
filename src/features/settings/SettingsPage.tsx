@@ -16,6 +16,7 @@ import {
   type StorageStatus,
 } from "../../db/storage";
 import type { SnippetKind } from "../../db/types";
+import { DrawingSettings } from "./DrawingSettings";
 import { MyDetailsForm, MySignature } from "./MyDetailsForm";
 import { SnippetsEditor } from "./SnippetsEditor";
 import { BackupAll } from "../backup/BackupAll";
@@ -108,6 +109,8 @@ export function SettingsPage() {
             </p>
             <SnippetsEditor />
           </section>
+
+          <DrawingSettings />
 
           <section
             id="storage"
