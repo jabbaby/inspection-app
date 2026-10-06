@@ -8,6 +8,8 @@ import { visiblePart, type PageLayout } from "./documentLayout";
 
 // iPad Safari limits total canvas memory, and several pages can be live.
 const MAX_BASE_PIXELS = 4_000_000;
+/** Pixels for the sharp part on screen, shared by the pages showing. */
+const TILE_PIXELS = 12_000_000;
 
 export interface SettledView {
   /** Visible document rectangle (document units). */
@@ -272,7 +274,7 @@ export function DocPage({
     tileTask.current?.cancel();
     if (!proxy || !view || !rendered) return;
     const part = visiblePart(page, view.docRect);
-    let scale = view.devicePxPerDocUnit * page.scale;
+    const scale = view.devicePxPerDocUnit * page.scale;
     if (!part || scale <= baseScale.current * 1.1) {
       clearHost(tileHost.current);
       if (tileArea.current) {
@@ -291,49 +293,65 @@ export function DocPage({
     rect.width = Math.min(page.size.width, part.x + part.width + pad) - rect.x;
     rect.height =
       Math.min(page.size.height, part.y + part.height + pad) - rect.y;
-    const budget = 12_000_000 / Math.max(1, view.visibleCount);
+    // The sharp layers share one pixel budget (iPad Safari caps total
+    // canvas memory; past it, new canvases silently fail and the page stays
+    // blurry): a page with marks has two, the drawing's and the marks'.
+    // Even halved it is more than the screen's own pixels.
+    const layers = marksRef.current.length > 0 ? 2 : 1;
+    const budget = TILE_PIXELS / layers / Math.max(1, view.visibleCount);
     const area = rect.width * rect.height;
-    if (area * scale * scale > budget) scale = Math.sqrt(budget / area);
+    const target = scale;
 
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.ceil(rect.width * scale);
-    canvas.height = Math.ceil(rect.height * scale);
-    Object.assign(canvas.style, {
-      left: `${rect.x}px`,
-      top: `${rect.y}px`,
-      width: `${rect.width}px`,
-      height: `${rect.height}px`,
-    });
-    const task = proxy.render({
-      canvas,
-      viewport: proxy.getViewport({
-        scale,
-        offsetX: -rect.x * scale,
-        offsetY: -rect.y * scale,
-      }),
-    });
-    tileTask.current = task;
-    // A pinch cancels it; the next settled view draws it again.
-    const unregister = registerRender(() => task.cancel());
-    task.promise.then(
-      () => {
-        unregister();
-        if (tileTask.current !== task) return releaseCanvas(canvas);
-        clearHost(tileHost.current);
-        tileHost.current?.appendChild(canvas);
-        tileTask.current = null;
-        tileArea.current = { rect, scale };
-        repaintMarks();
-      },
-      (error: unknown) => {
-        unregister();
-        releaseCanvas(canvas);
-        if (!isCancel(error)) console.error("Tile render failed", error);
-      },
-    );
+    let task: RenderTask | null = null;
+    let unregister = () => {};
+    const start = (pixels: number, retry: boolean) => {
+      const tileScale =
+        area * target * target > pixels ? Math.sqrt(pixels / area) : target;
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.ceil(rect.width * tileScale);
+      canvas.height = Math.ceil(rect.height * tileScale);
+      Object.assign(canvas.style, {
+        left: `${rect.x}px`,
+        top: `${rect.y}px`,
+        width: `${rect.width}px`,
+        height: `${rect.height}px`,
+      });
+      const current = proxy.render({
+        canvas,
+        viewport: proxy.getViewport({
+          scale: tileScale,
+          offsetX: -rect.x * tileScale,
+          offsetY: -rect.y * tileScale,
+        }),
+      });
+      task = current;
+      tileTask.current = current;
+      // A pinch cancels it; the next settled view draws it again.
+      unregister = registerRender(() => current.cancel());
+      current.promise.then(
+        () => {
+          unregister();
+          if (tileTask.current !== current) return releaseCanvas(canvas);
+          clearHost(tileHost.current);
+          tileHost.current?.appendChild(canvas);
+          tileTask.current = null;
+          tileArea.current = { rect, scale: tileScale };
+          repaintMarks();
+        },
+        (error: unknown) => {
+          unregister();
+          releaseCanvas(canvas);
+          if (isCancel(error) || tileTask.current !== current) return;
+          console.error("Tile render failed", error);
+          // Out of canvas memory, most likely: once more, smaller.
+          if (retry) start(pixels / 4, false);
+        },
+      );
+    };
+    start(budget, true);
     return () => {
       unregister();
-      task.cancel();
+      task?.cancel();
     };
     // repaintMarks reads refs (the marks have their own effect).
     // eslint-disable-next-line react-hooks/exhaustive-deps

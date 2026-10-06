@@ -128,13 +128,36 @@ export function thinStroke(points: Point[], width: number): Point[] {
   return kept;
 }
 
-/** A saved mark's path data in page units (see thinStroke). */
+/**
+ * A light evening-out once the Pencil has lifted: each point is averaged
+ * with its neighbours (twice), the ends stay put. The stroke being drawn
+ * isn't smoothed, so the line still follows the tip exactly.
+ */
+export function smoothLifted(points: Point[]): Point[] {
+  let out = points;
+  for (let pass = 0; pass < 2 && out.length > 2; pass++) {
+    const prev = out;
+    out = prev.map((p, i) =>
+      i === 0 || i === prev.length - 1
+        ? p
+        : {
+            x: (prev[i - 1].x + 2 * p.x + prev[i + 1].x) / 4,
+            y: (prev[i - 1].y + 2 * p.y + prev[i + 1].y) / 4,
+          },
+    );
+  }
+  return out;
+}
+
+/** A saved mark's path data in page units: thinned, then evened out. */
 export function markPath(
   mark: Pick<Markup, "points" | "weight">,
   page: Size,
 ): string {
   return strokePath(
-    thinStroke(toPagePoints(mark.points, page), markWidth(mark.weight, page)),
+    smoothLifted(
+      thinStroke(toPagePoints(mark.points, page), markWidth(mark.weight, page)),
+    ),
   );
 }
 

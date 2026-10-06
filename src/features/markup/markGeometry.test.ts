@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   markPath,
   markWidth,
+  smoothLifted,
   thinStroke,
   simplify,
   strokePath,
@@ -75,6 +76,20 @@ describe("mark geometry", () => {
       expect(
         Math.hypot(thin[i].x - thin[i - 1].x, thin[i].y - thin[i - 1].y),
       ).toBeGreaterThanOrEqual(width / 3);
+  });
+
+  test("after lifting, a stroke is evened out a little; the ends stay", () => {
+    const zigzag = Array.from({ length: 9 }, (_, i) => ({
+      x: i * 10,
+      y: i % 2 ? 6 : 0,
+    }));
+    const even = smoothLifted(zigzag);
+    expect(even[0]).toEqual(zigzag[0]);
+    expect(even.at(-1)).toEqual(zigzag.at(-1));
+    const wobble = (pts: { y: number }[]) =>
+      Math.max(...pts.slice(1, -1).map((p) => p.y)) -
+      Math.min(...pts.slice(1, -1).map((p) => p.y));
+    expect(wobble(even)).toBeLessThan(wobble(zigzag) / 2);
   });
 
   test("a mark's path goes through its own points", () => {
