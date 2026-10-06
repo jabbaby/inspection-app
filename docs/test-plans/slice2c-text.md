@@ -42,3 +42,5 @@ Reply with the step number and what you saw (no need to edit this file).
 21. **Move with the Pencil.** With Text on, press on (or just next to) a callout's box and drag: it moves, its arrow still pointing at the same spot.
 22. **Re-point.** With Text on, a small hollow circle shows at each arrow's tip. Drag it: the arrow points at the new spot.
 23. **With a finger.** Do 21 and 22 with a finger: the callout moves and the page doesn't scroll. Away from callouts, a finger still scrolls.
+24. **Like a pin.** With no tool on (and with Pin on), tap a callout: it opens for editing. Drag it: it moves. Drag its arrow tip: it re-points. No pin is placed.
+25. **Drawing tools.** With Pen on, draw over a callout with the Pencil: it draws (the callout doesn't move). A finger on the callout still moves it.

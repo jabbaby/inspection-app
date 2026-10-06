@@ -615,6 +615,11 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
 
   function tapDrawing(hit: { page: PageLayout; at: Point } | null) {
     placedByTap.current = null;
+    // A callout being typed closes first, like an open item.
+    if (draftRef.current) {
+      void commitDraft();
+      return;
+    }
     // Tapping the drawing closes what's open beside it: an item's editor
     // first (its text is saved), then the Items or Drawings panel. With
     // nothing open and the Pin tool on, it places an instruction pin.

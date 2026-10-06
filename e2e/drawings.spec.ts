@@ -2112,4 +2112,32 @@ test("text callouts: drag to place with a leader, type capitals, edit, empty rem
   await expect(callouts).toHaveCount(0);
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(callouts).toHaveCount(1);
+
+  // Like a pin, with no tool on: tap to edit, drag to move.
+  await expect(textTool).toHaveAttribute("aria-pressed", "false");
+  await callouts.first().getByTestId("callout-box").click();
+  await expect(editor).toBeFocused();
+  const stage = await stageBox(page);
+  await page.mouse.click(
+    stage.x + stage.width * 0.5,
+    stage.y + stage.height * 0.75,
+  );
+  await expect(editor).toHaveCount(0);
+  const x = (await callouts
+    .first()
+    .getByTestId("callout-box")
+    .getAttribute("x"))!;
+  const r = (await callouts.first().getByTestId("callout-box").boundingBox())!;
+  await page.mouse.move(r.x + r.width / 2, r.y + r.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(r.x + r.width / 2 + 60, r.y + r.height / 2 + 30, {
+    steps: 8,
+  });
+  await page.mouse.up();
+  await expect(callouts.first().getByTestId("callout-box")).not.toHaveAttribute(
+    "x",
+    x,
+  );
+  // No pin was placed by any of that.
+  await expect(page.getByTestId("viewer-pin")).toHaveCount(0);
 });

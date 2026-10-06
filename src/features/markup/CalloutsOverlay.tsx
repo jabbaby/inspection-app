@@ -29,7 +29,7 @@ interface Props {
   callouts: DocMark[];
   /** A callout being typed on this page. */
   draft: CalloutDraft | null;
-  /** The Text tool is on: callouts can be tapped, moved and re-pointed. */
+  /** The Text tool is on: the arrow tips show their handles. */
   interactive: boolean;
   onEdit: (mark: DocMark) => void;
   onDraftText: (text: string) => void;
@@ -50,8 +50,8 @@ const HANDLE_PX = 7;
 /**
  * A page's text callouts (SPEC section 5a): white boxes of capitals with a
  * thin border in their colour and an optional leader arrow, in page units
- * like the notes box. With the Text tool on, tapping one edits it, dragging
- * its box moves it, and dragging its tip re-points the leader.
+ * like the notes box. Like a pin, tapping one edits it, dragging its box
+ * moves it, and dragging its tip re-points the leader.
  */
 export const CalloutsOverlay = memo(function CalloutsOverlay({
   callouts,
@@ -88,8 +88,9 @@ export const CalloutsOverlay = memo(function CalloutsOverlay({
     [callouts, draft?.id, moving, width, height],
   );
 
+  // Like a pin: tapped or dragged whatever tool is on (the viewer keeps
+  // the Pencil for drawing tools before it gets here).
   function down(e: React.PointerEvent, mark: DocMark, part: "box" | "tip") {
-    if (!interactive) return;
     e.stopPropagation();
     try {
       e.currentTarget.setPointerCapture(e.pointerId);
@@ -232,7 +233,7 @@ export const CalloutsOverlay = memo(function CalloutsOverlay({
                 stroke={mark.colour}
                 strokeWidth={metrics.border}
               />
-              {/* Grab areas (Text tool on): round the box, and the tip. */}
+              {/* Grab areas: round the box, and the tip. */}
               <rect
                 className="callout-hit"
                 data-testid="callout-box"

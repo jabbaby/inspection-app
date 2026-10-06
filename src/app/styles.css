@@ -1231,7 +1231,7 @@ dl.facts dd {
   pointer-events: none;
 }
 
-/* Text callouts (SPEC 5a): only touchable with the Text tool on. */
+/* Text callouts (SPEC 5a): tapped and dragged like pins. */
 .callouts-overlay {
   position: absolute;
   left: 0;
@@ -1240,14 +1240,13 @@ dl.facts dd {
   pointer-events: none;
 }
 
-.callout-hit,
 .callout-handle {
   pointer-events: none;
 }
 
-/* With the Text tool on, the grab areas take the touch, finger included
-   (it would otherwise scroll the page). */
-.callouts-live .callout-hit {
+/* Like pins, callouts take the touch, finger included (it would otherwise
+   scroll the page). */
+.callout-hit {
   pointer-events: auto;
   touch-action: none;
 }
