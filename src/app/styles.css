@@ -1231,6 +1231,45 @@ dl.facts dd {
   pointer-events: none;
 }
 
+/* Text callouts (SPEC 5a): only touchable with the Text tool on. */
+.callouts-overlay {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.callouts-live .callout rect,
+.callouts-live .callout-tip {
+  pointer-events: auto;
+}
+
+/* The callout being typed, laid out at 16 px or more (iOS zooms into
+   smaller text boxes) and scaled down to the callout's size. */
+.callout-editor {
+  position: absolute;
+  z-index: 3;
+  margin: 0;
+  box-sizing: border-box;
+  transform-origin: 0 0;
+  border-style: solid;
+  border-radius: 0;
+  background: #fff;
+  font-family: Arial, Helvetica, sans-serif;
+  text-transform: uppercase;
+  resize: none;
+  overflow: hidden;
+  outline: none;
+}
+
+/* Its own border shows where it is: no focus ring. */
+.callout-editor:focus,
+.callout-editor:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
 /* The selected item's arrow tips: drag to move, tap to select. */
 .arrow-handle {
   position: absolute;
@@ -4139,6 +4178,15 @@ h1 {
   width: 18px;
   border-radius: 3px;
   background: var(--tool-ink);
+}
+
+.markup-weight span.markup-size {
+  width: auto;
+  height: auto;
+  background: none;
+  color: var(--tool-ink);
+  font-weight: 700;
+  line-height: 1;
 }
 
 .markup-swatch {

@@ -48,6 +48,19 @@ export async function deleteMarkups(
   });
 }
 
+/** Changes a mark's points or text (a callout typed again or moved). */
+export async function updateMarkup(
+  db: InspectionDb,
+  mark: Pick<Markup, "id" | "inspectionId">,
+  patch: Partial<Pick<Markup, "points" | "text">>,
+  now = Date.now(),
+): Promise<void> {
+  await db.transaction("rw", [db.inspections, db.markups], async () => {
+    await db.markups.update(mark.id, patch);
+    await touchInspection(db, mark.inspectionId, now);
+  });
+}
+
 /** Takes a closed shape's fill off (or puts it back). */
 export async function setMarkupFill(
   db: InspectionDb,

@@ -51,11 +51,12 @@ export const DEFAULT_PREFS: MarkupPrefs = {
     ],
     highlighter: ["#FFD400", "#7CE38B", "#FF9EC4"],
   },
-  selected: { pen: 0, highlighter: 0, shapes: 0 },
+  selected: { pen: 0, highlighter: 0, shapes: 0, text: 0 },
   weight: {
     pen: WEIGHT_PRESETS.pen[1],
     highlighter: WEIGHT_PRESETS.highlighter[1],
     shapes: WEIGHT_PRESETS.shapes[1],
+    text: WEIGHT_PRESETS.text[1],
   },
   shape: "cloud",
   fingerDraw: false,
@@ -119,7 +120,7 @@ export function parsePrefs(raw: string | null): MarkupPrefs {
     )
       prefs.palettes[key] = palette.slice(0, MAX_SLOTS);
   }
-  for (const tool of ["pen", "highlighter", "shapes"] as const) {
+  for (const tool of ["pen", "highlighter", "shapes", "text"] as const) {
     const slots = prefs.palettes[paletteOf(tool)];
     const selected = slotted ? stored.selected?.[tool] : undefined;
     if (
@@ -177,7 +178,7 @@ export function removeSlot(p: MarkupPrefs, tool: MarkupTool) {
   const removed = p.selected[tool];
   slots.splice(removed, 1);
   // Tools sharing this row keep pointing at the same colour where they can.
-  for (const other of ["pen", "highlighter", "shapes"] as const) {
+  for (const other of ["pen", "highlighter", "shapes", "text"] as const) {
     if (paletteOf(other) !== key) continue;
     if (other !== tool && p.selected[other] > removed) p.selected[other] -= 1;
     p.selected[other] = Math.min(p.selected[other], slots.length - 1);

@@ -19,6 +19,7 @@ import {
   type ViewTransform,
 } from "../viewer/viewTransform";
 import { kindName } from "../../items/letters";
+import { arrowMetrics } from "../arrows";
 import {
   SHAPE_FILL_OPACITY,
   insideMark,
@@ -103,6 +104,11 @@ interface Props {
   onErase: (ids: string[], done: boolean) => void;
   /** The eraser tapped inside a filled shape: take its fill off. */
   onUnfill: (id: string) => void;
+  /**
+   * The Text tool placed a callout: its box's top-left, and the point its
+   * leader refers to (null for a tap: no leader). Normalised on `page`.
+   */
+  onPlaceText: (page: PageLayout, box: Point, tip: Point | null) => void;
   /** While true, every tap (finger, Pencil or mouse) places an arrow or copy. */
   addPinMode: boolean;
   onPlacePin: (page: PageLayout, at: Point) => void;
@@ -777,11 +783,14 @@ export function DocumentViewer(props: Props) {
     /** Where the pen came to rest, and the timer that straightens it. */
     still: Point;
     timer: number;
+    /** The Text tool: points are the leader's tip, then where the box goes. */
+    callout: boolean;
   } | null>(null);
 
   /** Whether this pointer draws (or erases) with the current tool. */
   function inks(e: { pointerType: string; button: number }) {
-    if (!isInkTool(latest.current.tool)) return false;
+    const tool = latest.current.tool;
+    if (!isInkTool(tool) && tool !== "text") return false;
     if (e.pointerType === "mouse") return e.button === 0;
     return (
       e.pointerType === "pen" ||
@@ -810,12 +819,13 @@ export function DocumentViewer(props: Props) {
     tap.current = null;
     const shape =
       latest.current.tool === "shapes" ? latest.current.ink.shape : null;
+    const callout = latest.current.tool === "text";
     ink.current = {
       pointerId: e.pointerId,
       pointerType: e.pointerType,
       eraser: latest.current.tool === "eraser",
       page: hit.page,
-      points: shape ? [hit.at, hit.at] : [hit.at],
+      points: shape || callout ? [hit.at, hit.at] : [hit.at],
       erased: new Set(),
       predicted: [],
       frame: 0,
@@ -824,6 +834,7 @@ export function DocumentViewer(props: Props) {
       travel: 0,
       still: p,
       timer: 0,
+      callout,
     };
     if (ink.current.eraser) eraseAt(p);
     else requestInkFrame();
@@ -867,8 +878,8 @@ export function DocumentViewer(props: Props) {
       if (stroke.eraser) eraseAt(p);
       else {
         const at = clampNormalised(onPagePoint(stroke.page, p));
-        // A shape (or a straightened line) only moves its end.
-        if (stroke.shape) stroke.points[1] = at;
+        // A shape (or a straightened line, or a callout) only moves its end.
+        if (stroke.shape || stroke.callout) stroke.points[1] = at;
         else stroke.points.push(at);
       }
     }
@@ -881,7 +892,7 @@ export function DocumentViewer(props: Props) {
       Math.hypot(last.x - stroke.still.x, last.y - stroke.still.y) > STILL_SLOP
     )
       restartStill(last);
-    if (stroke.shape) {
+    if (stroke.shape || stroke.callout) {
       requestInkFrame();
       return;
     }
@@ -953,6 +964,32 @@ export function DocumentViewer(props: Props) {
     ctx.clearRect(0, 0, width, height);
     const t = currentTransform();
     const style = latest.current.ink;
+    if (stroke.callout) {
+      // The leader being dragged out: from where the box will go to the tip.
+      if (stroke.travel < TAP_SLOP) return;
+      const size = stroke.page.size;
+      const k = pxPerUnit(stroke.page);
+      ctx.setTransform(
+        dpr * k,
+        0,
+        0,
+        dpr * k,
+        dpr * t.x,
+        dpr * (t.y + stroke.page.top * t.scale),
+      );
+      const [tip, box] = toPagePoints(
+        stroke.points.flatMap((p) => [p.x, p.y]),
+        size,
+      );
+      const width = arrowMetrics(size).strokeWidth;
+      const drawing = shapeDrawing("arrow", box, tip, width);
+      ctx.strokeStyle = ctx.fillStyle = style.colour;
+      ctx.lineWidth = width;
+      ctx.lineCap = "round";
+      ctx.stroke(new Path2D(drawing.d));
+      if (drawing.head) ctx.fill(new Path2D(drawing.head));
+      return;
+    }
     if (stroke.shape) {
       // Drawn in page units, the same shape as the saved mark will be.
       const size = stroke.page.size;
@@ -1025,6 +1062,15 @@ export function DocumentViewer(props: Props) {
       return;
     }
     if (cancelled) return clearInk();
+    if (stroke.callout) {
+      clearInk();
+      const [tip, end] = stroke.points;
+      // A tap: a box with no leader. A drag: from the tip to the box.
+      if (stroke.travel < TAP_SLOP)
+        latest.current.onPlaceText(stroke.page, tip, null);
+      else latest.current.onPlaceText(stroke.page, end, tip);
+      return;
+    }
     if (stroke.shape) {
       // Too small to mean anything: dropped.
       if (stroke.travel < MIN_SHAPE) return clearInk();
@@ -1058,8 +1104,15 @@ export function DocumentViewer(props: Props) {
   // while the document is scrolling only stops it: on a pin or the box it
   // is swallowed; on the drawing it never places a pin.
   function onPointerDownCapture(e: React.PointerEvent) {
-    // Drawing and erasing take the pointer before pins and the notes box.
-    if (inks(e)) {
+    // Drawing and erasing take the pointer before pins and the notes box
+    // (with the Text tool, a callout handles its own touches).
+    if (
+      inks(e) &&
+      !(
+        latest.current.tool === "text" &&
+        (e.target as Element).closest(".callout")
+      )
+    ) {
       e.stopPropagation();
       // One stroke at a time; a second finger is a pinch.
       if (!ink.current && !(e.pointerType === "touch" && !e.isPrimary))

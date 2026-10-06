@@ -1,7 +1,8 @@
 import type { MarkKind } from "../../db/types";
 
 /** The markup toolbar's tools (SPEC section 5a); null means none is on. */
-export type ViewerTool = "pin" | "pen" | "highlighter" | "shapes" | "eraser";
+export type ViewerTool =
+  "pin" | "pen" | "highlighter" | "shapes" | "text" | "eraser";
 
 /** Tools that draw or erase with the Pencil (or a finger, with the toggle). */
 export function isInkTool(tool: ViewerTool | null): boolean {
@@ -21,6 +22,8 @@ export interface DocMark {
   tool: MarkKind;
   /** Closed shapes: false once the fill was taken off (default filled). */
   fill?: boolean;
+  /** Text callouts: what they say. */
+  text?: string;
   /** Normalised points, flat: x0, y0, x1, y1... */
   points: number[];
   colour: string;

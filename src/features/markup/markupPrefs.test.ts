@@ -22,7 +22,12 @@ describe("markup colour slots", () => {
     });
     const prefs = parsePrefs(old);
     expect(prefs.palettes).toEqual(DEFAULT_PREFS.palettes);
-    expect(prefs.selected).toEqual({ pen: 0, highlighter: 0, shapes: 0 });
+    expect(prefs.selected).toEqual({
+      pen: 0,
+      highlighter: 0,
+      shapes: 0,
+      text: 0,
+    });
     expect(prefs.weight.pen).toBe(0.004);
     expect(prefs.fingerDraw).toBe(true);
   });

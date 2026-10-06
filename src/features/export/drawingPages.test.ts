@@ -202,11 +202,18 @@ describe("appendDrawingPages", () => {
       mark({ tool: "cloud", points: [0.2, 0.2, 0.5, 0.4] }),
       mark({ tool: "arrow", points: [0.6, 0.6, 0.8, 0.5] }),
       mark({ tool: "rect", points: [0.1, 0.6, 0.3, 0.8], fill: false }),
+      // A text callout: box x, y, w, h, then the leader's tip.
+      mark({
+        tool: "text",
+        points: [0.5, 0.7, 0.2, 0.05, 0.4, 0.6],
+        weight: 0.012,
+        text: "LAP 600 MIN",
+      }),
     ];
     const pages = pinnedPages([d1], [item({ page: 1 })], marks);
     expect(pages.map((p) => [p.position, p.marks.length])).toEqual([
       [1, 0],
-      [2, 5],
+      [2, 6],
     ]);
     const doc = await PDFDocument.create();
     const fonts = {
@@ -229,6 +236,7 @@ describe("appendDrawingPages", () => {
     expect(texts[0]).toContain("NORTHROP INSPECTION");
     expect(texts[1]).toContain("S-501");
     expect(texts[1]).not.toContain("NORTHROP INSPECTION");
+    expect(texts[1]).toContain("LAP 600 MIN");
     // The highlighter is see-through, multiplied over the drawing.
     expect(new TextDecoder("latin1").decode(bytes)).toContain("/Multiply");
   });

@@ -10,6 +10,7 @@ import {
   Pointer,
   Slash,
   Square,
+  Type,
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -53,6 +54,7 @@ const BUTTONS: {
     tool: "shapes" as const,
     shape,
   })),
+  { id: "text", label: "Text", Icon: Type, tool: "text" },
 ];
 
 const SHAPE_ICONS: Record<MarkupShape, LucideIcon> = {
@@ -72,10 +74,13 @@ const SHAPE_NAMES: Record<MarkupShape, string> = {
 };
 
 const WEIGHT_NAMES = ["Thin", "Medium", "Thick"];
+/** Text has sizes instead of weights. */
+const SIZE_NAMES = ["Small", "Medium", "Large"];
 const TOOL_NAMES: Record<MarkupTool, string> = {
   pen: "Pen",
   highlighter: "Highlighter",
   shapes: "Shape",
+  text: "Text",
 };
 
 const HINTS: Partial<Record<ViewerTool, string>> = {
@@ -106,7 +111,12 @@ export function MarkupToolbar({ tool, onTool }: Props) {
   const [open, setOpen] = useState<Open | null>(null);
   const barRef = useRef<HTMLDivElement>(null);
   const inkTool: MarkupTool | null =
-    tool === "pen" || tool === "highlighter" || tool === "shapes" ? tool : null;
+    tool === "pen" ||
+    tool === "highlighter" ||
+    tool === "shapes" ||
+    tool === "text"
+      ? tool
+      : null;
 
   function openAt(which: Open["which"], button: HTMLElement) {
     const r = button.getBoundingClientRect();
@@ -224,6 +234,7 @@ function InkOptions({
   const weight = prefs.weight[tool];
   const selected = prefs.selected[tool];
   const [min, max] = WEIGHT_RANGE[tool];
+  const names = tool === "text" ? SIZE_NAMES : WEIGHT_NAMES;
 
   return (
     <>
@@ -235,11 +246,9 @@ function InkOptions({
             key={preset}
             type="button"
             className="markup-weight"
-            aria-label={WEIGHT_NAMES[i]}
+            aria-label={names[i]}
             aria-pressed={on}
-            title={
-              on ? `${WEIGHT_NAMES[i]}: tap again to adjust` : WEIGHT_NAMES[i]
-            }
+            title={on ? `${names[i]}: tap again to adjust` : names[i]}
             onClick={(e) => {
               if (on) onOpen("weight", e.currentTarget);
               else
@@ -248,7 +257,13 @@ function InkOptions({
                 });
             }}
           >
-            <span style={{ height: [2, 4, 7][i] }} />
+            {tool === "text" ? (
+              <span className="markup-size" style={{ fontSize: 12 + 3 * i }}>
+                {"SML"[i]}
+              </span>
+            ) : (
+              <span style={{ height: [2, 4, 7][i] }} />
+            )}
           </button>
         );
       })}

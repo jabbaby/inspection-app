@@ -27,6 +27,7 @@ import {
   isFilled,
   markStyle,
 } from "../markup/markGeometry";
+import { layoutCallout } from "../markup/calloutGeometry";
 import { toEncodable } from "../memo/pdf/text";
 import { layoutNotesBox, pageView, pinMetrics } from "./markupGeometry";
 import type { PagePin } from "./packContents";
@@ -79,7 +80,7 @@ export function drawPageMarkup(
     y: size.height - p.y * size.height,
   });
 
-  drawMarks(page, markup.marks, size);
+  drawMarks(page, markup.marks, size, fonts);
   // A page with only markup has no notes box (it lists the page's pins).
   if (markup.pins.length > 0) drawNotesBox(page, markup, size, fonts);
 
@@ -144,11 +145,16 @@ function drawMarks(
   page: PDFPage,
   marks: Markup[],
   size: { width: number; height: number },
+  fonts: MarkupFonts,
 ) {
   if (marks.length === 0) return;
   // drawSvgPath sets no line join: round, like the viewer.
   page.pushOperators(pushGraphicsState(), setLineJoin(LineJoinStyle.Round));
   for (const mark of marks) {
+    if (mark.tool === "text") {
+      drawCallout(page, mark, size, fonts);
+      continue;
+    }
     const style = markStyle(mark, size);
     const drawing = drawMark(mark, size);
     const colour = hex(style.colour);
@@ -175,6 +181,58 @@ function drawMarks(
       });
   }
   page.pushOperators(popGraphicsState());
+}
+
+/** A text callout: box, capitals in Helvetica, and its leader. */
+function drawCallout(
+  page: PDFPage,
+  mark: Markup,
+  size: { width: number; height: number },
+  fonts: MarkupFonts,
+) {
+  const font = fonts.regular;
+  const { box, metrics, lines, leader } = layoutCallout(mark, size, (t, s) =>
+    font.widthOfTextAtSize(toEncodable(t, font), s),
+  );
+  const colour = hex(mark.colour);
+  const flip = (y: number) => size.height - y;
+  if (leader) {
+    page.drawLine({
+      start: { x: leader.from.x, y: flip(leader.from.y) },
+      end: { x: leader.to.x, y: flip(leader.to.y) },
+      thickness: leader.width,
+      color: colour,
+      lineCap: 1,
+    });
+    const [a, b, c] = leader.head;
+    page.drawSvgPath(`M ${a.x} ${a.y} L ${b.x} ${b.y} L ${c.x} ${c.y} Z`, {
+      x: 0,
+      y: size.height,
+      color: colour,
+      borderWidth: 0,
+    });
+  }
+  // The border sits inside the box, as in the viewer.
+  page.drawRectangle({
+    x: box.x + metrics.border / 2,
+    y: flip(box.y + box.height) + metrics.border / 2,
+    width: box.width - metrics.border,
+    height: box.height - metrics.border,
+    color: WHITE,
+    borderColor: colour,
+    borderWidth: metrics.border,
+  });
+  for (const line of lines) {
+    const text = toEncodable(line.text, font);
+    if (!text) continue;
+    page.drawText(text, {
+      x: line.x,
+      y: flip(line.baseline),
+      size: metrics.fontSize,
+      font,
+      color: colour,
+    });
+  }
 }
 
 function drawNotesBox(

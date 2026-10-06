@@ -6,6 +6,7 @@ import {
   deleteMarkups,
   restoreMarkups,
   setMarkupFill,
+  updateMarkup,
   type NewMarkup,
 } from "../../db/markups";
 import type { Markup } from "../../db/types";
@@ -18,6 +19,7 @@ const LABELS: Record<Markup["tool"], string> = {
   rect: "Draw rectangle",
   ellipse: "Draw ellipse",
   cloud: "Draw cloud",
+  text: "Add text",
 };
 
 export async function drawWithUndo(mark: NewMarkup): Promise<Markup> {
@@ -59,5 +61,20 @@ export async function unfillWithUndo(mark: Markup): Promise<void> {
     label: "Remove fill",
     undo: () => setMarkupFill(db, mark, true),
     redo: () => setMarkupFill(db, mark, false),
+  });
+}
+
+/** A callout typed again or moved (undoable). */
+export async function changeMarkWithUndo(
+  mark: Markup,
+  patch: Partial<Pick<Markup, "points" | "text">>,
+  label: string,
+): Promise<void> {
+  const before = { points: mark.points, text: mark.text };
+  await updateMarkup(db, mark, patch);
+  pushUndo(mark.inspectionId, {
+    label,
+    undo: () => updateMarkup(db, mark, before),
+    redo: () => updateMarkup(db, mark, patch),
   });
 }

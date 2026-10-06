@@ -295,11 +295,11 @@ export interface ObservationBox {
 export const SHAPES = ["line", "arrow", "rect", "ellipse", "cloud"] as const;
 export type MarkupShape = (typeof SHAPES)[number];
 
-/** What a mark is: a pen or highlighter stroke, or a shape (SPEC 5a). */
-export type MarkKind = "pen" | "highlighter" | MarkupShape;
+/** What a mark is: a pen or highlighter stroke, a shape or a text callout (SPEC 5a). */
+export type MarkKind = "pen" | "highlighter" | MarkupShape | "text";
 
-/** Toolbar tools with their own colour slot and weight. */
-export type MarkupTool = "pen" | "highlighter" | "shapes";
+/** Toolbar tools with their own colour slot and weight (text: its size). */
+export type MarkupTool = "pen" | "highlighter" | "shapes" | "text";
 
 /** One mark drawn on a drawing page (SPEC section 5a). */
 export interface Markup {
@@ -323,6 +323,12 @@ export interface Markup {
    * colour; false once the eraser took the fill off.
    */
   fill?: boolean;
+  /**
+   * Text callouts: what it says (capitals). Their points are the box's
+   * x, y, width and height, then the leader's tip if it has one; weight is
+   * the text size.
+   */
+  text?: string;
   createdAt: number;
 }
 

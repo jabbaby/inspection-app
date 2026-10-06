@@ -10,12 +10,15 @@ import {
   type MarkupTool,
 } from "../../db/types";
 import type { Point, Size } from "../drawings/viewer/viewTransform";
+import { TEXT_SIZES, calloutOutline } from "./calloutGeometry";
 
 /** Weight presets as a fraction of the sheet's short side (medium = a pin arrow). */
 export const WEIGHT_PRESETS: Record<MarkupTool, [number, number, number]> = {
   pen: [0.0012, 0.0025, 0.005],
   highlighter: [0.006, 0.012, 0.02],
   shapes: [0.0012, 0.0025, 0.005],
+  // Text: S, M, L (the size of its letters).
+  text: TEXT_SIZES,
 };
 
 /** The weight slider's range per tool. */
@@ -23,6 +26,7 @@ export const WEIGHT_RANGE: Record<MarkupTool, [number, number]> = {
   pen: [0.0006, 0.01],
   highlighter: [0.003, 0.03],
   shapes: [0.0006, 0.01],
+  text: [0.006, 0.03],
 };
 
 /** How see-through the highlighter is (drawn with multiply in the PDF). */
@@ -379,6 +383,15 @@ export function drawMark(
   mark: Pick<Markup, "tool" | "points" | "weight">,
   page: Size,
 ): MarkDrawing {
+  // A callout is drawn with its text (calloutGeometry.ts); this is its
+  // outline, for the eraser.
+  if (mark.tool === "text")
+    return {
+      d: "",
+      closed: false,
+      head: null,
+      outline: calloutOutline(mark, page),
+    };
   const points = toPagePoints(mark.points, page);
   const width = markWidth(mark.weight, page);
   if (isShape(mark.tool) && points.length >= 2)

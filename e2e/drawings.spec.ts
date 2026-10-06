@@ -2020,3 +2020,53 @@ test("shapes: a filled cloud, the eraser takes the fill off, arrows, and a held 
   await tool("Pen").click();
   await expect(tool("Pen")).toHaveAttribute("aria-pressed", "false");
 });
+
+test("text callouts: drag to place with a leader, type capitals, edit, empty removes", async ({
+  page,
+}) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openDrawing(page, "S-101 Level 3", false);
+  const toolbar = page.getByRole("toolbar", { name: "Markup tools" });
+  const textTool = toolbar.getByRole("button", { name: "Text", exact: true });
+  const editor = page.getByRole("textbox", { name: "Callout text" });
+  const callouts = page.getByTestId("callout");
+
+  // Drag from the point referred to, lift where the box goes, and type.
+  await textTool.click();
+  await expect(toolbar.getByRole("button", { name: "Medium" })).toBeVisible();
+  await drawLine(page, [0.3, 0.3], [0.5, 0.42]);
+  await expect(editor).toBeFocused();
+  await editor.pressSequentially("lap 600 min");
+  // Turning the tool off finishes typing.
+  await textTool.click();
+  await expect(editor).toHaveCount(0);
+  await expect(callouts).toHaveCount(1);
+  await expect(callouts.first()).toHaveAttribute("aria-label", "LAP 600 MIN");
+  await expect(callouts.first().locator("line")).toHaveCount(1);
+
+  // With Text on, tapping it edits it.
+  await textTool.click();
+  await callouts.first().locator("rect").click();
+  await expect(editor).toHaveValue("LAP 600 MIN");
+  await editor.fill("lap 900 min");
+  await textTool.click();
+  await expect(callouts.first()).toHaveAttribute("aria-label", "LAP 900 MIN");
+
+  // A tap (no drag) places a box without a leader; left empty, it's dropped.
+  await textTool.click();
+  const box = await stageBox(page);
+  await page.mouse.click(box.x + box.width * 0.2, box.y + box.height * 0.7);
+  await expect(editor).toBeFocused();
+  await textTool.click();
+  await expect(callouts).toHaveCount(1);
+
+  // Emptied, a callout goes; Undo brings it back.
+  await textTool.click();
+  await callouts.first().locator("rect").click();
+  await editor.fill("");
+  await textTool.click();
+  await expect(callouts).toHaveCount(0);
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(callouts).toHaveCount(1);
+});

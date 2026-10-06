@@ -26,6 +26,8 @@ import {
   isFilled,
   markStyle,
 } from "../../markup/markGeometry";
+import { layoutCallout } from "../../markup/calloutGeometry";
+import { measureArial } from "../../markup/measureText";
 import type { DocMark } from "../../markup/tools";
 import type { DocPin } from "./DocumentViewer";
 import { DOC_WIDTH, pagePointToDoc, type PageLayout } from "./documentLayout";
@@ -251,6 +253,10 @@ function drawMarks(
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
   for (const mark of marks) {
+    if (mark.tool === "text") {
+      drawCallout(ctx, mark, page);
+      continue;
+    }
     const style = markStyle(mark, page.size);
     ctx.globalAlpha = style.opacity;
     ctx.globalCompositeOperation =
@@ -268,6 +274,49 @@ function drawMarks(
     if (drawing.head) ctx.fill(new Path2D(drawing.head));
   }
   ctx.restore();
+}
+
+/** A text callout, in page units (the context is already scaled). */
+function drawCallout(
+  ctx: CanvasRenderingContext2D,
+  mark: DocMark,
+  page: PageLayout,
+) {
+  const { box, metrics, lines, leader } = layoutCallout(
+    mark,
+    page.size,
+    measureArial,
+  );
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = "source-over";
+  ctx.strokeStyle = ctx.fillStyle = mark.colour;
+  if (leader) {
+    ctx.lineWidth = leader.width;
+    ctx.beginPath();
+    ctx.moveTo(leader.from.x, leader.from.y);
+    ctx.lineTo(leader.to.x, leader.to.y);
+    ctx.stroke();
+    ctx.beginPath();
+    leader.head.forEach((p, i) =>
+      i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y),
+    );
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(box.x, box.y, box.width, box.height);
+  ctx.lineWidth = metrics.border;
+  ctx.strokeRect(
+    box.x + metrics.border / 2,
+    box.y + metrics.border / 2,
+    box.width - metrics.border,
+    box.height - metrics.border,
+  );
+  ctx.fillStyle = mark.colour;
+  ctx.font = `${metrics.fontSize}px Arial, Helvetica, sans-serif`;
+  ctx.textBaseline = "alphabetic";
+  ctx.textAlign = "left";
+  for (const line of lines) ctx.fillText(line.text, line.x, line.baseline);
 }
 
 /** The notes boxes as laid out on the page (read from the DOM). */

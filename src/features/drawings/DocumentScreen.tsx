@@ -10,12 +10,20 @@ import { listDrawings, setPageSizes } from "../../db/drawings";
 import { listMarkups } from "../../db/markups";
 import { HIGHLIGHTER_OPACITY, toStoredPoints } from "../markup/markGeometry";
 import {
+  changeMarkWithUndo,
   drawWithUndo,
   eraseWithUndo,
   unfillWithUndo,
 } from "../markup/markupActions";
 import { toolColour, useMarkupPrefs } from "../markup/markupPrefs";
 import { MarkupOverlay } from "../markup/MarkupOverlay";
+import { CalloutsOverlay, type CalloutDraft } from "../markup/CalloutsOverlay";
+import {
+  calloutMetrics,
+  calloutPoints,
+  calloutSize,
+} from "../markup/calloutGeometry";
+import { measureArial } from "../markup/measureText";
 import { MarkupToolbar } from "../markup/MarkupToolbar";
 import type { DocMark, ViewerTool } from "../markup/tools";
 import type { MarkupShape, MarkupTool } from "../../db/types";
@@ -287,10 +295,106 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
           colour: m.colour,
           weight: m.weight,
           fill: m.fill,
+          text: m.text,
         })),
     [marks, erasing],
   );
   // Each page's marks as one list that only changes with them.
+  // Each page's text callouts, as a list that only changes with them.
+  const calloutsByPage = useMemo(() => {
+    const byPage = new Map<string, DocMark[]>();
+    for (const mark of docMarks)
+      if (mark.tool === "text")
+        byPage.set(mark.pageKey, [...(byPage.get(mark.pageKey) ?? []), mark]);
+    return byPage;
+  }, [docMarks]);
+  // A callout being typed (new, or an existing one tapped with Text on).
+  const [draft, setDraft] = useState<
+    (CalloutDraft & { pageKey: string }) | null
+  >(null);
+  // Read and cleared at once, so a callout is saved once even when the box
+  // losing focus and a new tap both finish it.
+  const draftRef = useRef(draft);
+  function putDraft(next: typeof draft) {
+    draftRef.current = next;
+    setDraft(next);
+  }
+
+  /** Saves the callout being typed: empty, it goes (or isn't made). */
+  async function commitDraft() {
+    const d = draftRef.current;
+    if (!d) return;
+    putDraft(null);
+    const page = layout.pages.find((p) => p.key === d.pageKey);
+    const existing = d.id ? marks?.find((m) => m.id === d.id) : undefined;
+    if (!page) return;
+    const text = d.text.trim().toUpperCase();
+    if (!text) {
+      if (existing) await eraseWithUndo(inspectionId, [existing]);
+      return;
+    }
+    const size = page.size;
+    const box = calloutSize(text, calloutMetrics(d.size, size), measureArial);
+    const points = calloutPoints(
+      {
+        box: {
+          x: d.box.x * size.width,
+          y: d.box.y * size.height,
+          ...box,
+        },
+        tip: d.tip && { x: d.tip.x * size.width, y: d.tip.y * size.height },
+      },
+      size,
+    );
+    if (existing) {
+      if (existing.text !== text)
+        await changeMarkWithUndo(existing, { text, points }, "Edit text");
+      return;
+    }
+    await drawWithUndo({
+      inspectionId,
+      drawingId: page.drawingId,
+      page: page.page,
+      tool: "text",
+      points,
+      text,
+      colour: d.colour,
+      weight: d.size,
+    });
+  }
+
+  function placeText(page: PageLayout, box: Point, tip: Point | null) {
+    void commitDraft();
+    putDraft({
+      pageKey: page.key,
+      id: null,
+      box,
+      tip,
+      text: "",
+      colour: toolColour(prefs, "text"),
+      size: prefs.weight.text,
+    });
+  }
+
+  function editCallout(mark: DocMark) {
+    void commitDraft();
+    const [x, y, , , tx, ty] = mark.points;
+    putDraft({
+      pageKey: mark.pageKey,
+      id: mark.id,
+      box: { x, y },
+      tip: tx === undefined || ty === undefined ? null : { x: tx, y: ty },
+      text: mark.text ?? "",
+      colour: mark.colour,
+      size: mark.weight,
+    });
+  }
+
+  function moveCallout(mark: DocMark, points: number[]) {
+    const existing = marks?.find((m) => m.id === mark.id);
+    if (existing) void changeMarkWithUndo(existing, { points }, "Move text");
+  }
+
   const marksByPage = useMemo(() => {
     const byPage = new Map<string, DocMark[]>();
     for (const mark of docMarks)
@@ -619,6 +723,17 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
     return (
       <>
         <MarkupOverlay marks={marksByPage.get(page.key) ?? NO_MARKS} />
+        <CalloutsOverlay
+          callouts={calloutsByPage.get(page.key) ?? NO_MARKS}
+          draft={draft?.pageKey === page.key ? draft : null}
+          interactive={tool === "text"}
+          onEdit={editCallout}
+          onDraftText={(text) =>
+            putDraft(draftRef.current && { ...draftRef.current, text })
+          }
+          onDone={() => void commitDraft()}
+          onMove={moveCallout}
+        />
         <ArrowsOverlay items={pageSpots} />
         {box && (
           <ObservationBoxOverlay
@@ -693,6 +808,7 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
               onStroke={saveStroke}
               onErase={erase}
               onUnfill={unfill}
+              onPlaceText={placeText}
               addPinMode={placingArrow !== null || copying !== null}
               onPlacePin={(page, at) =>
                 void (copying
