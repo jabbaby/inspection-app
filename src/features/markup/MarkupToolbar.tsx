@@ -29,13 +29,31 @@ import {
 } from "./markupPrefs";
 import type { ViewerTool } from "./tools";
 
-const TOOLS = [
-  { id: "pin", label: "Pin", Icon: MapPin },
-  { id: "pen", label: "Pen", Icon: Pen },
-  { id: "highlighter", label: "Highlighter", Icon: Highlighter },
-  { id: "shapes", label: "Shapes", Icon: Cloud },
-  { id: "eraser", label: "Eraser", Icon: Eraser },
-] as const;
+/** The toolbar's buttons: tools, with each shape a button of its own. */
+const BUTTONS: {
+  id: string;
+  label: string;
+  Icon: LucideIcon;
+  tool: ViewerTool;
+  shape?: MarkupShape;
+}[] = [
+  { id: "pin", label: "Pin", Icon: MapPin, tool: "pin" },
+  { id: "pen", label: "Pen", Icon: Pen, tool: "pen" },
+  {
+    id: "highlighter",
+    label: "Highlighter",
+    Icon: Highlighter,
+    tool: "highlighter",
+  },
+  ...SHAPES.map((shape) => ({
+    id: shape,
+    label: "",
+    Icon: Cloud,
+    tool: "shapes" as const,
+    shape,
+  })),
+  { id: "eraser", label: "Eraser", Icon: Eraser, tool: "eraser" },
+];
 
 const SHAPE_ICONS: Record<MarkupShape, LucideIcon> = {
   line: Slash,
@@ -67,7 +85,7 @@ const HINTS: Partial<Record<ViewerTool, string>> = {
 
 /** An open slider or colour panel, under the button that opened it (screen px). */
 interface Open {
-  which: "weight" | "colour" | "shapes";
+  which: "weight" | "colour";
   left: number;
   top: number;
 }
@@ -113,11 +131,18 @@ export function MarkupToolbar({ tool, onTool }: Props) {
     return () => document.removeEventListener("pointerdown", close);
   }, [open]);
 
-  function choose(next: ViewerTool, button: HTMLElement) {
-    // Shapes, tapped again: its list of shapes (it stays on).
-    if (next === "shapes" && tool === "shapes") return openAt("shapes", button);
+  /** Whether a button's tool (and shape) is the one on. */
+  const isOn = (b: (typeof BUTTONS)[number]) =>
+    tool === b.tool && (!b.shape || prefs.shape === b.shape);
+
+  function choose(b: (typeof BUTTONS)[number]) {
     setOpen(null);
-    onTool(tool === next ? null : next);
+    if (isOn(b)) return onTool(null);
+    if (b.shape)
+      updatePrefs((p) => {
+        p.shape = b.shape!;
+      });
+    onTool(b.tool);
   }
 
   return (
@@ -129,62 +154,23 @@ export function MarkupToolbar({ tool, onTool }: Props) {
     >
       {/* Centred; re-centres as a tool's options come and go. */}
       <div className="markup-toolbar-row">
-        {TOOLS.map(({ id, label, Icon }) => {
-          // The Shapes button shows the shape it draws.
-          const Shown = id === "shapes" ? SHAPE_ICONS[prefs.shape] : Icon;
+        {BUTTONS.map((b) => {
+          const Icon = b.shape ? SHAPE_ICONS[b.shape] : b.Icon;
+          const label = b.shape ? SHAPE_NAMES[b.shape] : b.label;
           return (
             <button
-              key={id}
+              key={b.id}
               type="button"
-              className={`markup-tool${id === "pin" ? " markup-tool-pin" : ""}`}
+              className={`markup-tool${b.id === "pin" ? " markup-tool-pin" : ""}`}
               aria-label={label}
-              aria-pressed={tool === id}
-              aria-expanded={
-                id === "shapes" && tool === "shapes"
-                  ? open?.which === "shapes"
-                  : undefined
-              }
-              title={
-                id === "shapes"
-                  ? `${SHAPE_NAMES[prefs.shape]}${tool === "shapes" ? ": tap again for other shapes" : ""}`
-                  : label
-              }
-              onClick={(e) => choose(id, e.currentTarget)}
+              aria-pressed={isOn(b)}
+              title={label}
+              onClick={() => choose(b)}
             >
-              <Shown aria-hidden="true" strokeWidth={2.25} />
+              <Icon aria-hidden="true" strokeWidth={2.25} />
             </button>
           );
         })}
-        {open?.which === "shapes" && (
-          <div
-            className="markup-popover markup-shapes"
-            role="group"
-            aria-label="Shapes"
-            style={{ left: open.left, top: open.top }}
-          >
-            {SHAPES.map((shape) => {
-              const Icon = SHAPE_ICONS[shape];
-              return (
-                <button
-                  key={shape}
-                  type="button"
-                  className="markup-tool"
-                  aria-label={SHAPE_NAMES[shape]}
-                  aria-pressed={prefs.shape === shape}
-                  title={SHAPE_NAMES[shape]}
-                  onClick={() => {
-                    updatePrefs((p) => {
-                      p.shape = shape;
-                    });
-                    setOpen(null);
-                  }}
-                >
-                  <Icon aria-hidden="true" strokeWidth={2.25} />
-                </button>
-              );
-            })}
-          </div>
-        )}
         <button
           type="button"
           className="markup-tool"

@@ -1980,8 +1980,8 @@ test("shapes: a filled cloud, the eraser takes the fill off, arrows, and a held 
     y: box.y + box.height * fy,
   });
 
-  // The Shapes tool starts on the revision cloud: drag out its box.
-  await tool("Shapes").click();
+  // Each shape is its own button: drag out a cloud's box.
+  await tool("Revision cloud").click();
   await drawLine(page, [0.2, 0.2], [0.45, 0.4]);
   const cloud = page.locator('[data-testid="mark"][data-tool="cloud"]');
   await expect(cloud).toHaveAttribute("data-filled", "true");
@@ -1994,13 +1994,9 @@ test("shapes: a filled cloud, the eraser takes the fill off, arrows, and a held 
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(cloud).toHaveAttribute("data-filled", "true");
 
-  // Tapping Shapes again lists the shapes: an arrow, in any direction.
-  await tool("Shapes").click();
-  await tool("Shapes").click();
-  await page
-    .getByRole("group", { name: "Shapes" })
-    .getByRole("button", { name: "Arrow" })
-    .click();
+  // An arrow, in any direction; tapping it again turns it off.
+  await tool("Arrow").click();
+  await expect(tool("Revision cloud")).toHaveAttribute("aria-pressed", "false");
   await drawLine(page, [0.6, 0.6], [0.75, 0.48]);
   await expect(
     page.locator('[data-testid="mark"][data-tool="arrow"]'),
@@ -2021,4 +2017,6 @@ test("shapes: a filled cloud, the eraser takes the fill off, arrows, and a held 
     page.locator('[data-testid="mark"][data-tool="line"]'),
   ).toHaveCount(1);
   await expect(page.getByTestId("mark")).toHaveCount(3);
+  await tool("Pen").click();
+  await expect(tool("Pen")).toHaveAttribute("aria-pressed", "false");
 });

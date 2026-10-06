@@ -4100,7 +4100,7 @@ h1 {
 }
 
 .markup-tool {
-  width: 40px;
+  width: 36px;
   height: 36px;
   border-radius: var(--radius-sm);
 }
@@ -4208,13 +4208,6 @@ h1 {
   margin: 0;
   -webkit-touch-callout: none;
   user-select: none;
-}
-
-/* The Shapes button's list, in a row under it. */
-.markup-shapes {
-  display: flex;
-  gap: 2px;
-  padding: var(--space-2);
 }
 
 .markup-colour-panel {
