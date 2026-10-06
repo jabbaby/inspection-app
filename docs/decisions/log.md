@@ -127,3 +127,4 @@ Format: `YYYY-MM-DD | decision | why | changed in SPEC section`
 2026-10-06 | Each shape gets its own toolbar button (no Shapes list); shapes share one colour and weight; toolbar buttons 36 px so the bar fits in portrait | engineer request | 5a
 2026-10-06 | Eraser moves between the pen and the highlighter | engineer request | 5a
 2026-10-06 | Slice 2c text callouts: Text button with S/M/L sizes; drag from the point to place a box with a leader, tap for one without; capitals, white box, border in the colour; grows then wraps; tap to edit, drag to move or re-point (with Text on); empty isn't kept; Markup.text | engineer agreed the proposal | 5a, 8
+2026-10-06 | Callout leaders as thick as the box border, heads scaled to match (was pin-arrow size) | engineer request | 5a

@@ -19,7 +19,7 @@ import {
   type ViewTransform,
 } from "../viewer/viewTransform";
 import { kindName } from "../../items/letters";
-import { arrowMetrics } from "../arrows";
+import { calloutMetrics } from "../../markup/calloutGeometry";
 import {
   SHAPE_FILL_OPACITY,
   insideMark,
@@ -981,7 +981,8 @@ export function DocumentViewer(props: Props) {
         stroke.points.flatMap((p) => [p.x, p.y]),
         size,
       );
-      const width = arrowMetrics(size).strokeWidth;
+      // As thick as the callout's border (calloutGeometry.ts).
+      const width = calloutMetrics(style.weight, size).border;
       const drawing = shapeDrawing("arrow", box, tip, width);
       ctx.strokeStyle = ctx.fillStyle = style.colour;
       ctx.lineWidth = width;

@@ -67,6 +67,8 @@ describe("text callouts", () => {
       A3,
       measure,
     );
+    // As thick as the box's border.
+    expect(layout.leader!.width).toBe(layout.metrics.border);
     expect(layout.leader!.from.x).toBeCloseTo(300, 1);
     expect(layout.leader!.from.y).toBeCloseTo(320, 1);
     expect(layout.leader!.head[0].x).toBeCloseTo(100, 1);

@@ -7,7 +7,6 @@
  * widths). Text is measured by the caller's font.
  */
 import type { Markup } from "../../db/types";
-import { arrowMetrics, arrowShape } from "../drawings/arrows";
 import type { Point, Rect, Size } from "../drawings/viewer/viewTransform";
 
 /** S, M, L as a fraction of the sheet's short side (M = the notes box text). */
@@ -19,6 +18,9 @@ export type MeasureText = (text: string, size: number) => number;
 /** Arial's ascent and descent, as the notes box uses them. */
 const ASCENT = 0.905;
 const DESCENT = 0.212;
+/** Leader arrowheads: as the arrow shape's, in border widths. */
+const HEAD_LENGTH = 7;
+const HEAD_WIDTH = 0.8;
 /** The widest a box grows before its text wraps, in font sizes. */
 const MAX_WIDTH_EM = 24;
 
@@ -134,7 +136,7 @@ export interface CalloutLayout {
   metrics: CalloutMetrics;
   /** Text lines with their baseline (page units, y down). */
   lines: { text: string; x: number; baseline: number }[];
-  /** The leader: from the box's edge to the tip, with its head. */
+  /** The leader (as thick as the box's border): from its edge to the tip. */
   leader: { from: Point; to: Point; width: number; head: Point[] } | null;
 }
 
@@ -173,15 +175,27 @@ export function layoutCallout(
   let leader: CalloutLayout["leader"] = null;
   if (tip) {
     const from = nearestOnBox(box, tip);
-    const shape = arrowShape(from, tip, page);
-    // A tip inside the box (or nearly) has no leader to draw.
-    if (shape)
+    const width = metrics.border;
+    const length = Math.hypot(tip.x - from.x, tip.y - from.y);
+    // Head proportions as the arrow shape's, scaled by the border. A tip
+    // inside the box (or right by it) has no leader to draw.
+    const headLength = width * HEAD_LENGTH;
+    if (length > headLength) {
+      const ux = (tip.x - from.x) / length;
+      const uy = (tip.y - from.y) / length;
+      const base = { x: tip.x - ux * headLength, y: tip.y - uy * headLength };
+      const half = (headLength * HEAD_WIDTH) / 2;
       leader = {
         from,
-        to: shape.line[1],
-        width: arrowMetrics(page).strokeWidth,
-        head: shape.head,
+        to: base,
+        width,
+        head: [
+          tip,
+          { x: base.x - uy * half, y: base.y + ux * half },
+          { x: base.x + uy * half, y: base.y - ux * half },
+        ],
       };
+    }
   }
   return { box, metrics, lines, leader };
 }
