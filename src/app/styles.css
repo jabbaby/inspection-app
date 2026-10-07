@@ -745,8 +745,9 @@ dl.facts dd {
   pointer-events: none;
 }
 
-/* Tap and hold: a ring fills under the finger, then a pin appears and an
-   arrow follows the drag. Positioned in content pixels by the viewer. */
+/* Tap and hold: a ring fills under the finger, then a pin appears; a drag
+   leaves the arrowhead at the press and the pin follows the finger.
+   Positioned in content pixels by the viewer. */
 .hold-layer {
   --hold-colour: var(--brand-red);
   position: absolute;
@@ -793,6 +794,11 @@ dl.facts dd {
   border-radius: 50%;
 }
 
+.hold-pin {
+  left: var(--pin-x);
+  top: var(--pin-y);
+}
+
 .hold-ring {
   width: 64px;
   height: 64px;
@@ -835,8 +841,9 @@ dl.facts dd {
   display: block;
 }
 
-/* The Text tool's hold: a box, its top-left at the press, as the callout
-   will be placed. */
+/* The Text tool's hold: a box, as the callout will be placed: its
+   top-left at the press, or dragged, its corner nearest the arrowhead at
+   the finger. */
 .hold-layer[data-kind="text"] .hold-pin {
   width: 44px;
   height: 26px;
@@ -844,6 +851,14 @@ dl.facts dd {
   border: 2px solid var(--hold-colour);
   border-radius: 2px;
   background: #fff;
+}
+
+.hold-layer[data-kind="text"][data-left="true"] .hold-pin {
+  margin-left: -44px;
+}
+
+.hold-layer[data-kind="text"][data-up="true"] .hold-pin {
+  margin-top: -26px;
 }
 
 .viewer-pin {

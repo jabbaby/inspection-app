@@ -115,6 +115,36 @@ export function calloutSize(
   };
 }
 
+/**
+ * Which way a new box hangs from the point it was placed at: a callout
+ * dragged out from its arrowhead keeps the corner nearest the tip there
+ * (engineer, 2026-10-07), so it grows away from the arrow as it's typed.
+ */
+export interface CalloutHang {
+  left: boolean;
+  up: boolean;
+}
+
+/** The hang for a box placed at `at` with its leader to `tip`. */
+export function calloutHang(at: Point, tip: Point): CalloutHang {
+  return { left: tip.x > at.x, up: tip.y > at.y };
+}
+
+/**
+ * The top-left of a box `size` hung from `corner` (page units), kept on
+ * the page's top and left.
+ */
+export function hungBoxOrigin(
+  corner: Point,
+  size: Size,
+  hang: CalloutHang | undefined,
+): Point {
+  return {
+    x: Math.max(0, hang?.left ? corner.x - size.width : corner.x),
+    y: Math.max(0, hang?.up ? corner.y - size.height : corner.y),
+  };
+}
+
 /** Where a callout is: its box and (optional) leader tip, in page units. */
 export interface CalloutPlace {
   box: Rect;

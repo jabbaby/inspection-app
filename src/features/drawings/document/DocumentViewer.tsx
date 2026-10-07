@@ -135,10 +135,11 @@ interface Props {
   /** The eraser tapped inside a filled shape: take its fill off. */
   onUnfill: (id: string) => void;
   /**
-   * The Text tool's tap and hold (then drag) placed a callout: its box's
-   * top-left at the press, and the point its leader refers to (null when
-   * not dragged: no leader). Normalised on `page`. A plain tap with Text on
-   * comes through `onTapDrawing`.
+   * The Text tool's tap and hold (then drag) placed a callout: dragged, its
+   * box at the lift (the corner nearest the tip there) and its leader's tip
+   * at the press; not dragged, its top-left at the press and no leader
+   * (`tip` null). Normalised on `page`. A plain tap with Text on comes
+   * through `onTapDrawing`.
    */
   onPlaceText: (page: PageLayout, box: Point, tip: Point | null) => void;
   /** The Select tool's picked marks (SPEC section 5a, slice 2d). */
@@ -167,15 +168,17 @@ interface Props {
   onMovePinEnd: (id: string, to: Point) => void;
   onSelectPin: (id: string) => void;
   /**
-   * Tap, hold, (drag,) release on the drawing: a pin at the press point,
-   * with an arrow to the release point when dragged (on the same page).
-   * After a tap (double-tap and hold) the kind is observation, and `pinId`
-   * names the pin pressed, when the hold started on one.
+   * Tap, hold, (drag,) release on the drawing, from `press` to `end` (null:
+   * not dragged), on the press's page: a new pin goes at the end with its
+   * arrowhead at the press (engineer, 2026-10-07). After a tap (double-tap
+   * and hold) the kind is observation, and `pinId` names the pin pressed,
+   * when the hold started on one: one that was already there stays put and
+   * its arrow points to the end instead.
    */
   onHoldPlace: (
     page: PageLayout,
-    at: Point,
-    tip: Point | null,
+    press: Point,
+    end: Point | null,
     kind: "instruction" | "observation",
     pinId: string | null,
   ) => void;
@@ -778,14 +781,23 @@ export function DocumentViewer(props: Props) {
     kind: "instruction" | "observation" | "text";
     /** The pin pressed (double-tap and hold on a pin). */
     pinId: string | null;
+    /**
+     * The arrowhead stays at the press and the pin (or box) follows the
+     * drag (engineer, 2026-10-07); false for a pin that was already there,
+     * whose arrow follows the drag instead.
+     */
+    headFirst: boolean;
     timer: number;
     ringTimer: number;
     held: boolean;
-    tip: Point | null;
+    /** Where it was dragged to, on the page (null: not dragged). */
+    end: Point | null;
   } | null>(null);
   const holdRef = useRef<HTMLDivElement>(null);
   /** The last tap (drawing or pin), to spot a double-tap. */
-  const lastTap = useRef<{ at: Point; time: number } | null>(null);
+  const lastTap = useRef<{ at: Point; time: number; onPin: boolean } | null>(
+    null,
+  );
   /** A touch that stopped a scroll: it never counts as a tap. */
   const stopTouch = useRef<number | null>(null);
   const pinch = useRef<{
@@ -1653,14 +1665,14 @@ export function DocumentViewer(props: Props) {
   }
 
   /** Records a tap; true when it is the second of a double-tap. */
-  function isSecondTap(at: Point, time: number) {
+  function isSecondTap(at: Point, time: number, onPin = false) {
     const second = nearLastTap(at, time);
     // A third tap starts a new pair.
-    lastTap.current = second ? null : { at, time };
+    lastTap.current = second ? null : { at, time, onPin };
     return second;
   }
 
-  // --- hold: a pin, then drag out an arrow --------------------------------
+  // --- hold: an arrowhead, then drag the pin out ---------------------------
 
   /** A point on the screen, in the scrolled content (where the layer is). */
   function toContent(p: Point): Point {
@@ -1677,6 +1689,19 @@ export function DocumentViewer(props: Props) {
     line.setAttribute("y2", String(to.y));
   }
 
+  /**
+   * Puts the hold's pin (or callout box) at `c`, in content pixels; a box
+   * hangs from its corner nearest the arrowhead (`left`, `up`).
+   */
+  function holdPin(c: Point, left: boolean, up: boolean) {
+    const layer = holdRef.current;
+    if (!layer) return;
+    layer.style.setProperty("--pin-x", `${c.x}px`);
+    layer.style.setProperty("--pin-y", `${c.y}px`);
+    layer.dataset.left = String(left);
+    layer.dataset.up = String(up);
+  }
+
   /** Shows the hold layer (nothing is touched until the ring is due). */
   function showHold(state: "pending" | "held" | null) {
     const layer = holdRef.current;
@@ -1689,6 +1714,7 @@ export function DocumentViewer(props: Props) {
     const c = toContent(h.origin);
     layer.style.setProperty("--hold-x", `${c.x}px`);
     layer.style.setProperty("--hold-y", `${c.y}px`);
+    holdPin(c, false, false);
     layer.dataset.kind = h.kind;
     // A callout's hold shows in the Text tool's colour.
     if (h.kind === "text")
@@ -1706,6 +1732,7 @@ export function DocumentViewer(props: Props) {
     at: Point,
     kind: "instruction" | "observation" | "text",
     pinId: string | null,
+    headFirst: boolean,
   ) {
     hold.current = {
       pointerId,
@@ -1715,10 +1742,11 @@ export function DocumentViewer(props: Props) {
       at,
       kind,
       pinId,
+      headFirst,
       timer: window.setTimeout(fireHold, HOLD_MS),
       ringTimer: window.setTimeout(() => showHold("pending"), RING_DELAY_MS),
       held: false,
-      tip: null,
+      end: null,
     };
   }
 
@@ -1736,17 +1764,35 @@ export function DocumentViewer(props: Props) {
       screenToPage(currentTransform(), start),
     );
     if (!hit) return;
-    beginHold(pointerId, start, start, hit.page, hit.at, kind, null);
+    beginHold(pointerId, start, start, hit.page, hit.at, kind, null, true);
   }
 
-  /** The second press of a double-tap landed on a pin (often the new one). */
-  function startPinHold(pointerId: number, pinId: string, start: Point) {
+  /**
+   * The second press of a double-tap landed on a pin: usually the one the
+   * first tap just placed (`headFirst`: it moves to where the drag ends),
+   * else one that was already there (it stays; its arrow follows the drag).
+   */
+  function startPinHold(
+    pointerId: number,
+    pinId: string,
+    start: Point,
+    headFirst: boolean,
+  ) {
     const pin = latest.current.pins.find((p) => p.id === pinId);
     const page = pin && pagesRef.current.get(pin.pageKey);
     if (!pin || !page) return;
     const at = { x: pin.x, y: pin.y };
     const origin = pageToScreen(currentTransform(), pagePointToDoc(page, at));
-    beginHold(pointerId, start, origin, page, at, "observation", pinId);
+    beginHold(
+      pointerId,
+      start,
+      origin,
+      page,
+      at,
+      "observation",
+      pinId,
+      headFirst,
+    );
   }
 
   function fireHold() {
@@ -1777,22 +1823,28 @@ export function DocumentViewer(props: Props) {
     const h = hold.current;
     if (!h?.held) return;
     if (Math.hypot(p.x - h.start.x, p.y - h.start.y) < ARROW_MIN) {
-      h.tip = null;
+      h.end = null;
     } else {
-      // The tip stays on the pin's page.
+      // The drag stays on the press's page.
       const doc = screenToPage(currentTransform(), p);
-      h.tip = clampNormalised({
+      h.end = clampNormalised({
         x: doc.x / DOC_WIDTH,
         y: (doc.y - h.page.top) / h.page.height,
       });
     }
-    const from = toContent(h.origin);
-    const to = h.tip
+    const press = toContent(h.origin);
+    const end = h.end
       ? toContent(
-          pageToScreen(currentTransform(), pagePointToDoc(h.page, h.tip)),
+          pageToScreen(currentTransform(), pagePointToDoc(h.page, h.end)),
         )
-      : from;
-    holdLine(from, to);
+      : press;
+    if (h.headFirst) {
+      // The arrowhead stays at the press; the pin follows the finger.
+      holdLine(end, press);
+      holdPin(end, end.x < press.x, end.y < press.y);
+    } else {
+      holdLine(press, end);
+    }
   }
 
   function holdEnd(p: Point) {
@@ -1800,8 +1852,14 @@ export function DocumentViewer(props: Props) {
     if (!h?.held) return;
     holdMove(p);
     cancelHold();
-    if (h.kind === "text") latest.current.onPlaceText(h.page, h.at, h.tip);
-    else latest.current.onHoldPlace(h.page, h.at, h.tip, h.kind, h.pinId);
+    // Dragged: the box where it lifted, its leader to the press. A pin's
+    // screen decides which end it goes (it knows which pin is new).
+    if (h.kind === "text") {
+      if (h.end) latest.current.onPlaceText(h.page, h.end, h.at);
+      else latest.current.onPlaceText(h.page, h.at, null);
+    } else {
+      latest.current.onHoldPlace(h.page, h.at, h.end, h.kind, h.pinId);
+    }
   }
 
   // Native scrolling, touch pinch, Pencil and wheel zoom.
@@ -2059,8 +2117,9 @@ export function DocumentViewer(props: Props) {
       latest.current.tool === "pin" &&
       nearLastTap(local(e), e.timeStamp)
     ) {
+      const firstOnPin = lastTap.current?.onPin ?? false;
       latest.current.onSecondPress({ pinId: id });
-      startPinHold(e.pointerId, id, local(e));
+      startPinHold(e.pointerId, id, local(e), !firstOnPin);
     }
   }
 
@@ -2111,7 +2170,10 @@ export function DocumentViewer(props: Props) {
     if (drag.moved && drag.last) {
       latest.current.onMovePinEnd(drag.id, drag.last);
     } else if (!drag.moved) {
-      if (latest.current.tool === "pin" && isSecondTap(local(e), e.timeStamp))
+      if (
+        latest.current.tool === "pin" &&
+        isSecondTap(local(e), e.timeStamp, true)
+      )
         latest.current.onDoubleTap({ pinId: drag.id });
       else latest.current.onSelectPin(drag.id);
     }

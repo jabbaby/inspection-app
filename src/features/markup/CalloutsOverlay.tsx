@@ -7,7 +7,9 @@ import {
   calloutPoints,
   calloutSize,
   calloutText,
+  hungBoxOrigin,
   layoutCallout,
+  type CalloutHang,
 } from "./calloutGeometry";
 import { measureArial } from "./measureText";
 import type { DocMark } from "./tools";
@@ -16,9 +18,11 @@ import type { DocMark } from "./tools";
 export interface CalloutDraft {
   /** The mark being edited, or null for a new one. */
   id: string | null;
-  /** Box top-left and leader tip, normalised on the page. */
+  /** Box top-left (or the corner it hangs from) and leader tip, normalised on the page. */
   box: Point;
   tip: Point | null;
+  /** A new box dragged out from its arrowhead hangs from another corner. */
+  hang?: CalloutHang;
   /** The box's width when it was resized by hand (normalised), else null. */
   width: number | null;
   text: string;
@@ -35,6 +39,13 @@ function draftBoxSize(draft: CalloutDraft, page: Size) {
     measureArial,
     draft.width === null ? undefined : draft.width * page.width,
   );
+}
+
+/** A draft's box in page units: its top-left and size. */
+function draftBox(draft: CalloutDraft, page: Size) {
+  const size = draftBoxSize(draft, page);
+  const corner = { x: draft.box.x * page.width, y: draft.box.y * page.height };
+  return { ...hungBoxOrigin(corner, size, draft.hang), ...size };
 }
 
 interface Props {
@@ -187,11 +198,7 @@ export const CalloutsOverlay = memo(function CalloutsOverlay({
     const size = { width, height };
     const points = calloutPoints(
       {
-        box: {
-          x: draft.box.x * width,
-          y: draft.box.y * height,
-          ...draftBoxSize(draft, size),
-        },
+        box: draftBox(draft, size),
         tip: { x: draft.tip.x * width, y: draft.tip.y * height },
       },
       size,
@@ -404,11 +411,7 @@ function CalloutEditor({
   const { pageSize } = useViewerCoords();
   const ref = useRef<HTMLTextAreaElement>(null);
   const m = calloutMetrics(draft.size, pageSize);
-  const size = draftBoxSize(draft, pageSize);
-  const place = calloutPlace(
-    { points: [draft.box.x, draft.box.y, 0, 0] },
-    pageSize,
-  );
+  const box = draftBox(draft, pageSize);
   // Laid out at least MIN_INPUT_PX and scaled down to the callout's size.
   const k = Math.max(1, MIN_INPUT_PX / m.fontSize);
 
@@ -427,10 +430,10 @@ function CalloutEditor({
       onPointerDown={(e) => e.stopPropagation()}
       rows={1}
       style={{
-        left: place.box.x,
-        top: place.box.y,
-        width: size.width * k,
-        height: size.height * k,
+        left: box.x,
+        top: box.y,
+        width: box.width * k,
+        height: box.height * k,
         fontSize: m.fontSize * k,
         lineHeight: `${m.lineHeight * k}px`,
         padding: m.padding * k,

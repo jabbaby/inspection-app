@@ -753,7 +753,7 @@ test("a double-tap on a pin switches its kind; Undo switches it back", async ({
   await expect(pinByLetter(page, "A", "instruction")).toBeVisible();
 });
 
-test("hold then drag places a pin with an arrow; hold alone just the pin", async ({
+test("hold then drag: the arrowhead at the press, the pin where it lifts; hold alone just the pin", async ({
   page,
 }) => {
   await setupInspection(page);
@@ -763,7 +763,7 @@ test("hold then drag places a pin with an arrow; hold alone just the pin", async
   const from = { x: box.x + box.width * 0.3, y: box.y + box.height * 0.4 };
   const to = { x: box.x + box.width * 0.6, y: box.y + box.height * 0.6 };
 
-  // Hold, then drag: the pin stays where pressed, the arrow tip follows.
+  // Hold, then drag: the arrowhead stays where pressed, the pin follows.
   await page.mouse.move(from.x, from.y);
   await page.mouse.down();
   await page.waitForTimeout(700);
@@ -772,11 +772,11 @@ test("hold then drag places a pin with an arrow; hold alone just the pin", async
   await expect(pinByLetter(page, "A")).toBeVisible();
   await expect(sheet(page)).toBeVisible();
   const pin = await centre(pinByLetter(page, "A"));
-  expect(Math.abs(pin.x - from.x)).toBeLessThan(3);
-  expect(Math.abs(pin.y - from.y)).toBeLessThan(3);
+  expect(Math.abs(pin.x - to.x)).toBeLessThan(3);
+  expect(Math.abs(pin.y - to.y)).toBeLessThan(3);
   const tip = await centre(page.getByTestId("arrow-handle"));
-  expect(Math.abs(tip.x - to.x)).toBeLessThan(3);
-  expect(Math.abs(tip.y - to.y)).toBeLessThan(3);
+  expect(Math.abs(tip.x - from.x)).toBeLessThan(3);
+  expect(Math.abs(tip.y - from.y)).toBeLessThan(3);
   // One step: Undo removes the pin and its arrow.
   const undo = page.getByRole("button", { name: "Undo" });
   await expect(undo).toHaveAttribute("title", "Undo: Add instruction A");
@@ -805,7 +805,7 @@ test("hold then drag places a pin with an arrow; hold alone just the pin", async
   await expect(page.getByTestId("viewer-pin")).toHaveCount(0);
 });
 
-test("double-tap and hold places an observation with an arrow in one step", async ({
+test("double-tap and hold: an observation dragged out from its arrowhead in one step; an existing pin keeps its place", async ({
   page,
 }) => {
   await setupInspection(page);
@@ -816,7 +816,8 @@ test("double-tap and hold places an observation with an arrow in one step", asyn
   const to = { x: box.x + box.width * 0.6, y: box.y + box.height * 0.6 };
 
   // Tap, then press again at once: the pin turns blue straight away; hold
-  // and drag the arrow; the editor waits until the finger lifts.
+  // and drag the pin out from its arrowhead; the editor waits until the
+  // finger lifts.
   await page.mouse.click(from.x, from.y);
   await page.mouse.down();
   await expect(pinByLetter(page, "A", "observation")).toBeVisible();
@@ -828,13 +829,39 @@ test("double-tap and hold places an observation with an arrow in one step", asyn
   await expect(page.getByTestId("viewer-pin")).toHaveCount(1);
   await expect(pinByLetter(page, "A", "observation")).toBeVisible();
   await expect(sheet(page)).toBeVisible();
+  await expect(async () => {
+    const pin = await centre(pinByLetter(page, "A", "observation"));
+    expect(Math.abs(pin.x - to.x)).toBeLessThan(3);
+    expect(Math.abs(pin.y - to.y)).toBeLessThan(3);
+  }).toPass();
   const tip = await centre(page.getByTestId("arrow-handle"));
-  expect(Math.abs(tip.x - to.x)).toBeLessThan(3);
-  expect(Math.abs(tip.y - to.y)).toBeLessThan(3);
+  expect(Math.abs(tip.x - from.x)).toBeLessThan(3);
+  expect(Math.abs(tip.y - from.y)).toBeLessThan(3);
   const undo = page.getByRole("button", { name: "Undo" });
   await expect(undo).toHaveAttribute("title", "Undo: Add observation A");
   await undo.click();
   await expect(page.getByTestId("viewer-pin")).toHaveCount(0);
+
+  // On a pin that was already there: it stays put and the arrow follows.
+  await page.mouse.click(from.x, from.y);
+  await expect(sheet(page)).toBeVisible();
+  await sheet(page).getByRole("button", { name: "Done" }).first().click();
+  await expect(sheet(page)).toHaveCount(0);
+  // Past the moment a pin still counts as just placed.
+  await page.waitForTimeout(1100);
+  const existing = await centre(pinByLetter(page, "A", "instruction"));
+  await page.mouse.click(existing.x, existing.y);
+  await page.mouse.down();
+  await page.waitForTimeout(700);
+  await page.mouse.move(to.x, to.y, { steps: 10 });
+  await page.mouse.up();
+  await expect(pinByLetter(page, "A", "observation")).toBeVisible();
+  const kept = await centre(pinByLetter(page, "A", "observation"));
+  expect(Math.abs(kept.x - existing.x)).toBeLessThan(3);
+  expect(Math.abs(kept.y - existing.y)).toBeLessThan(3);
+  const tip2 = await centre(page.getByTestId("arrow-handle"));
+  expect(Math.abs(tip2.x - to.x)).toBeLessThan(3);
+  expect(Math.abs(tip2.y - to.y)).toBeLessThan(3);
 });
 
 test("jumping to an item keeps its pin clear of the panel", async ({
@@ -2037,25 +2064,30 @@ test("text callouts: hold and drag for a leader, tap for a box, select then edit
     y: box.y + box.height * fy,
   });
 
-  // Hold where the box goes, drag to the point referred to, and type.
+  // Hold at the point referred to, drag the box out, and type.
   await textTool.click();
   await expect(toolbar.getByRole("button", { name: "Medium" })).toBeVisible();
   await expect(toolbar).toContainText("hold and drag for an arrow");
-  const press = at(0.5, 0.42);
-  await page.mouse.move(press.x, press.y);
+  const point = at(0.5, 0.42);
+  await page.mouse.move(point.x, point.y);
   await page.mouse.down();
   await page.waitForTimeout(700);
-  const point = at(0.25, 0.3);
-  await page.mouse.move(point.x, point.y, { steps: 8 });
+  const lift = at(0.25, 0.3);
+  await page.mouse.move(lift.x, lift.y, { steps: 8 });
   await page.mouse.up();
   await expect(editor).toBeFocused();
+  // Up and left of the point: the box hangs up and left from the lift (its
+  // corner nearest the arrowhead there), growing away from the arrow.
+  const typing = (await editor.boundingBox())!;
+  expect(Math.abs(typing.x + typing.width - lift.x)).toBeLessThan(3);
+  expect(Math.abs(typing.y + typing.height - lift.y)).toBeLessThan(3);
   await editor.pressSequentially("lap 600 min");
   // Turning the tool off finishes typing.
   await textTool.click();
   await expect(editor).toHaveCount(0);
   await expect(callouts).toHaveCount(1);
   await expect(callouts.first()).toHaveAttribute("aria-label", "LAP 600 MIN");
-  // The point is to the left: a dog leg out of the box's left side.
+  // The point is to the right: a dog leg out of the box's right side.
   const leader = callouts.first().locator("polyline");
   await expect(leader).toHaveCount(1);
   expect((await leader.getAttribute("points"))!.split(" ")).toHaveLength(3);
@@ -2401,12 +2433,12 @@ test("select: a callout tapped again opens for typing; its tip and width handles
 
   // A callout with an arrow (hold, drag), typed and finished.
   await tool("Text").click();
-  const press = at(0.5, 0.4);
-  await page.mouse.move(press.x, press.y);
+  const point = at(0.3, 0.55);
+  await page.mouse.move(point.x, point.y);
   await page.mouse.down();
   await page.waitForTimeout(700);
-  const point = at(0.3, 0.55);
-  await page.mouse.move(point.x, point.y, { steps: 8 });
+  const lift = at(0.5, 0.4);
+  await page.mouse.move(lift.x, lift.y, { steps: 8 });
   await page.mouse.up();
   await editor.pressSequentially("check lap 600 min");
   await tool("Text").click();

@@ -39,8 +39,10 @@ import { MarkupOverlay } from "../markup/MarkupOverlay";
 import { CalloutsOverlay, type CalloutDraft } from "../markup/CalloutsOverlay";
 import {
   calloutMetrics,
+  calloutHang,
   calloutPoints,
   calloutSize,
+  hungBoxOrigin,
 } from "../markup/calloutGeometry";
 import { measureArial } from "../markup/measureText";
 import { MarkupToolbar } from "../markup/MarkupToolbar";
@@ -482,8 +484,11 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
     const points = calloutPoints(
       {
         box: {
-          x: d.box.x * size.width,
-          y: d.box.y * size.height,
+          ...hungBoxOrigin(
+            { x: d.box.x * size.width, y: d.box.y * size.height },
+            box,
+            d.hang,
+          ),
           ...box,
         },
         tip: d.tip && { x: d.tip.x * size.width, y: d.tip.y * size.height },
@@ -519,6 +524,7 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
       id: null,
       box,
       tip,
+      hang: tip ? calloutHang(box, tip) : undefined,
       width: null,
       text: "",
       colour: toolColour(prefs, "text"),
@@ -1013,35 +1019,42 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
   }
 
   /**
-   * A tap and hold (then release). An instruction is a new pin, with its
-   * arrow if dragged. An observation (double-tap and hold) turns the pin
-   * the first tap placed into one, with the arrow, in the same Undo step;
-   * on an existing pin it switches the pin and adds the arrow; otherwise
-   * it places a new observation.
+   * A tap and hold (then release), from `press` to `end` (null: not
+   * dragged). A new pin goes where the drag ended with its arrowhead at
+   * the press (engineer, 2026-10-07: the arrowhead first, then drag the
+   * pin out). An instruction is a new pin. An observation (double-tap and
+   * hold) moves the pin the first tap placed and turns it into one, with
+   * the arrow, in the same Undo step; an existing pin stays put, switches,
+   * and gets an arrow to the end; otherwise it places a new observation.
    */
   async function holdPlace(
     page: PageLayout,
-    at: Point,
-    tip: Point | null,
+    press: Point,
+    end: Point | null,
     kind: ItemKind,
     pinId: string | null,
   ) {
-    const arrows = tip ? [{ id: crypto.randomUUID(), ...tip }] : [];
+    // A new pin: at the end, pointing back at the press.
+    const at = end ?? press;
+    const arrows = end ? [{ id: crypto.randomUUID(), ...press }] : [];
     placedByTap.current = null;
     if (kind === "instruction") {
       await placePin(page, at, { arrows });
       return;
     }
-    // Double-tap and hold: the pin the second press turned gets the arrow.
+    // Double-tap and hold: the pin the second press turned moves to the
+    // end and gets the arrow.
     const turned = await takeSecondPressed();
     if (turned) {
       const samePage =
         turned.drawingId === page.drawingId && turned.page === page.page;
-      if (arrows.length && samePage) {
-        await switchNewItemKind(turned, "observation", [
-          ...(turned.arrows ?? []),
-          ...arrows,
-        ]);
+      if (end && samePage) {
+        await switchNewItemKind(
+          turned,
+          "observation",
+          [...(turned.arrows ?? []), ...arrows],
+          at,
+        );
       }
       openItem(turned.id);
       return;
@@ -1051,10 +1064,10 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
       select(existing.id);
       await setKindWithUndo(existing, "observation");
       const spot = itemSpots(existing).find((s) => s.key === pinId);
-      if (arrows.length && spot) {
+      if (end && spot) {
         await setArrowsWithUndo(
           existing,
-          [...spot.arrows, ...arrows],
+          [...spot.arrows, { id: crypto.randomUUID(), ...end }],
           `Add arrow to observation ${existing.letter}`,
           spot.copyId,
         );

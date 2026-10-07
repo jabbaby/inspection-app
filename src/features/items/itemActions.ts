@@ -73,8 +73,14 @@ export async function switchNewItemKind(
   kind: ItemKind,
   /** Replaces its arrows too (a double-tap and hold drags one out). */
   arrows?: ItemArrow[],
+  /** Moves it too (the hold dragged the pin out from its arrowhead). */
+  at?: { x: number; y: number },
 ): Promise<void> {
-  await updateItem(db, created.id, arrows ? { kind, arrows } : { kind });
+  await updateItem(db, created.id, {
+    kind,
+    ...(arrows && { arrows }),
+    ...(at && { x: at.x, y: at.y }),
+  });
   const entry = addEntries.get(created.id);
   const item = await db.items.get(created.id);
   if (entry && item)

@@ -58,7 +58,8 @@ async function pin(
     await sheet.getByRole("button", { name: "Done" }).first().click();
     await expect(sheet).toHaveCount(0);
   }
-  if (arrowTo) await drag(page, [[fx, fy], arrowTo], { hold: 700 });
+  // Hold at the arrow's spot, then drag the pin out to its place.
+  if (arrowTo) await drag(page, [arrowTo, [fx, fy]], { hold: 700 });
   else {
     const box = await stageBox(page);
     await page.mouse.click(box.x + box.width * fx, box.y + box.height * fy);
@@ -172,8 +173,8 @@ test("manual screenshots @shots", async ({ page }) => {
   await drag(
     page,
     [
-      [0.38, 0.86],
       [0.3, 0.74],
+      [0.38, 0.86],
     ],
     { hold: 700 },
   );
