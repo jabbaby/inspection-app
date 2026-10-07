@@ -1,9 +1,21 @@
 import { ChevronDown, Copy, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useViewerCoords } from "../drawings/viewer/viewerCoords";
-import { isHighlight } from "./markGeometry";
+import {
+  boxCentre,
+  isBoxShape,
+  isHighlight,
+  rotatePoint,
+  toPagePoints,
+} from "./markGeometry";
 import { PRESET_COLOURS, useMarkupPrefs } from "./markupPrefs";
-import { selectionBounds, shapeHandles, weightIndex } from "./selectGeometry";
+import {
+  ROTATE_OFFSET_PX,
+  rotateHandle,
+  selectionBounds,
+  shapeHandles,
+  weightIndex,
+} from "./selectGeometry";
 import type { DocMark } from "./tools";
 
 interface Props {
@@ -60,6 +72,29 @@ export function SelectionOverlay({
   const b = selectionBounds(marks, pageSize);
   const gap = GAP_PX * k;
   const handles = marks.length === 1 ? shapeHandles(marks[0], pageSize) : [];
+  const turn = rotateHandle(marks, pageSize, ROTATE_OFFSET_PX * k);
+  // A single turned box: its dashed outline turns with it.
+  const one = marks.length === 1 ? marks[0] : null;
+  const turned =
+    one && one.rotation && isBoxShape(one.tool)
+      ? (() => {
+          const [a, c2] = toPagePoints(one.points, pageSize);
+          const c = boxCentre([a, c2]);
+          const l = Math.min(a.x, c2.x) - gap;
+          const r = Math.max(a.x, c2.x) + gap;
+          const t = Math.min(a.y, c2.y) - gap;
+          const bt = Math.max(a.y, c2.y) + gap;
+          return {
+            corners: [
+              { x: l, y: t },
+              { x: r, y: t },
+              { x: r, y: bt },
+              { x: l, y: bt },
+            ].map((p) => rotatePoint(p, c, one.rotation!)),
+            top: rotatePoint({ x: (l + r) / 2, y: t }, c, one.rotation),
+          };
+        })()
+      : null;
 
   const highlights = marks.filter(isHighlight);
   const palette = highlights.length === marks.length ? "highlighter" : "pen";
@@ -73,7 +108,9 @@ export function SelectionOverlay({
   const names = onlyText
     ? ["Small", "Medium", "Large"]
     : ["Thin", "Medium", "Thick"];
-  const above = b.y - gap - (BAR_GAP_PX + BAR_PX) * k > 0;
+  // Above the rotate handle when there is one.
+  const barGap = turn ? ROTATE_OFFSET_PX + 18 : BAR_GAP_PX;
+  const above = b.y - gap - (barGap + BAR_PX) * k > 0;
   const slots = [
     ...new Set([...prefs.palettes[palette], ...PRESET_COLOURS[palette]]),
   ];
@@ -89,16 +126,52 @@ export function SelectionOverlay({
         viewBox={`0 0 ${width} ${height}`}
         aria-hidden="true"
       >
-        <rect
-          x={b.x - gap}
-          y={b.y - gap}
-          width={b.width + 2 * gap}
-          height={b.height + 2 * gap}
-          fill="none"
-          stroke="#3b3b3b"
-          strokeWidth={1.5 * k}
-          strokeDasharray={`${6 * k} ${4 * k}`}
-        />
+        {turned ? (
+          <polygon
+            points={turned.corners.map((p) => `${p.x},${p.y}`).join(" ")}
+            fill="none"
+            stroke="#3b3b3b"
+            strokeWidth={1.5 * k}
+            strokeDasharray={`${6 * k} ${4 * k}`}
+          />
+        ) : (
+          <rect
+            x={b.x - gap}
+            y={b.y - gap}
+            width={b.width + 2 * gap}
+            height={b.height + 2 * gap}
+            fill="none"
+            stroke="#3b3b3b"
+            strokeWidth={1.5 * k}
+            strokeDasharray={`${6 * k} ${4 * k}`}
+          />
+        )}
+        {turn && (
+          <g data-testid="handle-rotate">
+            <line
+              x1={turned ? turned.top.x : b.x + b.width / 2}
+              y1={turned ? turned.top.y : b.y - gap}
+              x2={turn.x}
+              y2={turn.y}
+              stroke="#3b3b3b"
+              strokeWidth={1.5 * k}
+            />
+            <circle
+              cx={turn.x}
+              cy={turn.y}
+              r={HANDLE_PX * 1.4 * k}
+              fill="#fff"
+              stroke="#3b3b3b"
+              strokeWidth={1.5 * k}
+            />
+            <path
+              d={`M ${turn.x - 3 * k} ${turn.y - 2 * k} A ${3.5 * k} ${3.5 * k} 0 1 1 ${turn.x + 3 * k} ${turn.y + 2 * k}`}
+              fill="none"
+              stroke="#3b3b3b"
+              strokeWidth={1.2 * k}
+            />
+          </g>
+        )}
         {handles.map((h) =>
           h.id === "width" ? (
             <rect
@@ -150,7 +223,7 @@ export function SelectionOverlay({
           style={{
             left: b.x - gap,
             top: above
-              ? b.y - gap - BAR_GAP_PX * k
+              ? b.y - gap - barGap * k
               : b.y + b.height + gap + BAR_GAP_PX * k,
             transform: above ? `scale(${k}) translateY(-100%)` : `scale(${k})`,
           }}

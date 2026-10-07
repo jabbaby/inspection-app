@@ -2545,3 +2545,79 @@ test("two fingers double-tapped undo; a pinch doesn't", async ({ page }) => {
   await page.waitForTimeout(300);
   await expect(marks).toHaveCount(1);
 });
+
+test("select: the rotate handle turns a shape (handles still resize it) and a group", async ({
+  page,
+}) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openDrawing(page, "S-101 Level 3", false);
+  const toolbar = page.getByRole("toolbar", { name: "Markup tools" });
+  const tool = (name: string) =>
+    toolbar.getByRole("button", { name, exact: true });
+  const box = await stageBox(page);
+  const at = (fx: number, fy: number) => ({
+    x: box.x + box.width * fx,
+    y: box.y + box.height * fy,
+  });
+  const undo = page.getByRole("button", { name: "Undo" });
+  await tool("Rectangle").click();
+  await drawLine(page, [0.35, 0.4], [0.55, 0.5]);
+  await tool("Pen").click();
+  await drawLine(page, [0.2, 0.7], [0.3, 0.75]);
+  const rect = page.locator('[data-tool="rect"] path').first();
+  const level = (await rect.getAttribute("d"))!;
+
+  // One shape: drag its rotate handle a quarter turn.
+  await tool("Select").click();
+  const onRect = at(0.45, 0.45);
+  await page.mouse.click(onRect.x, onRect.y);
+  const handle = page.getByTestId("handle-rotate").locator("circle");
+  const h = (await handle.boundingBox())!;
+  const centre = at(0.45, 0.45);
+  const grab = { x: h.x + h.width / 2, y: h.y + h.height / 2 };
+  const r = centre.y - grab.y;
+  await page.mouse.move(grab.x, grab.y);
+  await page.mouse.down();
+  for (const a of [0.4, 0.8, 1.2, Math.PI / 2])
+    await page.mouse.move(
+      centre.x + r * Math.sin(a),
+      centre.y - r * Math.cos(a),
+      { steps: 4 },
+    );
+  await page.mouse.up();
+  await expect(rect).not.toHaveAttribute("d", level);
+  // Turned, it still resizes from its handles.
+  await expect(page.getByTestId("handle-se")).toBeVisible();
+  const turned = (await rect.getAttribute("d"))!;
+  const se = (await page.getByTestId("handle-se").boundingBox())!;
+  await page.mouse.move(se.x + se.width / 2, se.y + se.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(se.x - 30, se.y + 40, { steps: 6 });
+  await page.mouse.up();
+  await expect(rect).not.toHaveAttribute("d", turned);
+  await undo.click();
+  await undo.click();
+  await expect(rect).toHaveAttribute("d", level);
+
+  // A group: a loop round both, then turn them together.
+  const pen = page.locator('[data-tool="pen"] path').first();
+  const penBefore = (await pen.getAttribute("d"))!;
+  const loop = [at(0.15, 0.35), at(0.6, 0.35), at(0.6, 0.8), at(0.15, 0.8)];
+  await page.mouse.move(loop[0].x, loop[0].y);
+  await page.mouse.down();
+  for (const p of [...loop.slice(1), loop[0]])
+    await page.mouse.move(p.x, p.y, { steps: 6 });
+  await page.mouse.up();
+  await expect(page.getByTestId("selection")).toHaveAttribute(
+    "data-count",
+    "2",
+  );
+  const g = (await handle.boundingBox())!;
+  await page.mouse.move(g.x + g.width / 2, g.y + g.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(g.x + 120, g.y + 60, { steps: 8 });
+  await page.mouse.up();
+  await expect(pen).not.toHaveAttribute("d", penBefore);
+  await expect(rect).not.toHaveAttribute("d", level);
+});

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import type { Markup } from "../../db/types";
-import { WEIGHT_PRESETS } from "./markGeometry";
+import { WEIGHT_PRESETS, drawMark, rotatePoint } from "./markGeometry";
 import {
   clampMove,
   markBounds,
@@ -8,6 +8,9 @@ import {
   movedPoints,
   pickMark,
   resizedPoints,
+  rotatedMark,
+  rotationBy,
+  rotationCentre,
   selectionBounds,
   shapeHandles,
   weightIndex,
@@ -96,5 +99,60 @@ describe("select", () => {
       }),
     ).toBe(2);
     expect(weightIndex({ tool: "pen", weight: 0.004 })).toBe(-1);
+  });
+
+  test("a turned rectangle is drawn turned about its middle", () => {
+    const turned = { ...rect, rotation: Math.PI / 2 };
+    const outline = drawMark(turned, PAGE).outline;
+    // 200 x 100 at (600, 550) turned a quarter: 100 wide, 200 tall.
+    const xs = outline.map((p) => p.x);
+    const ys = outline.map((p) => p.y);
+    expect(Math.max(...xs) - Math.min(...xs)).toBeCloseTo(100, 5);
+    expect(Math.max(...ys) - Math.min(...ys)).toBeCloseTo(200, 5);
+  });
+
+  test("turning: box shapes keep their box and gain a rotation; strokes turn point by point", () => {
+    const c = rotationCentre([rect], PAGE);
+    expect(c).toEqual({ x: 600, y: 550 });
+    const r = rotatedMark(rect, PAGE, c, Math.PI / 4);
+    expect(r.points).toEqual(rect.points);
+    expect(r.rotation).toBeCloseTo(Math.PI / 4, 9);
+    const l = rotatedMark(line, PAGE, { x: 100, y: 100 }, Math.PI / 2);
+    expect(l.points[2]).toBeCloseTo(0.1, 5);
+    expect(l.points[3]).toBeCloseTo(0.3, 5);
+    expect(l.rotation).toBeUndefined();
+    // A callout's text stays level: only its box and tip move.
+    const t = rotatedMark(callout, PAGE, { x: 250, y: 725 }, Math.PI);
+    expect(t.points[2]).toBe(0.1);
+    expect(t.rotation).toBeUndefined();
+  });
+
+  test("turns snap to level and 45 degrees", () => {
+    const c = { x: 600, y: 550 };
+    const from = { x: 600, y: 450 };
+    const nearly = rotatePoint(from, c, Math.PI / 4 + 0.03);
+    expect(rotationBy([rect], c, from, nearly)).toBeCloseTo(Math.PI / 4, 9);
+    const free = rotatePoint(from, c, 0.3);
+    expect(rotationBy([rect], c, from, free)).toBeCloseTo(0.3, 9);
+  });
+
+  test("a turned box resizes along its own sides; its far corner stays put", () => {
+    const turned = { ...rect, rotation: Math.PI / 2 };
+    const before = drawMark(turned, PAGE).outline;
+    // The level box's nw corner, turned: where it sits on the page.
+    const nw = rotatePoint({ x: 500, y: 500 }, { x: 600, y: 550 }, Math.PI / 2);
+    // Drag the se handle a bit further out along the turned sides.
+    const seNow = rotatePoint(
+      { x: 700, y: 600 },
+      { x: 600, y: 550 },
+      Math.PI / 2,
+    );
+    const to = { x: (seNow.x - 20) / 1000, y: (seNow.y + 40) / 1000 };
+    const points = resizedPoints(turned, "se", to, PAGE);
+    const after = drawMark({ ...turned, points }, PAGE).outline;
+    const near = (p: { x: number; y: number }) =>
+      after.some((q) => Math.hypot(q.x - p.x, q.y - p.y) < 0.5);
+    expect(near(nw)).toBe(true);
+    expect(after).not.toEqual(before);
   });
 });

@@ -45,3 +45,11 @@ Reply with the step number and what you saw (no need to edit this file).
 22. **Edit without switching.** With Select on, tap a callout (it's picked), then tap it again: the keyboard opens with its text and the toolbar stays on Select. Change it and tap elsewhere: the keyboard closes and the change is kept.
 23. **Handles.** With one callout picked, a hollow circle shows at its arrow tip and a handle on its right side. Drag the tip: the arrow re-points. Drag the side handle: the box gets narrower or wider and the text re-wraps.
 24. **Undo.** Undo reverses the edit, the re-point and the width change, one at a time.
+
+## Follow-up (2026-10-07): rotating
+25. **Rotate one shape.** Select a rectangle (then a cloud, then an ellipse): a round handle on a short stalk sits above it. Drag it round: the shape turns about its middle, and the dashed outline and corner handles turn with it.
+26. **Snap.** Turn it slowly past level and past 45 degrees: it settles exactly level or at 45 when you're close.
+27. **Resize when turned.** Drag a corner handle of a turned rectangle: it resizes along its own sides and the opposite corner stays put.
+28. **Group.** Loop round a few marks (a pen line, a shape, a callout with an arrow) and drag the rotate handle: they turn together; the callout's text stays level while its box and arrow move round.
+29. **Held shapes.** Draw and hold a rectangle at an angle: it can now be resized and rotated like any rectangle.
+30. **Undo and PDF.** Undo takes each turn back. Export: turned shapes are turned in the PDF.

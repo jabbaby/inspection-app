@@ -12,12 +12,13 @@ import { simplify } from "./markGeometry";
 /** What a held stroke became; points in page units. */
 export interface Recognised {
   /**
-   * "rect" and "ellipse" are level boxes (two corners, like the shape
-   * tools); "polygon" is its corners; "oval" a tilted ellipse: its centre
-   * and the ends of its two axes.
+   * "rect" and "ellipse" are boxes (two corners, like the shape tools),
+   * turned by `rotation` when drawn at an angle; "polygon" is its corners.
    */
-  tool: "rect" | "ellipse" | "polygon" | "oval";
+  tool: "rect" | "ellipse" | "polygon";
   points: Point[];
+  /** Radians, about the box's middle (rect and ellipse). */
+  rotation?: number;
 }
 
 /** Samples along the stroke for fitting. */
@@ -207,15 +208,23 @@ function rectangle(poly: Point[]): Recognised | null {
       ],
     };
   }
+  // At an angle: the level box about its middle, turned by the angle.
+  const m = at((u0 + u1) / 2, (v0 + v1) / 2);
+  const hw = (u1 - u0) / 2;
+  const hh = (v1 - v0) / 2;
   return {
-    tool: "polygon",
-    points: [at(u0, v0), at(u1, v0), at(u1, v1), at(u0, v1)],
+    tool: "rect",
+    points: [
+      { x: m.x - hw, y: m.y - hh },
+      { x: m.x + hw, y: m.y + hh },
+    ],
+    rotation: angle,
   };
 }
 
 /** A clean ellipse: a circle if nearly round, level if nearly level. */
 function ellipse(fit: ReturnType<typeof fitEllipse>): Recognised {
-  const { c, e1, e2 } = fit;
+  const { c, e1 } = fit;
   let { r1, r2 } = fit;
   if (r2 / r1 > ROUND) r1 = r2 = (r1 + r2) / 2;
   if (r1 === r2 || offLevel(fit.angle) < LEVEL) {
@@ -231,13 +240,15 @@ function ellipse(fit: ReturnType<typeof fitEllipse>): Recognised {
       ],
     };
   }
+  // At an angle: a level box about its middle (its long axis along x),
+  // turned by the axis's angle.
   return {
-    tool: "oval",
+    tool: "ellipse",
     points: [
-      c,
-      { x: c.x + e1.x * r1, y: c.y + e1.y * r1 },
-      { x: c.x + e2.x * r2, y: c.y + e2.y * r2 },
+      { x: c.x - r1, y: c.y - r2 },
+      { x: c.x + r1, y: c.y + r2 },
     ],
+    rotation: fit.angle,
   };
 }
 

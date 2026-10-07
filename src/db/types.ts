@@ -330,6 +330,12 @@ export interface Markup {
    */
   fill?: boolean;
   /**
+   * Rectangles, ellipses and clouds turned about their centre (radians,
+   * clockwise on the page); their points stay the level box (SPEC 5a,
+   * 2026-10-07). Other marks rotate by moving their points.
+   */
+  rotation?: number;
+  /**
    * A shape made by holding the highlighter: drawn like a highlight
    * (see-through, multiplied in the PDF), never filled.
    */

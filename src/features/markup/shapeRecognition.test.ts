@@ -77,12 +77,12 @@ describe("draw and hold: shapes", () => {
     const tilted = recogniseShape(
       ellipse({ x: 300, y: 300 }, 160, 80, Math.PI / 6),
     )!;
-    expect(tilted.tool).toBe("oval");
-    const [c, major] = tilted.points;
-    expect(Math.atan2(major.y - c.y, major.x - c.x)).toBeCloseTo(
-      Math.PI / 6,
-      1,
-    );
+    // An Ellipse shape turned to its angle, its long axis along the box.
+    expect(tilted.tool).toBe("ellipse");
+    expect(Math.tan(tilted.rotation!)).toBeCloseTo(Math.tan(Math.PI / 6), 1);
+    const [p, q] = tilted.points;
+    expect(q.x - p.x).toBeGreaterThan(q.y - p.y);
+    expect((p.x + q.x) / 2).toBeCloseTo(300, -1);
   });
 
   test("a level rectangle is the Rectangle shape; a square is square", () => {
@@ -107,11 +107,15 @@ describe("draw and hold: shapes", () => {
     const r = recogniseShape(
       polygon(rotate(RECT, { x: 250, y: 180 }, Math.PI / 8)),
     )!;
-    expect(r.tool).toBe("polygon");
-    expect(r.points).toHaveLength(4);
-    const [a, b, c] = r.points;
-    const dot = (b.x - a.x) * (c.x - b.x) + (b.y - a.y) * (c.y - b.y);
-    expect(Math.abs(dot)).toBeLessThan(1e-6);
+    // A Rectangle shape (two corners), turned to its angle.
+    expect(r.tool).toBe("rect");
+    expect(r.points).toHaveLength(2);
+    expect(Math.tan(r.rotation!)).toBeCloseTo(Math.tan(Math.PI / 8), 1);
+    const [a, b] = r.points;
+    // Its sides keep their lengths (300 x 160) and its middle stays put.
+    expect(b.x - a.x).toBeCloseTo(300, -1);
+    expect(b.y - a.y).toBeCloseTo(160, -1);
+    expect((a.x + b.x) / 2).toBeCloseTo(250, -1);
   });
 
   test("triangles and pentagons go through their corners", () => {

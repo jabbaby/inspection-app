@@ -8,16 +8,20 @@ import type { Point, Rect, Size } from "../drawings/viewer/viewTransform";
 import { calloutPlace, insideCallout } from "./calloutGeometry";
 import {
   WEIGHT_PRESETS,
+  boxCentre,
   drawMark,
   insideMark,
+  isBoxShape,
   isShape,
   markWidth,
+  rotatePoint,
+  toPagePoints,
   touchesMark,
 } from "./markGeometry";
 
 type SelectMark = Pick<
   Markup,
-  "id" | "tool" | "points" | "weight" | "fill" | "highlight"
+  "id" | "tool" | "points" | "weight" | "fill" | "highlight" | "rotation"
 >;
 
 /** The toolbar tool whose weights a mark uses. */
@@ -214,13 +218,29 @@ export type HandleId =
   | "end"
   // A callout's arrow tip and its box's width (as with the Text tool).
   | "tip"
-  | "width";
+  | "width"
+  // Turns the selection about its middle (engineer, 2026-10-07).
+  | "rotate";
 
 /**
  * A single selected shape's resize handles, in page units: a callout's
  * arrow tip and width; none for strokes or tilted shapes.
  */
 export function shapeHandles(
+  mark: Pick<Markup, "tool" | "points" | "rotation">,
+  page: Size,
+): { id: HandleId; at: Point }[] {
+  const level = levelHandles(mark, page);
+  if (!mark.rotation || !isBoxShape(mark.tool)) return level;
+  // A turned box: its handles turn with it, about its middle.
+  const c = boxCentre(toPagePoints(mark.points, page));
+  return level.map((h) => ({
+    id: h.id,
+    at: rotatePoint(h.at, c, mark.rotation!),
+  }));
+}
+
+function levelHandles(
   mark: Pick<Markup, "tool" | "points">,
   page: Size,
 ): { id: HandleId; at: Point }[] {
@@ -267,17 +287,47 @@ export function shapeHandles(
  * right way round.
  */
 export function resizedPoints(
-  mark: Pick<Markup, "tool" | "points">,
+  mark: Pick<Markup, "tool" | "points" | "rotation">,
   id: HandleId,
   to: Point,
+  page: Size = { width: 1, height: 1 },
 ): number[] {
-  const [ax, ay, bx, by] = mark.points;
+  if (mark.rotation && isBoxShape(mark.tool)) {
+    // A turned box: the drag is measured along its own sides (the handle
+    // brought back level about the middle), then the resized box is put
+    // back so its far side stays where it was on the page.
+    const angle = mark.rotation;
+    const c0 = boxCentre(toPagePoints(mark.points, page));
+    const local = rotatePoint(
+      { x: to.x * page.width, y: to.y * page.height },
+      c0,
+      -angle,
+    );
+    const level = resizedLevel(mark.points, id, {
+      x: local.x / page.width,
+      y: local.y / page.height,
+    });
+    const c1 = boxCentre(toPagePoints(level, page));
+    const moved = rotatePoint(c1, c0, angle);
+    return level.map((v, i) =>
+      round(
+        i % 2
+          ? v + (moved.y - c1.y) / page.height
+          : v + (moved.x - c1.x) / page.width,
+      ),
+    );
+  }
+  return resizedLevel(mark.points, id, to);
+}
+
+function resizedLevel(points: number[], id: HandleId, to: Point): number[] {
+  const [ax, ay, bx, by] = points;
   const x = round(to.x);
   const y = round(to.y);
   // A callout's tip moves; its width is sized by the caller (it measures
-  // the text).
-  if (id === "tip") return [...mark.points.slice(0, 4), x, y];
-  if (id === "width") return mark.points;
+  // the text); turning is rotatedMark's.
+  if (id === "tip") return [...points.slice(0, 4), x, y];
+  if (id === "width" || id === "rotate") return points;
   if (id === "start") return [x, y, bx, by];
   if (id === "end") return [ax, ay, x, y];
   let l = Math.min(ax, bx);
@@ -289,4 +339,124 @@ export function resizedPoints(
   if (id.includes("n")) t = y;
   if (id.includes("s")) b = y;
   return [Math.min(l, r), Math.min(t, b), Math.max(l, r), Math.max(t, b)];
+}
+
+/** Screen px from the top of the selection to its rotate handle. */
+export const ROTATE_OFFSET_PX = 30;
+
+/** Where a selection turns about: a single box shape's middle, else the selection's. */
+export function rotationCentre(marks: SelectMark[], page: Size): Point {
+  if (marks.length === 1 && isBoxShape(marks[0].tool))
+    return boxCentre(toPagePoints(marks[0].points, page));
+  const b = selectionBounds(marks, page);
+  return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+}
+
+/**
+ * The rotate handle (page units), `offset` above the selection: above a
+ * single turned box's top edge, turning with it; else above the middle of
+ * the selection's box. None for a lone callout (its text stays level).
+ */
+export function rotateHandle(
+  marks: SelectMark[],
+  page: Size,
+  offset: number,
+): Point | null {
+  if (marks.length === 0 || marks.every((m) => m.tool === "text")) return null;
+  if (marks.length === 1 && isBoxShape(marks[0].tool)) {
+    const [a, b] = toPagePoints(marks[0].points, page);
+    const c = boxCentre([a, b]);
+    const top = { x: c.x, y: Math.min(a.y, b.y) - offset };
+    return rotatePoint(top, c, marks[0].rotation ?? 0);
+  }
+  const b = selectionBounds(marks, page);
+  return { x: b.x + b.width / 2, y: b.y - offset };
+}
+
+/** Angles within this of a multiple of 45° snap to it (radians). */
+const SNAP = (4 * Math.PI) / 180;
+
+function snapAngle(angle: number): number {
+  const step = Math.PI / 4;
+  const nearest = Math.round(angle / step) * step;
+  return Math.abs(angle - nearest) < SNAP ? nearest : angle;
+}
+
+/**
+ * How far the rotate handle, grabbed at `from` and now at `to` (page
+ * units), turns the selection about `c`. A single box's resulting angle
+ * snaps to level and 45° steps; a group's turn snaps the same way.
+ */
+export function rotationBy(
+  marks: SelectMark[],
+  c: Point,
+  from: Point,
+  to: Point,
+): number {
+  const turn =
+    Math.atan2(to.y - c.y, to.x - c.x) - Math.atan2(from.y - c.y, from.x - c.x);
+  if (marks.length === 1 && isBoxShape(marks[0].tool)) {
+    const start = marks[0].rotation ?? 0;
+    return snapAngle(start + turn) - start;
+  }
+  return snapAngle(turn);
+}
+
+/**
+ * A mark turned by `angle` about `c` (page units): a box shape's middle
+ * moves and its rotation grows; a callout's box moves (its text stays
+ * level) with its tip; anything else turns point by point.
+ */
+export function rotatedMark(
+  mark: Pick<Markup, "tool" | "points" | "rotation">,
+  page: Size,
+  c: Point,
+  angle: number,
+): { points: number[]; rotation?: number } {
+  const units = (x: number, y: number) => ({
+    x: x * page.width,
+    y: y * page.height,
+  });
+  const turned = (x: number, y: number) => {
+    const p = rotatePoint(units(x, y), c, angle);
+    return [round(p.x / page.width), round(p.y / page.height)];
+  };
+  if (isBoxShape(mark.tool)) {
+    const pts = toPagePoints(mark.points, page);
+    const m = boxCentre(pts);
+    const moved = rotatePoint(m, c, angle);
+    const dx = (moved.x - m.x) / page.width;
+    const dy = (moved.y - m.y) / page.height;
+    return {
+      points: mark.points.map((v, i) => round(v + (i % 2 ? dy : dx))),
+      rotation: normaliseAngle((mark.rotation ?? 0) + angle),
+    };
+  }
+  if (mark.tool === "text") {
+    const [x, y, w, h, tx, ty] = mark.points;
+    const mid = units(x + w / 2, y + h / 2);
+    const moved = rotatePoint(mid, c, angle);
+    const nx = moved.x / page.width - w / 2;
+    const ny = moved.y / page.height - h / 2;
+    return {
+      points: [
+        round(nx),
+        round(ny),
+        w,
+        h,
+        ...(tx === undefined || ty === undefined ? [] : turned(tx, ty)),
+      ],
+    };
+  }
+  const out: number[] = [];
+  for (let i = 0; i + 1 < mark.points.length; i += 2)
+    out.push(...turned(mark.points[i], mark.points[i + 1]));
+  return { points: out };
+}
+
+/** An angle in (-π, π], near-level values made exactly level. */
+function normaliseAngle(a: number): number {
+  let r = Math.atan2(Math.sin(a), Math.cos(a));
+  if (Math.abs(r) < 1e-6) r = 0;
+  return r;
 }

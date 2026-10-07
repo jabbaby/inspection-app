@@ -22,6 +22,8 @@ export interface DocMark {
   tool: MarkKind;
   /** Closed shapes: false once the fill was taken off (default filled). */
   fill?: boolean;
+  /** Rectangles, ellipses and clouds: turned about their centre (radians). */
+  rotation?: number;
   /** A shape held with the highlighter: drawn like a highlight. */
   highlight?: boolean;
   /** Text callouts: what they say. */

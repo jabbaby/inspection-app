@@ -36,6 +36,8 @@ import {
   clampMove,
   marksInLoop,
   pickMark,
+  ROTATE_OFFSET_PX,
+  rotateHandle,
   selectionBounds,
   shapeHandles,
   type HandleId,
@@ -63,7 +65,13 @@ export interface MarkSelection {
 /** A selection being dragged (normalised on its page). */
 export type SelectDrag =
   | { kind: "move"; dx: number; dy: number }
-  | { kind: "handle"; handle: HandleId; to: Point };
+  | {
+      kind: "handle";
+      handle: HandleId;
+      to: Point;
+      /** Where the handle was grabbed (turning measures from it). */
+      from: Point;
+    };
 
 export interface DocPin {
   id: string;
@@ -119,6 +127,8 @@ interface Props {
     page: PageLayout,
     points: Point[],
     shape: MarkupShape | HeldShape | null,
+    /** A held rectangle or ellipse drawn at an angle (radians). */
+    rotation?: number,
   ) => Promise<void>;
   /** The marks the eraser has touched so far; `done` when it lifts. */
   onErase: (ids: string[], done: boolean) => void;
@@ -826,6 +836,8 @@ export function DocumentViewer(props: Props) {
      */
     shape: MarkupShape | HeldShape | null;
     held: boolean;
+    /** A held rectangle or ellipse drawn at an angle: its turn (radians). */
+    heldRotation: number;
     /**
      * A held shape as it snapped (page units), the centre it grows or
      * shrinks about, and how far the Pencil was from that centre then.
@@ -887,6 +899,7 @@ export function DocumentViewer(props: Props) {
       still: p,
       timer: 0,
       held: false,
+      heldRotation: 0,
       heldBase: [],
       heldCentre: { x: 0, y: 0 },
       heldFrom: 0,
@@ -928,21 +941,19 @@ export function DocumentViewer(props: Props) {
     if (shape) {
       stroke.shape = shape.tool;
       stroke.held = true;
+      stroke.heldRotation = shape.rotation ?? 0;
       stroke.points = shape.points.map((p) => ({
         x: p.x / size.width,
         y: p.y / size.height,
       }));
       // Dragging on from here scales it about its centre (engineer,
-      // 2026-10-07): an oval's own centre, else its corners' middle.
+      // 2026-10-07): its corners' middle (a turned box turns about it too).
       const xs = shape.points.map((p) => p.x);
       const ys = shape.points.map((p) => p.y);
-      const centre =
-        shape.tool === "oval"
-          ? shape.points[0]
-          : {
-              x: (Math.min(...xs) + Math.max(...xs)) / 2,
-              y: (Math.min(...ys) + Math.max(...ys)) / 2,
-            };
+      const centre = {
+        x: (Math.min(...xs) + Math.max(...xs)) / 2,
+        y: (Math.min(...ys) + Math.max(...ys)) / 2,
+      };
       const n = onPagePoint(stroke.page, stroke.still);
       const at = { x: n.x * size.width, y: n.y * size.height };
       stroke.heldBase = shape.points;
@@ -1101,7 +1112,12 @@ export function DocumentViewer(props: Props) {
       const width = markWidth(style.weight, size);
       const drawing = stroke.held
         ? drawMark(
-            { tool: stroke.shape, points: flat, weight: style.weight },
+            {
+              tool: stroke.shape,
+              points: flat,
+              weight: style.weight,
+              rotation: stroke.heldRotation,
+            },
             size,
           )
         : shapeDrawing(stroke.shape as MarkupShape, a, b, width);
@@ -1165,7 +1181,7 @@ export function DocumentViewer(props: Props) {
       // Too small to mean anything: dropped (a held shape is never small).
       if (!stroke.held && stroke.travel < MIN_SHAPE) return clearInk();
       void latest.current
-        .onStroke(stroke.page, stroke.points, stroke.shape)
+        .onStroke(stroke.page, stroke.points, stroke.shape, stroke.heldRotation)
         .finally(() =>
           requestAnimationFrame(() => requestAnimationFrame(clearInk)),
         );
@@ -1284,6 +1300,17 @@ export function DocumentViewer(props: Props) {
     const current = selected();
     if (current) {
       const { page, marks } = current;
+      // The rotate handle, above the selection.
+      const turn = rotateHandle(
+        marks,
+        page.size,
+        ROTATE_OFFSET_PX / pxPerUnit(page),
+      );
+      if (turn) {
+        const at = unitsToScreen(page, turn);
+        if (Math.hypot(at.x - p.x, at.y - p.y) <= HANDLE_REACH)
+          return begin("handle", page, "rotate");
+      }
       if (marks.length === 1)
         for (const h of shapeHandles(marks[0], page.size)) {
           const at = unitsToScreen(page, h.at);
@@ -1326,6 +1353,7 @@ export function DocumentViewer(props: Props) {
         kind: "handle",
         handle: s.handle,
         to: clampNormalised(onPagePoint(s.page, p)),
+        from: onPagePoint(s.page, s.start),
       };
     } else {
       const current = selected();

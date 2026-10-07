@@ -7,7 +7,7 @@ import { NotFound } from "../../app/NotFound";
 import { peekUndo, redoLast, undoLast, useUndo } from "../../app/undo";
 import { db } from "../../db/db";
 import { listDrawings, setPageSizes } from "../../db/drawings";
-import { listMarkups } from "../../db/markups";
+import { listMarkups, type MarkupPatch } from "../../db/markups";
 import {
   HIGHLIGHTER_OPACITY,
   WEIGHT_PRESETS,
@@ -18,6 +18,9 @@ import {
   clampMove,
   type HandleId,
   movedPoints,
+  rotatedMark,
+  rotationBy,
+  rotationCentre,
   resizedPoints,
   selectionBounds,
   weightToolOf,
@@ -125,14 +128,54 @@ function msUntil(time: number) {
  * A selected shape's points with handle `handle` dragged to `to`; a
  * callout's width is measured like the Text tool's side handle.
  */
+/**
+ * What a drag of the selection does to each picked mark: a move, a turn
+ * about the selection's middle (rotate handle), or (one mark) a resize.
+ */
+function draggedPatches(
+  marks: Pick<
+    DocMark,
+    "id" | "tool" | "points" | "weight" | "text" | "rotation" | "fill"
+  >[],
+  drag: SelectDrag,
+  size: Size,
+): Map<string, MarkupPatch> {
+  const out = new Map<string, MarkupPatch>();
+  if (drag.kind === "move") {
+    for (const m of marks)
+      out.set(m.id, { points: movedPoints(m, drag.dx, drag.dy) });
+    return out;
+  }
+  if (drag.handle === "rotate") {
+    const units = (p: Point) => ({
+      x: p.x * size.width,
+      y: p.y * size.height,
+    });
+    const c = rotationCentre(marks, size);
+    const angle = rotationBy(marks, c, units(drag.from), units(drag.to));
+    for (const m of marks) out.set(m.id, rotatedMark(m, size, c, angle));
+    return out;
+  }
+  if (marks.length !== 1) return out;
+  const m = marks[0];
+  out.set(m.id, {
+    points: handlePoints(m, drag.handle, drag.to, size),
+    // A callout resized by hand keeps its width.
+    ...(m.tool === "text" && drag.handle === "width"
+      ? { fixedWidth: true }
+      : {}),
+  });
+  return out;
+}
+
 function handlePoints(
-  mark: Pick<DocMark, "tool" | "points" | "weight" | "text">,
+  mark: Pick<DocMark, "tool" | "points" | "weight" | "text" | "rotation">,
   handle: HandleId,
   to: Point,
   size: Size,
 ): number[] {
   if (mark.tool !== "text" || handle !== "width")
-    return resizedPoints(mark, handle, to);
+    return resizedPoints(mark, handle, to, size);
   const [x, y, , , ...tip] = mark.points;
   const box = calloutSize(
     mark.text ?? "",
@@ -376,6 +419,7 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
           weight: m.weight,
           fill: m.fill,
           highlight: m.highlight,
+          rotation: m.rotation,
           text: m.text,
           fixedWidth: m.fixedWidth,
         })),
@@ -539,25 +583,15 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
     : undefined;
   const preview = useMemo(() => {
     if (!selection || !selectDrag) return null;
-    const moved = new Map<string, number[]>();
-    for (const mark of selectedMarks) {
-      if (selectDrag.kind === "move")
-        moved.set(mark.id, movedPoints(mark, selectDrag.dx, selectDrag.dy));
-      else if (selectedMarks.length === 1)
-        moved.set(
-          mark.id,
-          handlePoints(
-            mark,
-            selectDrag.handle,
-            selectDrag.to,
-            selectionPage?.size ?? { width: 1, height: 1 },
-          ),
-        );
-    }
+    const moved = draggedPatches(
+      selectedMarks,
+      selectDrag,
+      selectionPage?.size ?? { width: 1, height: 1 },
+    );
     const apply = (list: DocMark[]) =>
       list.map((m) => {
-        const points = moved.get(m.id);
-        return points ? { ...m, points } : m;
+        const patch = moved.get(m.id);
+        return patch ? { ...m, ...patch } : m;
       });
     return {
       pageKey: selection.pageKey,
@@ -604,30 +638,22 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
     if (!done) return setSelectDrag(drag);
     const records = selectedRecords();
     if (!drag || records.length === 0) return setSelectDrag(null);
+    const many = records.length === 1 ? "" : ` ${records.length} marks`;
     const label =
       drag.kind === "move"
-        ? records.length === 1
-          ? "Move"
-          : `Move ${records.length} marks`
-        : "Resize";
+        ? `Move${many}`
+        : drag.handle === "rotate"
+          ? `Rotate${many}`
+          : "Resize";
+    const patches = draggedPatches(
+      records,
+      drag,
+      selectionPage?.size ?? { width: 1, height: 1 },
+    );
     // The dragged spot stays shown until the saved one arrives.
     void changeMarksWithUndo(
       records,
-      (m) =>
-        drag.kind === "move"
-          ? { points: movedPoints(m, drag.dx, drag.dy) }
-          : {
-              points: handlePoints(
-                m,
-                drag.handle,
-                drag.to,
-                selectionPage?.size ?? { width: 1, height: 1 },
-              ),
-              // A callout resized by hand keeps its width.
-              ...(m.tool === "text" && drag.handle === "width"
-                ? { fixedWidth: true }
-                : {}),
-            },
+      (m) => patches.get(m.id) ?? {},
       label,
     ).finally(() => setSelectDrag(null));
   }
@@ -716,6 +742,7 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
     page: PageLayout,
     points: Point[],
     shape: MarkupShape | HeldShape | null,
+    rotation?: number,
   ) {
     if (tool !== "pen" && tool !== "highlighter" && tool !== "shapes") return;
     await drawWithUndo({
@@ -730,6 +757,7 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
       weight: prefs.weight[tool],
       // A shape held with the highlighter is drawn like a highlight.
       ...(shape && tool === "highlighter" ? { highlight: true } : {}),
+      ...(rotation ? { rotation } : {}),
     });
   }
 

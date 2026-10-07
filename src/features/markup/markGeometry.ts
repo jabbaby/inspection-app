@@ -427,7 +427,60 @@ export function insideMark(
 }
 
 /** How to draw any mark: a stroke (thinned, evened out) or a shape. */
+/** Whether a mark keeps a level box and turns by its `rotation`. */
+export function isBoxShape(tool: Markup["tool"]): boolean {
+  return tool === "rect" || tool === "ellipse" || tool === "cloud";
+}
+
+/** `p` turned by `angle` (radians) about `c`. */
+export function rotatePoint(p: Point, c: Point, angle: number): Point {
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const dx = p.x - c.x;
+  const dy = p.y - c.y;
+  return { x: c.x + dx * cos - dy * sin, y: c.y + dx * sin + dy * cos };
+}
+
+/** Path data (absolute M, L, C and Z only) with every point turned. */
+function rotatePath(d: string, c: Point, angle: number): string {
+  const out: string[] = [];
+  const tokens = d.split(" ");
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i];
+    if (/^[A-Za-z]$/.test(t) || i + 1 >= tokens.length) {
+      out.push(t);
+      continue;
+    }
+    const p = rotatePoint({ x: Number(t), y: Number(tokens[i + 1]) }, c, angle);
+    out.push(fmt(p.x), fmt(p.y));
+    i++;
+  }
+  return out.join(" ");
+}
+
+/** The middle of a box shape's two corners (page units). */
+export function boxCentre(points: Point[]): Point {
+  const [a, b] = [points[0], points[points.length - 1]];
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+}
+
 export function drawMark(
+  mark: Pick<Markup, "tool" | "points" | "weight" | "rotation">,
+  page: Size,
+): MarkDrawing {
+  const drawing = drawLevel(mark, page);
+  if (!mark.rotation || !isBoxShape(mark.tool)) return drawing;
+  // A turned box shape: drawn level, then every point turned about its middle.
+  const c = boxCentre(toPagePoints(mark.points, page));
+  return {
+    ...drawing,
+    d: rotatePath(drawing.d, c, mark.rotation),
+    head: drawing.head && rotatePath(drawing.head, c, mark.rotation),
+    outline: drawing.outline.map((p) => rotatePoint(p, c, mark.rotation!)),
+  };
+}
+
+function drawLevel(
   mark: Pick<Markup, "tool" | "points" | "weight">,
   page: Size,
 ): MarkDrawing {

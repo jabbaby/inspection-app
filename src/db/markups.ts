@@ -50,7 +50,10 @@ export async function deleteMarkups(
 
 /** What can change on a saved mark. */
 export type MarkupPatch = Partial<
-  Pick<Markup, "points" | "text" | "fixedWidth" | "colour" | "weight">
+  Pick<
+    Markup,
+    "points" | "text" | "fixedWidth" | "colour" | "weight" | "rotation"
+  >
 >;
 
 /** Adds several marks in one go (a duplicated selection). */
