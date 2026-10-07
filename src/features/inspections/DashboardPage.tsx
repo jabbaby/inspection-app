@@ -2,13 +2,13 @@ import { useLiveQuery } from "dexie-react-hooks";
 import {
   ArrowUpRight,
   Check,
-  ClipboardPlus,
   FileText,
   MapPin,
   ShieldAlert,
   ShieldCheck,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
+import { Buddy } from "../../app/Buddy";
 import { appCommit, appVersion } from "../../app/version";
 import { northrop } from "../../brand/northrop";
 import { db } from "../../db/db";
@@ -86,9 +86,8 @@ export function DashboardPage() {
             src={northrop.assets.wordmarkRed}
             alt={northrop.name}
           />
-          <span className="empty-state-icon">
-            <ClipboardPlus aria-hidden="true" />
-          </span>
+          {/* The app's buddy welcomes a new user (app only, never client-facing). */}
+          <Buddy size={72} />
           <h1>Start your first inspection</h1>
           <p className="muted">
             Pick or create the project, add the drawing PDFs, then drop pins on

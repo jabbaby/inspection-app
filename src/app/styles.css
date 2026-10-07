@@ -4493,3 +4493,75 @@ h1 {
   transform: translateX(-50%);
   pointer-events: none;
 }
+
+/* Settings, About: the app's own mark (the buddy), its documents and
+   what's new. */
+.buddy {
+  --buddy-fill: var(--surface);
+  flex: none;
+  color: var(--ink);
+}
+
+.buddy .buddy-fill {
+  fill: var(--buddy-fill);
+}
+
+/* On the first-run screen it stands on the page, not a card. */
+.home-first-run .buddy {
+  --buddy-fill: var(--page);
+}
+
+.about-app {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.about-app p {
+  margin: 0;
+}
+
+.about-name {
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+.about-docs {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.about-docs .list-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.about-docs .list-row svg {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  color: var(--accent);
+}
+
+.about-heading {
+  margin: var(--space-5) 0 var(--space-2);
+  font-size: var(--text-md);
+}
+
+.about-release-title {
+  margin: var(--space-3) 0 var(--space-1);
+  font-weight: 600;
+}
+
+.about-release ul {
+  margin: 0;
+  padding-left: 1.2em;
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}

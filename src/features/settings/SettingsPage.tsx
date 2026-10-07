@@ -1,6 +1,7 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import {
   Database,
+  Info,
   MessageSquareText,
   ShieldAlert,
   ShieldCheck,
@@ -20,6 +21,7 @@ import { DrawingSettings } from "./DrawingSettings";
 import { MyDetailsForm, MySignature } from "./MyDetailsForm";
 import { SnippetsEditor } from "./SnippetsEditor";
 import { BackupAll } from "../backup/BackupAll";
+import { AboutCard } from "./AboutCard";
 
 const KINDS: [SnippetKind, string][] = [
   ["body", "body"],
@@ -37,6 +39,7 @@ const SECTIONS = [
     Icon: MessageSquareText,
   },
   { id: "storage", label: "Storage and backup", Icon: Database },
+  { id: "about", label: "About", Icon: Info },
 ];
 
 /**
@@ -167,6 +170,7 @@ export function SettingsPage() {
             )}
             <BackupAll />
           </section>
+          <AboutCard />
         </div>
       </div>
     </section>

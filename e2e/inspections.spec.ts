@@ -293,3 +293,27 @@ test("drawings can be added on Pre-inspection, before going to site", async ({
     page.locator('[data-testid="drawing-viewer"][data-ready="true"]'),
   ).toBeVisible({ timeout: 20_000 });
 });
+
+test("Settings, About: version, documents (bundled) and what's new", async ({
+  page,
+}) => {
+  await page.goto("./");
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Settings" })
+    .click();
+  const about = page.getByRole("region", { name: "About" });
+  await expect(about).toContainText("Inspection Companion");
+  await expect(about).toContainText("Built by David Samson");
+  await expect(about).toContainText(/Version \d+\.\d+\.\d+/);
+  for (const name of ["User guide", "Features and limitations"]) {
+    const link = about.getByRole("link", { name: new RegExp(`^${name}`) });
+    const href = (await link.getAttribute("href"))!;
+    const response = await page.request.get(href);
+    expect(response.status()).toBe(200);
+    expect(response.headers()["content-type"]).toContain("application/pdf");
+  }
+  await expect(
+    about.getByRole("heading", { name: "What's new" }),
+  ).toBeVisible();
+});

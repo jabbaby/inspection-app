@@ -67,7 +67,7 @@ export default defineConfig({
         // with no network at all. TTFs are the fonts embedded in exported PDFs;
         // mjs/bcmap/pfb/wasm/icc are the pdf.js worker and its runtime data.
         globPatterns: [
-          "**/*.{js,mjs,css,html,ico,png,svg,woff2,woff,ttf,json,bcmap,pfb,wasm,icc}",
+          "**/*.{js,mjs,css,html,ico,png,svg,woff2,woff,ttf,json,bcmap,pfb,wasm,icc,pdf}",
         ],
         navigateFallback: "index.html",
         cleanupOutdatedCaches: true,
