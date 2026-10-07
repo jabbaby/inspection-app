@@ -20,7 +20,10 @@ export default defineConfig({
     {
       name: "ipad-webkit",
       use: { ...devices["iPad Pro 11"] },
-      grepInvert: /@offline/,
+      // Manual screenshots (@shots) run only when asked for: docs:shots.
+      grepInvert: process.argv.some((a) => a.includes("@shots"))
+        ? /@offline/
+        : /@offline|@shots/,
     },
     {
       // Playwright's WebKit cannot reload a page offline through a service

@@ -1,7 +1,7 @@
 {
   "name": "inspection-app",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -16,7 +16,9 @@
     "test:watch": "vitest",
     "snippets:build": "node scripts/build-snippets.ts",
     "test:e2e": "playwright test",
-    "fixtures:drawings": "node scripts/build-drawings.ts"
+    "fixtures:drawings": "node scripts/build-drawings.ts",
+    "docs:shots": "playwright test --project ipad-webkit --grep @shots",
+    "docs:build": "node scripts/build-manual.ts"
   },
   "dependencies": {
     "@fontsource/figtree": "^5.3.0",
