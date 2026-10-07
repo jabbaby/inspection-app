@@ -79,6 +79,16 @@ test("creates an inspection, autosaves every field and keeps it after reload", a
     name: "Continue where you left off",
   });
   await expect(continueTile).toContainText(/Edited (just now|\d+ min ago)/);
+  // Any step opens from the tile; the suggested next one is marked.
+  const steps = continueTile.getByRole("navigation", { name: "Open a step" });
+  await expect(steps.getByRole("link")).toHaveText([
+    "Pre-inspection",
+    "Inspection",
+    "Site memo",
+  ]);
+  await expect(steps.locator(".suggested")).toHaveCount(1);
+  await steps.getByRole("link", { name: "Site memo" }).click();
+  await expect(page).toHaveURL(/\/memo/);
 });
 
 test("saves an edit made just before leaving the screen", async ({ page }) => {

@@ -84,6 +84,7 @@ export function InspectionLink({
   tab,
   from,
   className,
+  title,
   children,
 }: {
   inspection: JobInspection;
@@ -91,6 +92,7 @@ export function InspectionLink({
   tab?: InspectionTab;
   from: string;
   className: string;
+  title?: string;
   children: ReactNode;
 }) {
   const to = tab
@@ -102,6 +104,7 @@ export function InspectionLink({
     <Link
       to={to}
       className={className}
+      title={title}
       onClick={() => rememberBack(`inspection:${inspection.id}`, from)}
     >
       {children}

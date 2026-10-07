@@ -40,6 +40,7 @@ import {
   NewInspectionButton,
 } from "./inspectionParts";
 import { inspectionTitle } from "./inspectionTitle";
+import type { InspectionTab } from "./tabPath";
 
 /** Where the dashboard's links say back goes. */
 const HERE = "/";
@@ -164,6 +165,13 @@ export function DashboardPage() {
   );
 }
 
+/** The steps the Continue tile opens. */
+const STEP_LINKS: { tab: InspectionTab; label: string }[] = [
+  { tab: "details", label: "Pre-inspection" },
+  { tab: "inspection", label: "Inspection" },
+  { tab: "memo", label: "Site memo" },
+];
+
 /** The inspection edited last: a preview of its drawing and the next step. */
 function ContinueTile({
   inspection,
@@ -216,14 +224,26 @@ function ContinueTile({
           observation{progress.observations === 1 ? "" : "s"} ·{" "}
           {progress.photos} photo{progress.photos === 1 ? "" : "s"}
         </span>
-        <InspectionLink
-          inspection={inspection}
-          tab={next.tab}
-          from={HERE}
-          className="button-link emphasis"
-        >
-          {next.label} <ArrowUpRight aria-hidden="true" />
-        </InspectionLink>
+        {/* Any step, straight from here (engineer, 2026-10-07); the
+            suggested next one is dark. */}
+        <nav className="step-links" aria-label="Open a step">
+          {STEP_LINKS.map((step) => {
+            const suggested = step.tab === next.tab;
+            return (
+              <InspectionLink
+                key={step.tab}
+                inspection={inspection}
+                tab={step.tab}
+                from={HERE}
+                className={`step-link${suggested ? " suggested" : ""}`}
+                title={suggested ? `Next: ${next.label}` : undefined}
+              >
+                {step.label}
+                {suggested && <ArrowUpRight aria-hidden="true" />}
+              </InspectionLink>
+            );
+          })}
+        </nav>
       </div>
     </section>
   );

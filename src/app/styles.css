@@ -3078,6 +3078,39 @@ button.item-row:hover:not(:disabled) {
   gap: var(--space-2);
 }
 
+/* The Continue tile's steps: open any of them; the suggested one is dark. */
+.step-links {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--sunken);
+}
+
+.step-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: var(--radius-pill);
+  color: var(--ink);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.step-link svg {
+  width: 16px;
+  height: 16px;
+}
+
+.step-link.suggested {
+  background: var(--selected);
+  color: #fff;
+}
+
 /* Drawing preview in the Continue tile (stays white, as printed). */
 .drawing-thumb {
   position: relative;
