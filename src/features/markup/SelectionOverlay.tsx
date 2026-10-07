@@ -100,7 +100,20 @@ export function SelectionOverlay({
           strokeDasharray={`${6 * k} ${4 * k}`}
         />
         {handles.map((h) =>
-          h.id === "start" || h.id === "end" ? (
+          h.id === "width" ? (
+            <rect
+              key={h.id}
+              data-testid="handle-width"
+              x={h.at.x - 5 * k}
+              y={h.at.y - 9 * k}
+              width={10 * k}
+              height={18 * k}
+              rx={3 * k}
+              fill="#fff"
+              stroke="#3b3b3b"
+              strokeWidth={1.5 * k}
+            />
+          ) : h.id === "start" || h.id === "end" || h.id === "tip" ? (
             <circle
               key={h.id}
               data-testid={`handle-${h.id}`}

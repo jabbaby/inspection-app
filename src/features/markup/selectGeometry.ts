@@ -202,13 +202,38 @@ export function clampMove(
 
 /** Handles on one selected shape: its box's corners and sides, or a line's ends. */
 export type HandleId =
-  "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "start" | "end";
+  | "nw"
+  | "n"
+  | "ne"
+  | "e"
+  | "se"
+  | "s"
+  | "sw"
+  | "w"
+  | "start"
+  | "end"
+  // A callout's arrow tip and its box's width (as with the Text tool).
+  | "tip"
+  | "width";
 
-/** A single selected shape's resize handles, in page units (none for others). */
+/**
+ * A single selected shape's resize handles, in page units: a callout's
+ * arrow tip and width; none for strokes or tilted shapes.
+ */
 export function shapeHandles(
   mark: Pick<Markup, "tool" | "points">,
   page: Size,
 ): { id: HandleId; at: Point }[] {
+  if (mark.tool === "text") {
+    const { box, tip } = calloutPlace(mark, page);
+    return [
+      ...(tip ? [{ id: "tip" as const, at: tip }] : []),
+      {
+        id: "width",
+        at: { x: box.x + box.width, y: box.y + box.height / 2 },
+      },
+    ];
+  }
   if (!isShape(mark.tool) || mark.points.length < 4) return [];
   const [ax, ay, bx, by] = mark.points;
   const a = { x: ax * page.width, y: ay * page.height };
@@ -249,6 +274,10 @@ export function resizedPoints(
   const [ax, ay, bx, by] = mark.points;
   const x = round(to.x);
   const y = round(to.y);
+  // A callout's tip moves; its width is sized by the caller (it measures
+  // the text).
+  if (id === "tip") return [...mark.points.slice(0, 4), x, y];
+  if (id === "width") return mark.points;
   if (id === "start") return [x, y, bx, by];
   if (id === "end") return [ax, ay, x, y];
   let l = Math.min(ax, bx);

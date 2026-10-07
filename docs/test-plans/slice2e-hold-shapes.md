@@ -34,3 +34,8 @@ Reply with the step number and what you saw (no need to edit this file).
 15. **Select.** Pick a level rectangle or circle made by holding: its handles resize it. Pick an angled one: it moves, recolours and deletes (no handles).
 16. **Eraser.** Rub over a held shape: it goes. Tap inside a pen-held shape with the eraser: its fill comes off.
 17. **PDF and backup.** Export: the shapes are in the PDF as drawn on screen. Back up and import: they come back.
+
+## Follow-up (2026-10-07): resizing after the snap
+18. **Bigger.** Draw a circle and hold until it snaps, then (still pressing) drag away from its middle: it grows, staying round. Lift: it's saved that size.
+19. **Smaller.** Do the same with a rectangle, dragging in towards its middle: it shrinks, keeping its shape and angle.
+20. **Highlighter.** Do 18 with the highlighter: it grows too, still without fill.

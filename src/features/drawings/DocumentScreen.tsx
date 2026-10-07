@@ -16,6 +16,7 @@ import {
 } from "../markup/markGeometry";
 import {
   clampMove,
+  type HandleId,
   movedPoints,
   resizedPoints,
   selectionBounds,
@@ -89,7 +90,7 @@ import {
   defaultBoxPosition,
   observationHeading,
 } from "./observationBox";
-import type { Point } from "./viewer/viewTransform";
+import type { Point, Size } from "./viewer/viewTransform";
 
 /** Measures and saves page sizes for drawings added before they were stored. */
 async function backfillPageSizes(drawing: Drawing) {
@@ -118,6 +119,36 @@ const CLOSE_TAP_MS = 600;
 /** Milliseconds until a performance.now() time (event handlers only). */
 function msUntil(time: number) {
   return time - performance.now();
+}
+
+/**
+ * A selected shape's points with handle `handle` dragged to `to`; a
+ * callout's width is measured like the Text tool's side handle.
+ */
+function handlePoints(
+  mark: Pick<DocMark, "tool" | "points" | "weight" | "text">,
+  handle: HandleId,
+  to: Point,
+  size: Size,
+): number[] {
+  if (mark.tool !== "text" || handle !== "width")
+    return resizedPoints(mark, handle, to);
+  const [x, y, , , ...tip] = mark.points;
+  const box = calloutSize(
+    mark.text ?? "",
+    calloutMetrics(mark.weight, size),
+    measureArial,
+    // Never past the page's right edge.
+    Math.min(to.x, 1) * size.width - x * size.width,
+  );
+  const round = (n: number) => Math.round(n * 1e5) / 1e5;
+  return [
+    x,
+    y,
+    round(box.width / size.width),
+    round(box.height / size.height),
+    ...tip,
+  ];
 }
 
 export function DocumentScreen() {
@@ -515,7 +546,12 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
       else if (selectedMarks.length === 1)
         moved.set(
           mark.id,
-          resizedPoints(mark, selectDrag.handle, selectDrag.to),
+          handlePoints(
+            mark,
+            selectDrag.handle,
+            selectDrag.to,
+            selectionPage?.size ?? { width: 1, height: 1 },
+          ),
         );
     }
     const apply = (list: DocMark[]) =>
@@ -529,7 +565,20 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
       callouts: apply(calloutsByPage.get(selection.pageKey) ?? []),
       selected: apply(selectedMarks),
     };
-  }, [selection, selectDrag, selectedMarks, marksByPage, calloutsByPage]);
+  }, [
+    selection,
+    selectDrag,
+    selectedMarks,
+    marksByPage,
+    calloutsByPage,
+    selectionPage,
+  ]);
+
+  /** A tap or loop with Select on: a callout being typed closes first. */
+  function selectMarks(next: MarkSelection | null) {
+    if (draftRef.current) return void commitDraft();
+    setSelection(next);
+  }
 
   /** The saved records of the selected marks. */
   const selectedRecords = () =>
@@ -549,12 +598,21 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
     // The dragged spot stays shown until the saved one arrives.
     void changeMarksWithUndo(
       records,
-      (m) => ({
-        points:
-          drag.kind === "move"
-            ? movedPoints(m, drag.dx, drag.dy)
-            : resizedPoints(m, drag.handle, drag.to),
-      }),
+      (m) =>
+        drag.kind === "move"
+          ? { points: movedPoints(m, drag.dx, drag.dy) }
+          : {
+              points: handlePoints(
+                m,
+                drag.handle,
+                drag.to,
+                selectionPage?.size ?? { width: 1, height: 1 },
+              ),
+              // A callout resized by hand keeps its width.
+              ...(m.tool === "text" && drag.handle === "width"
+                ? { fixedWidth: true }
+                : {}),
+            },
       label,
     ).finally(() => setSelectDrag(null));
   }
@@ -1085,7 +1143,11 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
               onUnfill={unfill}
               onPlaceText={placeText}
               selection={tool === "select" ? selection : null}
-              onSelectMarks={setSelection}
+              onSelectMarks={selectMarks}
+              onSelectTapAgain={(id) => {
+                const mark = docMarks.find((m) => m.id === id);
+                if (mark?.tool === "text") editCallout(mark);
+              }}
               onSelectDrag={dragSelection}
               addPinMode={placingArrow !== null || copying !== null}
               onPlacePin={(page, at) =>

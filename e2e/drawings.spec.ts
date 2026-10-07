@@ -2381,3 +2381,113 @@ test("draw and hold: a closed pen stroke becomes its shape; the highlighter's is
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(marks).toHaveCount(3);
 });
+
+test("select: a callout tapped again opens for typing; its tip and width handles work", async ({
+  page,
+}) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openDrawing(page, "S-101 Level 3", false);
+  const toolbar = page.getByRole("toolbar", { name: "Markup tools" });
+  const tool = (name: string) =>
+    toolbar.getByRole("button", { name, exact: true });
+  const editor = page.getByRole("textbox", { name: "Callout text" });
+  const callout = page.getByTestId("callout");
+  const box = await stageBox(page);
+  const at = (fx: number, fy: number) => ({
+    x: box.x + box.width * fx,
+    y: box.y + box.height * fy,
+  });
+
+  // A callout with an arrow (hold, drag), typed and finished.
+  await tool("Text").click();
+  const press = at(0.5, 0.4);
+  await page.mouse.move(press.x, press.y);
+  await page.mouse.down();
+  await page.waitForTimeout(700);
+  const point = at(0.3, 0.55);
+  await page.mouse.move(point.x, point.y, { steps: 8 });
+  await page.mouse.up();
+  await editor.pressSequentially("check lap 600 min");
+  await tool("Text").click();
+  await expect(callout).toHaveCount(1);
+
+  // With Select: a tap picks it, a second tap opens it; Select stays on.
+  await tool("Select").click();
+  const r = (await callout.getByTestId("callout-box").boundingBox())!;
+  const centre = { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+  await page.mouse.click(centre.x, centre.y);
+  await expect(page.getByTestId("selection")).toHaveAttribute(
+    "data-count",
+    "1",
+  );
+  await page.mouse.click(centre.x, centre.y);
+  await expect(editor).toHaveValue("CHECK LAP 600 MIN");
+  await editor.fill("check lap 900 min");
+  const off = at(0.85, 0.85);
+  await page.mouse.click(off.x, off.y);
+  await expect(editor).toHaveCount(0);
+  await expect(callout).toHaveAttribute("aria-label", "CHECK LAP 900 MIN");
+  await expect(tool("Select")).toHaveAttribute("aria-pressed", "true");
+
+  // Still picked: the width handle narrows it (the text wraps, taller).
+  await expect(page.getByTestId("selection")).toHaveAttribute(
+    "data-count",
+    "1",
+  );
+  const hit = callout.getByTestId("callout-box");
+  const height = Number(await hit.getAttribute("height"));
+  const w = (await page.getByTestId("handle-width").boundingBox())!;
+  await page.mouse.move(w.x + w.width / 2, w.y + w.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(w.x - 120, w.y + w.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await expect
+    .poll(async () => Number(await hit.getAttribute("height")))
+    .toBeGreaterThan(height);
+
+  // The tip handle re-points the arrow.
+  const leader = callout.locator("polyline");
+  const before = (await leader.getAttribute("points"))!;
+  const tip = (await page.getByTestId("handle-tip").boundingBox())!;
+  await page.mouse.move(tip.x + tip.width / 2, tip.y + tip.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(tip.x - 40, tip.y + 60, { steps: 8 });
+  await page.mouse.up();
+  await expect(leader).not.toHaveAttribute("points", before);
+});
+
+test("draw and hold: dragging on after the shape snaps makes it bigger", async ({
+  page,
+}) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openDrawing(page, "S-101 Level 3", false);
+  const toolbar = page.getByRole("toolbar", { name: "Markup tools" });
+  await toolbar.getByRole("button", { name: "Pen", exact: true }).click();
+  const box = await stageBox(page);
+  const at = (fx: number, fy: number) => ({
+    x: box.x + box.width * fx,
+    y: box.y + box.height * fy,
+  });
+  const corners = [
+    at(0.3, 0.3),
+    at(0.4, 0.3),
+    at(0.4, 0.4),
+    at(0.3, 0.4),
+    at(0.301, 0.303),
+  ];
+  await page.mouse.move(corners[0].x, corners[0].y);
+  await page.mouse.down();
+  for (const p of corners.slice(1))
+    await page.mouse.move(p.x, p.y, { steps: 10 });
+  await page.waitForTimeout(800);
+  // Snapped: drag out, away from the middle, then lift.
+  const out = at(0.2, 0.2);
+  await page.mouse.move(out.x, out.y, { steps: 10 });
+  await page.mouse.up();
+  const rect = page.locator('[data-tool="rect"]');
+  await expect(rect).toHaveCount(1);
+  const drawn = (await rect.boundingBox())!;
+  expect(drawn.width).toBeGreaterThan(box.width * 0.15);
+});

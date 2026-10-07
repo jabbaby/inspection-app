@@ -40,3 +40,8 @@ Reply with the step number and what you saw (no need to edit this file).
 
 ## Export
 21. **PDF pack.** Export after moving, resizing, recolouring and duplicating: the PDF shows the marks where they are now.
+
+## Follow-up (2026-10-07): callouts in Select
+22. **Edit without switching.** With Select on, tap a callout (it's picked), then tap it again: the keyboard opens with its text and the toolbar stays on Select. Change it and tap elsewhere: the keyboard closes and the change is kept.
+23. **Handles.** With one callout picked, a hollow circle shows at its arrow tip and a handle on its right side. Drag the tip: the arrow re-points. Drag the side handle: the box gets narrower or wider and the text re-wraps.
+24. **Undo.** Undo reverses the edit, the re-point and the width change, one at a time.

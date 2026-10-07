@@ -135,6 +135,8 @@ interface Props {
   selection: MarkSelection | null;
   /** A tap or loop picked these marks (none: let go). */
   onSelectMarks: (selection: MarkSelection | null) => void;
+  /** The one mark selected was tapped again (a callout: edit its text). */
+  onSelectTapAgain: (markId: string) => void;
   /**
    * The selection (or one shape's handle) is being dragged; `done` when
    * it lifts (`drag` null: it didn't move).
@@ -815,6 +817,13 @@ export function DocumentViewer(props: Props) {
      */
     shape: MarkupShape | HeldShape | null;
     held: boolean;
+    /**
+     * A held shape as it snapped (page units), the centre it grows or
+     * shrinks about, and how far the Pencil was from that centre then.
+     */
+    heldBase: Point[];
+    heldCentre: Point;
+    heldFrom: number;
     /** Where the pointer went down and how far it has gone (screen px). */
     start: Point;
     travel: number;
@@ -869,6 +878,9 @@ export function DocumentViewer(props: Props) {
       still: p,
       timer: 0,
       held: false,
+      heldBase: [],
+      heldCentre: { x: 0, y: 0 },
+      heldFrom: 0,
     };
     if (ink.current.eraser) eraseAt(p);
     else requestInkFrame();
@@ -911,6 +923,25 @@ export function DocumentViewer(props: Props) {
         x: p.x / size.width,
         y: p.y / size.height,
       }));
+      // Dragging on from here scales it about its centre (engineer,
+      // 2026-10-07): an oval's own centre, else its corners' middle.
+      const xs = shape.points.map((p) => p.x);
+      const ys = shape.points.map((p) => p.y);
+      const centre =
+        shape.tool === "oval"
+          ? shape.points[0]
+          : {
+              x: (Math.min(...xs) + Math.max(...xs)) / 2,
+              y: (Math.min(...ys) + Math.max(...ys)) / 2,
+            };
+      const n = onPagePoint(stroke.page, stroke.still);
+      const at = { x: n.x * size.width, y: n.y * size.height };
+      stroke.heldBase = shape.points;
+      stroke.heldCentre = centre;
+      stroke.heldFrom = Math.max(
+        1,
+        Math.hypot(at.x - centre.x, at.y - centre.y),
+      );
       stroke.predicted = [];
       requestInkFrame();
       return;
@@ -919,6 +950,28 @@ export function DocumentViewer(props: Props) {
     stroke.points = [stroke.points[0], stroke.points[stroke.points.length - 1]];
     stroke.predicted = [];
     requestInkFrame();
+  }
+
+  /**
+   * A snapped shape follows the Pencil: further from its centre than when
+   * it snapped, it grows; nearer, it shrinks (same proportions and angle).
+   */
+  function scaleHeld(stroke: NonNullable<typeof ink.current>, p: Point) {
+    const size = stroke.page.size;
+    const n = onPagePoint(stroke.page, p);
+    const c = stroke.heldCentre;
+    const k = Math.min(
+      6,
+      Math.max(
+        0.15,
+        Math.hypot(n.x * size.width - c.x, n.y * size.height - c.y) /
+          stroke.heldFrom,
+      ),
+    );
+    stroke.points = stroke.heldBase.map((q) => ({
+      x: (c.x + (q.x - c.x) * k) / size.width,
+      y: (c.y + (q.y - c.y) * k) / size.height,
+    }));
   }
 
   function moveInk(e: React.PointerEvent) {
@@ -933,7 +986,8 @@ export function DocumentViewer(props: Props) {
         Math.hypot(p.x - stroke.start.x, p.y - stroke.start.y),
       );
       if (stroke.eraser) eraseAt(p);
-      else if (!stroke.held) {
+      else if (stroke.held) scaleHeld(stroke, p);
+      else {
         const at = clampNormalised(onPagePoint(stroke.page, p));
         // A shape (or a straightened line) only moves its end.
         if (stroke.shape) stroke.points[1] = at;
@@ -1307,10 +1361,14 @@ export function DocumentViewer(props: Props) {
       return;
     }
     latest.current.onSelectDrag(cancelled ? null : s.last, true);
-    // A tap inside the selection picks the mark under it (if any).
+    // A tap inside the selection picks the mark under it (if any); on the
+    // only one picked, it's tapped again (a callout opens for typing).
     if (!s.last && s.kind === "move" && !cancelled) {
       const mark = markAt(s.page, s.start);
-      if (mark)
+      const sel = latest.current.selection;
+      if (mark && sel?.ids.length === 1 && sel.ids[0] === mark.id)
+        latest.current.onSelectTapAgain(mark.id);
+      else if (mark)
         latest.current.onSelectMarks({ pageKey: s.page.key, ids: [mark.id] });
     }
   }
