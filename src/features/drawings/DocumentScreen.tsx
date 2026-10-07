@@ -12,6 +12,7 @@ import {
   HIGHLIGHTER_OPACITY,
   WEIGHT_PRESETS,
   toStoredPoints,
+  isHighlight,
 } from "../markup/markGeometry";
 import {
   clampMove,
@@ -40,7 +41,7 @@ import {
 import { measureArial } from "../markup/measureText";
 import { MarkupToolbar } from "../markup/MarkupToolbar";
 import type { DocMark, ViewerTool } from "../markup/tools";
-import type { MarkupShape, MarkupTool } from "../../db/types";
+import type { HeldShape, MarkupShape, MarkupTool } from "../../db/types";
 import { moveObservationBox, updateCopy, updateItem } from "../../db/items";
 import {
   createItemWithUndo,
@@ -343,6 +344,7 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
           colour: m.colour,
           weight: m.weight,
           fill: m.fill,
+          highlight: m.highlight,
           text: m.text,
           fixedWidth: m.fixedWidth,
         })),
@@ -560,7 +562,7 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
   /** Recolour: highlights only from the highlighter's colours, the rest from the pen's. */
   function recolourSelection(colour: string, palette: "pen" | "highlighter") {
     const records = selectedRecords().filter(
-      (m) => (m.tool === "highlighter") === (palette === "highlighter"),
+      (m) => isHighlight(m) === (palette === "highlighter"),
     );
     void changeMarksWithUndo(records, () => ({ colour }), "Change colour");
   }
@@ -640,7 +642,7 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
   async function saveStroke(
     page: PageLayout,
     points: Point[],
-    shape: MarkupShape | null,
+    shape: MarkupShape | HeldShape | null,
   ) {
     if (tool !== "pen" && tool !== "highlighter" && tool !== "shapes") return;
     await drawWithUndo({
@@ -650,9 +652,11 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
       tool: shape ?? (tool === "shapes" ? prefs.shape : tool),
       // Already normalised: stored rounded.
       points: toStoredPoints(points, { width: 1, height: 1 }),
-      // The pen's colour and weight for its straightened lines.
+      // The pen's (or highlighter's) colour and weight for its held shapes.
       colour: toolColour(prefs, tool),
       weight: prefs.weight[tool],
+      // A shape held with the highlighter is drawn like a highlight.
+      ...(shape && tool === "highlighter" ? { highlight: true } : {}),
     });
   }
 

@@ -2290,7 +2290,7 @@ test("select: tap or loop to pick marks, move, recolour, weight, resize, duplica
   const onRect = at(0.45, 0.45);
   await page.mouse.click(onRect.x, onRect.y);
   await expect(selection).toHaveAttribute("data-count", "1");
-  const rect = marks.nth(1).locator("path").first();
+  const rect = page.locator('[data-tool="rect"] path').first();
   const shape = await rect.getAttribute("d");
   const corner = (await page.getByTestId("handle-se").boundingBox())!;
   await page.mouse.move(
@@ -2307,4 +2307,77 @@ test("select: tap or loop to pick marks, move, recolour, weight, resize, duplica
   // Turning Select off lets go.
   await tool("Select").click();
   await expect(selection).toHaveCount(0);
+});
+
+test("draw and hold: a closed pen stroke becomes its shape; the highlighter's isn't filled", async ({
+  page,
+}) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openDrawing(page, "S-101 Level 3", false);
+  const toolbar = page.getByRole("toolbar", { name: "Markup tools" });
+  const marks = page.getByTestId("mark");
+  const box = await stageBox(page);
+  /** Draws through the points (page fractions), holds still, then lifts. */
+  async function drawAndHold(points: [number, number][]) {
+    const at = ([fx, fy]: [number, number]) => ({
+      x: box.x + box.width * fx,
+      y: box.y + box.height * fy,
+    });
+    await page.mouse.move(at(points[0]).x, at(points[0]).y);
+    await page.mouse.down();
+    for (const p of points.slice(1))
+      await page.mouse.move(at(p).x, at(p).y, { steps: 10 });
+    await page.waitForTimeout(800);
+    await page.mouse.up();
+  }
+
+  // A rectangle with the pen: the Rectangle shape, filled lightly.
+  await toolbar.getByRole("button", { name: "Pen", exact: true }).click();
+  await drawAndHold([
+    [0.2, 0.3],
+    [0.4, 0.3],
+    [0.4, 0.45],
+    [0.2, 0.45],
+    [0.201, 0.305],
+  ]);
+  const kind = (tool: string) => page.locator(`[data-tool="${tool}"]`);
+  await expect(marks).toHaveCount(1);
+  await expect(kind("rect")).toHaveAttribute("data-filled", "true");
+
+  // A triangle: a polygon through its corners.
+  await drawAndHold([
+    [0.5, 0.6],
+    [0.6, 0.35],
+    [0.7, 0.6],
+    [0.502, 0.598],
+  ]);
+  await expect(kind("polygon")).toHaveCount(1);
+
+  // An open stroke held: a straight line, as before.
+  await drawAndHold([
+    [0.2, 0.7],
+    [0.3, 0.75],
+    [0.4, 0.7],
+  ]);
+  await expect(kind("line")).toHaveCount(1);
+
+  // With the highlighter: a box, not filled; Undo takes it away.
+  await toolbar
+    .getByRole("button", { name: "Highlighter", exact: true })
+    .click();
+  await drawAndHold([
+    [0.75, 0.2],
+    [0.9, 0.2],
+    [0.9, 0.35],
+    [0.75, 0.35],
+    [0.751, 0.205],
+  ]);
+  await expect(marks).toHaveCount(4);
+  await expect(kind("rect")).toHaveCount(2);
+  await expect(
+    kind("rect").and(page.locator('[data-filled="false"]')),
+  ).toHaveCount(1);
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(marks).toHaveCount(3);
 });

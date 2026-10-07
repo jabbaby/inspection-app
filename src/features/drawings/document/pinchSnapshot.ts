@@ -25,6 +25,7 @@ import {
   drawMark,
   isFilled,
   markStyle,
+  isHighlight,
 } from "../../markup/markGeometry";
 import { layoutCallout } from "../../markup/calloutGeometry";
 import { measureArial } from "../../markup/measureText";
@@ -259,8 +260,9 @@ function drawMarks(
     }
     const style = markStyle(mark, page.size);
     ctx.globalAlpha = style.opacity;
-    ctx.globalCompositeOperation =
-      mark.tool === "highlighter" ? "multiply" : "source-over";
+    ctx.globalCompositeOperation = isHighlight(mark)
+      ? "multiply"
+      : "source-over";
     ctx.strokeStyle = ctx.fillStyle = style.colour;
     ctx.lineWidth = style.width;
     const drawing = drawMark(mark, page.size);

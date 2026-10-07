@@ -21,6 +21,7 @@ import {
 import { kindName } from "../../items/letters";
 import {
   SHAPE_FILL_OPACITY,
+  drawMark,
   insideMark,
   markWidth,
   shapeDrawing,
@@ -29,7 +30,8 @@ import {
   toPagePoints,
   touchesMark,
 } from "../../markup/markGeometry";
-import type { MarkupShape } from "../../../db/types";
+import type { HeldShape, MarkupShape } from "../../../db/types";
+import { recogniseShape } from "../../markup/shapeRecognition";
 import {
   clampMove,
   marksInLoop,
@@ -116,7 +118,7 @@ interface Props {
   onStroke: (
     page: PageLayout,
     points: Point[],
-    shape: MarkupShape | null,
+    shape: MarkupShape | HeldShape | null,
   ) => Promise<void>;
   /** The marks the eraser has touched so far; `done` when it lifts. */
   onErase: (ids: string[], done: boolean) => void;
@@ -808,8 +810,11 @@ export function DocumentViewer(props: Props) {
     /**
      * A shape being dragged out (points are its two corners): the Shapes
      * tool's, or "line" once a pen stroke held still has straightened.
+     * After a held closed stroke, the shape it became (`held`: its points
+     * are the shape's, and stay put).
      */
-    shape: MarkupShape | null;
+    shape: MarkupShape | HeldShape | null;
+    held: boolean;
     /** Where the pointer went down and how far it has gone (screen px). */
     start: Point;
     travel: number;
@@ -863,10 +868,17 @@ export function DocumentViewer(props: Props) {
       travel: 0,
       still: p,
       timer: 0,
+      held: false,
     };
     if (ink.current.eraser) eraseAt(p);
     else requestInkFrame();
-    if (latest.current.tool === "pen") restartStill(p);
+    if (holds()) restartStill(p);
+  }
+
+  /** Whether the tool's strokes become shapes when held (pen and highlighter). */
+  function holds() {
+    const tool = latest.current.tool;
+    return tool === "pen" || tool === "highlighter";
   }
 
   /** The pen came to rest at `p`: straighten the stroke if it stays there. */
@@ -879,13 +891,30 @@ export function DocumentViewer(props: Props) {
   }
 
   /**
-   * GoodNotes style: a pen stroke held still at its end becomes a straight
-   * line from where it started; until the Pencil lifts, the line's end
-   * follows it in any direction.
+   * GoodNotes style: a pen or highlighter stroke held still at its end
+   * becomes the shape it looks like (engineer, 2026-10-07): a closed one a
+   * circle, ellipse, rectangle, triangle or polygon (shapeRecognition.ts),
+   * and anything else a straight line from where it started, whose end then
+   * follows the Pencil in any direction until it lifts.
    */
   function straighten() {
     const stroke = ink.current;
     if (!stroke || stroke.shape || stroke.travel < MIN_SHAPE * 3) return;
+    const size = stroke.page.size;
+    const shape = recogniseShape(
+      stroke.points.map((p) => ({ x: p.x * size.width, y: p.y * size.height })),
+    );
+    if (shape) {
+      stroke.shape = shape.tool;
+      stroke.held = true;
+      stroke.points = shape.points.map((p) => ({
+        x: p.x / size.width,
+        y: p.y / size.height,
+      }));
+      stroke.predicted = [];
+      requestInkFrame();
+      return;
+    }
     stroke.shape = "line";
     stroke.points = [stroke.points[0], stroke.points[stroke.points.length - 1]];
     stroke.predicted = [];
@@ -904,7 +933,7 @@ export function DocumentViewer(props: Props) {
         Math.hypot(p.x - stroke.start.x, p.y - stroke.start.y),
       );
       if (stroke.eraser) eraseAt(p);
-      else {
+      else if (!stroke.held) {
         const at = clampNormalised(onPagePoint(stroke.page, p));
         // A shape (or a straightened line) only moves its end.
         if (stroke.shape) stroke.points[1] = at;
@@ -916,7 +945,7 @@ export function DocumentViewer(props: Props) {
     const last = local(e.nativeEvent);
     if (
       !stroke.shape &&
-      latest.current.tool === "pen" &&
+      holds() &&
       Math.hypot(last.x - stroke.still.x, last.y - stroke.still.y) > STILL_SLOP
     )
       restartStill(last);
@@ -1004,22 +1033,27 @@ export function DocumentViewer(props: Props) {
         dpr * t.x,
         dpr * (t.y + stroke.page.top * t.scale),
       );
-      const [a, b] = toPagePoints(
-        stroke.points.flatMap((p) => [p.x, p.y]),
-        size,
-      );
+      const flat = stroke.points.flatMap((p) => [p.x, p.y]);
+      const [a, b] = toPagePoints(flat, size);
       const width = markWidth(style.weight, size);
-      const drawing = shapeDrawing(stroke.shape, a, b, width);
+      const drawing = stroke.held
+        ? drawMark(
+            { tool: stroke.shape, points: flat, weight: style.weight },
+            size,
+          )
+        : shapeDrawing(stroke.shape as MarkupShape, a, b, width);
       const path = new Path2D(drawing.d);
+      // A highlighter's shape: see-through, never filled.
+      const highlight = latest.current.tool === "highlighter";
       ctx.strokeStyle = ctx.fillStyle = style.colour;
       ctx.lineWidth = width;
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
-      if (drawing.closed) {
+      if (drawing.closed && !highlight) {
         ctx.globalAlpha = SHAPE_FILL_OPACITY;
         ctx.fill(path);
       }
-      ctx.globalAlpha = 1;
+      ctx.globalAlpha = highlight ? style.opacity : 1;
       ctx.stroke(path);
       if (drawing.head) ctx.fill(new Path2D(drawing.head));
       return;
@@ -1065,8 +1099,8 @@ export function DocumentViewer(props: Props) {
     }
     if (cancelled) return clearInk();
     if (stroke.shape) {
-      // Too small to mean anything: dropped.
-      if (stroke.travel < MIN_SHAPE) return clearInk();
+      // Too small to mean anything: dropped (a held shape is never small).
+      if (!stroke.held && stroke.travel < MIN_SHAPE) return clearInk();
       void latest.current
         .onStroke(stroke.page, stroke.points, stroke.shape)
         .finally(() =>

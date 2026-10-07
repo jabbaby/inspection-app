@@ -1,5 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
+  drawMark,
+  isFilled,
   markPath,
   markWidth,
   smoothLifted,
@@ -110,5 +112,36 @@ describe("mark geometry", () => {
     expect(touchesMark(mark, A3, { x: 500, y: y + 5 }, 4)).toBe(true);
     expect(touchesMark(mark, A3, { x: 500, y: y + 20 }, 4)).toBe(false);
     expect(touchesMark(mark, A3, { x: 50, y }, 4)).toBe(false);
+  });
+
+  test("held shapes: a polygon through its corners, a tilted ellipse as cubics", () => {
+    const page = { width: 1000, height: 1000 };
+    const tri = drawMark(
+      {
+        tool: "polygon",
+        points: [0.1, 0.1, 0.3, 0.1, 0.2, 0.3],
+        weight: 0.0025,
+      },
+      page,
+    );
+    expect(tri.closed).toBe(true);
+    expect(tri.outline).toHaveLength(4);
+    const oval = drawMark(
+      {
+        tool: "oval",
+        points: [0.5, 0.5, 0.6, 0.55, 0.48, 0.54],
+        weight: 0.0025,
+      },
+      page,
+    );
+    expect(oval.d).toMatch(/C/);
+    expect(oval.d).not.toMatch(/Q/);
+    // The outline passes through the major axis's end.
+    expect(
+      Math.min(...oval.outline.map((p) => Math.hypot(p.x - 600, p.y - 550))),
+    ).toBeLessThan(0.01);
+    // Held with the highlighter: never filled.
+    expect(isFilled({ tool: "polygon", highlight: true }, tri)).toBe(false);
+    expect(isFilled({ tool: "polygon" }, tri)).toBe(true);
   });
 });

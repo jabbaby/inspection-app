@@ -1,6 +1,7 @@
 import { ChevronDown, Copy, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useViewerCoords } from "../drawings/viewer/viewerCoords";
+import { isHighlight } from "./markGeometry";
 import { PRESET_COLOURS, useMarkupPrefs } from "./markupPrefs";
 import { selectionBounds, shapeHandles, weightIndex } from "./selectGeometry";
 import type { DocMark } from "./tools";
@@ -60,11 +61,10 @@ export function SelectionOverlay({
   const gap = GAP_PX * k;
   const handles = marks.length === 1 ? shapeHandles(marks[0], pageSize) : [];
 
-  const highlights = marks.filter((m) => m.tool === "highlighter");
+  const highlights = marks.filter(isHighlight);
   const palette = highlights.length === marks.length ? "highlighter" : "pen";
   const shown =
-    marks.find((m) => (palette === "pen") === (m.tool !== "highlighter")) ??
-    marks[0];
+    marks.find((m) => (palette === "pen") === !isHighlight(m)) ?? marks[0];
   // Callouts keep their size unless only callouts are picked (S, M, L).
   const onlyText = marks.every((m) => m.tool === "text");
   const sized = onlyText ? marks : marks.filter((m) => m.tool !== "text");

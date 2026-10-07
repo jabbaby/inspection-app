@@ -26,6 +26,7 @@ import {
   drawMark,
   isFilled,
   markStyle,
+  isHighlight,
 } from "../markup/markGeometry";
 import { layoutCallout } from "../markup/calloutGeometry";
 import { toEncodable } from "../memo/pdf/text";
@@ -172,8 +173,7 @@ function drawMarks(
       borderWidth: style.width,
       borderOpacity: style.opacity,
       borderLineCap: LineCapStyle.Round,
-      blendMode:
-        mark.tool === "highlighter" ? BlendMode.Multiply : BlendMode.Normal,
+      blendMode: isHighlight(mark) ? BlendMode.Multiply : BlendMode.Normal,
     });
     if (drawing.head)
       page.drawSvgPath(drawing.head, {

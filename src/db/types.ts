@@ -295,8 +295,14 @@ export interface ObservationBox {
 export const SHAPES = ["line", "arrow", "rect", "ellipse", "cloud"] as const;
 export type MarkupShape = (typeof SHAPES)[number];
 
+/**
+ * Shapes made by drawing and holding (SPEC 5a, 2026-10-07): a polygon
+ * through its corners, or a tilted ellipse (centre, then its axes' ends).
+ */
+export type HeldShape = "polygon" | "oval";
+
 /** What a mark is: a pen or highlighter stroke, a shape or a text callout (SPEC 5a). */
-export type MarkKind = "pen" | "highlighter" | MarkupShape | "text";
+export type MarkKind = "pen" | "highlighter" | MarkupShape | HeldShape | "text";
 
 /** Toolbar tools with their own colour slot and weight (text: its size). */
 export type MarkupTool = "pen" | "highlighter" | "shapes" | "text";
@@ -323,6 +329,11 @@ export interface Markup {
    * colour; false once the eraser took the fill off.
    */
   fill?: boolean;
+  /**
+   * A shape made by holding the highlighter: drawn like a highlight
+   * (see-through, multiplied in the PDF), never filled.
+   */
+  highlight?: boolean;
   /**
    * Text callouts: what it says (capitals). Their points are the box's
    * x, y, width and height, then the leader's tip if it has one; weight is

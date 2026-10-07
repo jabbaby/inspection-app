@@ -15,10 +15,16 @@ import {
   touchesMark,
 } from "./markGeometry";
 
-type SelectMark = Pick<Markup, "id" | "tool" | "points" | "weight" | "fill">;
+type SelectMark = Pick<
+  Markup,
+  "id" | "tool" | "points" | "weight" | "fill" | "highlight"
+>;
 
 /** The toolbar tool whose weights a mark uses. */
-export function weightToolOf(mark: Pick<Markup, "tool">): MarkupTool {
+export function weightToolOf(
+  mark: Pick<Markup, "tool" | "highlight">,
+): MarkupTool {
+  if (mark.highlight) return "highlighter";
   if (
     mark.tool === "pen" ||
     mark.tool === "highlighter" ||
@@ -29,7 +35,9 @@ export function weightToolOf(mark: Pick<Markup, "tool">): MarkupTool {
 }
 
 /** Which of its tool's three presets a mark's weight is (-1: none). */
-export function weightIndex(mark: Pick<Markup, "tool" | "weight">): number {
+export function weightIndex(
+  mark: Pick<Markup, "tool" | "weight" | "highlight">,
+): number {
   return WEIGHT_PRESETS[weightToolOf(mark)].findIndex(
     (w) => Math.abs(w - mark.weight) < 1e-9,
   );

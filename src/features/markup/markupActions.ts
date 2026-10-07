@@ -22,6 +22,8 @@ const LABELS: Record<Markup["tool"], string> = {
   rect: "Draw rectangle",
   ellipse: "Draw ellipse",
   cloud: "Draw cloud",
+  polygon: "Draw shape",
+  oval: "Draw ellipse",
   text: "Add text",
 };
 

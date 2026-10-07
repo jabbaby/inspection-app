@@ -172,15 +172,20 @@ export function markPath(
   );
 }
 
+/** Drawn like a highlight: a highlighter stroke, or a shape held with it. */
+export function isHighlight(mark: Pick<Markup, "tool" | "highlight">): boolean {
+  return mark.tool === "highlighter" || mark.highlight === true;
+}
+
 /** How a mark is stroked, in page units. */
 export function markStyle(
-  mark: Pick<Markup, "tool" | "colour" | "weight">,
+  mark: Pick<Markup, "tool" | "colour" | "weight" | "highlight">,
   page: Size,
 ): { width: number; colour: string; opacity: number } {
   return {
     width: markWidth(mark.weight, page),
     colour: mark.colour,
-    opacity: mark.tool === "highlighter" ? HIGHLIGHTER_OPACITY : 1,
+    opacity: isHighlight(mark) ? HIGHLIGHTER_OPACITY : 1,
   };
 }
 
@@ -350,10 +355,53 @@ export function shapeDrawing(
 
 /** Whether a mark is drawn with its light fill (closed shapes, unless taken off). */
 export function isFilled(
-  mark: Pick<Markup, "tool" | "fill">,
+  mark: Pick<Markup, "tool" | "fill" | "highlight">,
   drawing: MarkDrawing,
 ): boolean {
-  return drawing.closed && mark.fill !== false;
+  return drawing.closed && mark.fill !== false && mark.highlight !== true;
+}
+
+/** A polygon through its corners (a shape held with the pen or highlighter). */
+function polygonDrawing(points: Point[]): MarkDrawing {
+  return {
+    d: pathOf(points, true),
+    closed: true,
+    head: null,
+    outline: [...points, points[0]],
+  };
+}
+
+/**
+ * A tilted ellipse from its centre and its axes' ends, as four exact-ish
+ * cubic quarters (C, never Q: see strokePath).
+ */
+function ovalDrawing(c: Point, a: Point, b: Point): MarkDrawing {
+  const u = { x: a.x - c.x, y: a.y - c.y };
+  const v = { x: b.x - c.x, y: b.y - c.y };
+  const at = (cu: number, cv: number) => ({
+    x: c.x + u.x * cu + v.x * cv,
+    y: c.y + u.y * cu + v.y * cv,
+  });
+  const p = (q: Point) => `${fmt(q.x)} ${fmt(q.y)}`;
+  const quarters: [number, number][] = [
+    [1, 0],
+    [0, 1],
+    [-1, 0],
+    [0, -1],
+  ];
+  let d = `M ${p(at(1, 0))}`;
+  quarters.forEach(([su, sv], i) => {
+    const [eu, ev] = quarters[(i + 1) % 4];
+    d += ` C ${p(at(su + KAPPA * eu, sv + KAPPA * ev))} ${p(
+      at(eu + KAPPA * su, ev + KAPPA * sv),
+    )} ${p(at(eu, ev))}`;
+  });
+  const outline: Point[] = [];
+  for (let i = 0; i <= 48; i++) {
+    const t = (2 * Math.PI * i) / 48;
+    outline.push(at(Math.cos(t), Math.sin(t)));
+  }
+  return { d: `${d} Z`, closed: true, head: null, outline };
 }
 
 /** Whether `p` (page units) is inside a filled shape (its outline, closed). */
@@ -394,6 +442,10 @@ export function drawMark(
     };
   const points = toPagePoints(mark.points, page);
   const width = markWidth(mark.weight, page);
+  if (mark.tool === "polygon" && points.length >= 3)
+    return polygonDrawing(points);
+  if (mark.tool === "oval" && points.length >= 3)
+    return ovalDrawing(points[0], points[1], points[2]);
   if (isShape(mark.tool) && points.length >= 2)
     return shapeDrawing(mark.tool, points[0], points[points.length - 1], width);
   const line = smoothLifted(thinStroke(points, width));
