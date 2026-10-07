@@ -46,8 +46,9 @@ import { measureArial } from "../markup/measureText";
 import { MarkupToolbar } from "../markup/MarkupToolbar";
 import type { DocMark, ViewerTool } from "../markup/tools";
 import type { HeldShape, MarkupShape, MarkupTool } from "../../db/types";
-import { moveObservationBox, updateCopy, updateItem } from "../../db/items";
+import { placeObservationBox, updateCopy, updateItem } from "../../db/items";
 import {
+  createGeneralNoteWithUndo,
   createItemWithUndo,
   setArrowsWithUndo,
   addCopyWithUndo,
@@ -404,6 +405,12 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
         selectedArrowId: item.id === selectedId ? selectedArrow : null,
       };
     }),
+  );
+
+  // General notes (no pin): listed in every page's notes box.
+  const generalNotes = useMemo(
+    () => (items ?? []).filter((item) => item.general),
+    [items],
   );
 
   const docMarks: DocMark[] = useMemo(
@@ -1064,10 +1071,22 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
       (b) => b.drawingId === page.drawingId && b.page === page.page,
     );
     if (!inspection) return null;
-    // Items with a pin (original or copy) here: the notes box lists them.
+    // Items with a pin (original or copy) here: the notes box lists them,
+    // after the general notes (which every page's box lists).
     const pageItems = (items ?? []).filter((item) =>
       isOnPage(item, page.drawingId, page.page),
     );
+    // A page with only general notes shows its box at the default spot
+    // until it's moved (then it has a record).
+    const shownBox =
+      pageItems.length > 0 || generalNotes.length > 0
+        ? (box ?? {
+            id: "",
+            drawingId: page.drawingId,
+            page: page.page,
+            ...defaultBoxPosition(page.size),
+          })
+        : null;
     const pageSpots = pageItems.flatMap((item) =>
       itemSpots(item)
         .filter((s) => s.drawingId === page.drawingId && s.page === page.page)
@@ -1111,16 +1130,22 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
             onDelete={deleteSelection}
           />
         )}
-        {box && (
+        {shownBox && (
           <ObservationBoxOverlay
-            box={box}
+            box={shownBox}
             lines={boxLines({
               header: boxHeader(inspection),
               observationHeading: heading ?? DEFAULT_OBSERVATION_HEADING,
-              items: pageItems,
+              items: [...generalNotes, ...pageItems],
             })}
             onMoveEnd={(to) =>
-              void moveObservationBox(db, box.id, to, inspectionId)
+              void placeObservationBox(
+                db,
+                page.drawingId,
+                page.page,
+                to,
+                inspectionId,
+              )
             }
           />
         )}
@@ -1472,8 +1497,15 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
               drawings={drawings}
               inView={pinsInView}
               onClose={() => setItemsOpen(false)}
+              onAddGeneral={() =>
+                void createGeneralNoteWithUndo(inspectionId).then((created) =>
+                  select(created.id),
+                )
+              }
               onSelect={(item) => {
                 select(item.id);
+                // A general note has no pin to scroll to.
+                if (item.general) return;
                 setScrollTarget({
                   pageKey: pageKey(item.drawingId, item.page),
                   at: { x: item.x, y: item.y },

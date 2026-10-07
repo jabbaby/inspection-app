@@ -72,6 +72,7 @@ export async function buildPack(
     doc,
     {
       pages: pinned,
+      generalNotes: data.items.filter((item) => item.general),
       boxes: data.boxes,
       header: boxHeader(inspection),
       observationHeading: data.observationHeading,

@@ -216,21 +216,27 @@ export function ItemSheet({
         </button>
       </div>
 
-      <div className="segmented" role="group" aria-label="Item kind">
-        {KINDS.map(({ kind, label }) => (
-          <button
-            key={kind}
-            type="button"
-            aria-pressed={item.kind === kind}
-            onClick={() => {
-              if (item.kind !== kind)
-                void autosave.flush().then(() => setKindWithUndo(item, kind));
-            }}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      {item.general ? (
+        <p className="muted item-sheet-note">
+          General note: no pin. It's listed in every page's notes box.
+        </p>
+      ) : (
+        <div className="segmented" role="group" aria-label="Item kind">
+          {KINDS.map(({ kind, label }) => (
+            <button
+              key={kind}
+              type="button"
+              aria-pressed={item.kind === kind}
+              onClick={() => {
+                if (item.kind !== kind)
+                  void autosave.flush().then(() => setKindWithUndo(item, kind));
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <label className="field">
         <span>{isInstruction ? "Instruction" : "Observation"}</span>
@@ -244,7 +250,9 @@ export function ItemSheet({
           placeholder={
             isInstruction
               ? "e.g. Add N12 bar at grid C/4"
-              : "e.g. Existing crack noted at grid 4"
+              : item.general
+                ? "e.g. Inspection limited to the roof, grids 1–4 / A–C"
+                : "e.g. Existing crack noted at grid 4"
           }
           onChange={(e) => {
             setText(e.target.value);
@@ -274,20 +282,22 @@ export function ItemSheet({
         <ItemPhotos item={item} />
       </div>
 
-      {arrows && (
+      {arrows && !item.general && (
         <ArrowControls
           count={allArrows.length}
           only={allArrows.length === 1 ? allArrows[0].id : null}
           {...arrows}
         />
       )}
-      {copies && <CopyControls {...copies} />}
+      {copies && !item.general && <CopyControls {...copies} />}
 
-      <p className="muted item-sheet-note">
-        {isInstruction
-          ? "Instructions go in this page's notes box and the memo's conditions."
-          : "Observations go in this page's notes box, not the memo."}
-      </p>
+      {!item.general && (
+        <p className="muted item-sheet-note">
+          {isInstruction
+            ? "Instructions go in this page's notes box and the memo's conditions."
+            : "Observations go in this page's notes box, not the memo."}
+        </p>
+      )}
 
       <div className="sheet-spacer" />
 

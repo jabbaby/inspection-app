@@ -102,6 +102,53 @@ export async function createItem(
   );
 }
 
+/**
+ * Adds a general note: an observation with no pin, listed in every notes
+ * box and lettered before the pinned observations.
+ */
+export async function createGeneralNote(
+  db: InspectionDb,
+  inspectionId: string,
+  now = Date.now(),
+): Promise<Item> {
+  return db.transaction(
+    "rw",
+    [db.inspections, db.drawings, db.items],
+    async () => {
+      const existing = await db.items
+        .where("inspectionId")
+        .equals(inspectionId)
+        .toArray();
+      const createdAt = Math.max(
+        now,
+        ...existing.map((other) => other.createdAt + 1),
+      );
+      const created: Item = {
+        id: crypto.randomUUID(),
+        inspectionId,
+        drawingId: "",
+        page: 0,
+        x: 0,
+        y: 0,
+        general: true,
+        letter: letterForIndex(existing.length),
+        kind: "observation",
+        text: "",
+        requiresPhotoConfirmation: false,
+        photoIds: [],
+        createdAt,
+        // After the other general notes.
+        sequence: createdAt,
+        arrows: [],
+      };
+      await db.items.add(created);
+      await reletterInspection(db, inspectionId);
+      await touchInspection(db, inspectionId, now);
+      return (await db.items.get(created.id))!;
+    },
+  );
+}
+
 export async function updateItem(
   db: InspectionDb,
   id: string,
@@ -114,6 +161,12 @@ export async function updateItem(
     async () => {
       const item = await db.items.get(id);
       if (!item) throw new Error(`Item ${id} not found`);
+      // General notes are always observations.
+      if (item.general && patch.kind === "instruction") {
+        const { kind: _kind, ...rest } = patch;
+        void _kind;
+        patch = rest;
+      }
       await db.items.update(id, patch);
       // Switching kind moves it to the other list: re-letter both.
       if (patch.kind && patch.kind !== item.kind)
@@ -150,7 +203,9 @@ export function letterChanges(
   drawingOrder: string[],
 ): { id: string; letter: string }[] {
   const rank = new Map(drawingOrder.map((id, i) => [id, i]));
-  const drawingRank = (item: Item) => rank.get(item.drawingId) ?? Infinity;
+  // General notes come first (engineer, 2026-10-07), then the pins.
+  const drawingRank = (item: Item) =>
+    item.general ? -1 : (rank.get(item.drawingId) ?? Infinity);
   const changes: { id: string; letter: string }[] = [];
   for (const kind of ["instruction", "observation"] as const) {
     const ofKind = items
@@ -333,6 +388,39 @@ export async function reorderItems(
   );
 }
 
+/**
+ * Puts a page's notes box at `to`, making its record if the page had none
+ * yet (a page with only general notes shows one at the default spot).
+ */
+export async function placeObservationBox(
+  db: InspectionDb,
+  drawingId: string,
+  page: number,
+  to: { x: number; y: number },
+  inspectionId: string,
+  now = Date.now(),
+): Promise<void> {
+  await db.transaction(
+    "rw",
+    [db.inspections, db.observationBoxes],
+    async () => {
+      const box = await db.observationBoxes
+        .where("[drawingId+page]")
+        .equals([drawingId, page])
+        .first();
+      if (box) await db.observationBoxes.update(box.id, to);
+      else
+        await db.observationBoxes.add({
+          id: crypto.randomUUID(),
+          drawingId,
+          page,
+          ...to,
+        });
+      await touchInspection(db, inspectionId, now);
+    },
+  );
+}
+
 export async function moveObservationBox(
   db: InspectionDb,
   id: string,
@@ -364,7 +452,10 @@ export async function pageHasPins(
   return items.some((item) => isOnPage(item, drawingId, page));
 }
 
-/** Removes a page's notes box once it has no pins; returns it (for undo). */
+/**
+ * Removes a page's notes box once it has no pins (kept, where it was put,
+ * while there are general notes to list); returns it (for undo).
+ */
 async function removeBoxIfEmpty(
   db: InspectionDb,
   inspectionId: string,
@@ -372,6 +463,12 @@ async function removeBoxIfEmpty(
   page: number,
 ): Promise<ObservationBox | null> {
   if (await pageHasPins(db, inspectionId, drawingId, page)) return null;
+  const general = await db.items
+    .where("inspectionId")
+    .equals(inspectionId)
+    .filter((item) => item.general === true)
+    .count();
+  if (general > 0) return null;
   const pageBox = db.observationBoxes
     .where("[drawingId+page]")
     .equals([drawingId, page]);

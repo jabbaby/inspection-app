@@ -8,6 +8,7 @@ import {
 } from "./drawings";
 import { createInspection } from "./inspections";
 import {
+  createGeneralNote,
   createItem,
   deleteItem,
   reorderItems,
@@ -175,6 +176,33 @@ describe("items", () => {
     expect((await db.inspections.get(inspection.id))?.updatedAt).toBe(
       999_999_999_999,
     );
+  });
+});
+
+describe("general notes", () => {
+  test("are observations with no pin, lettered before the pinned ones", async () => {
+    const d1 = await drawing("S-101");
+    const p = await pin(d1.id);
+    await updateItem(db, p.id, { kind: "observation" });
+    const g = await createGeneralNote(db, inspection.id);
+    expect(g).toMatchObject({
+      general: true,
+      kind: "observation",
+      drawingId: "",
+      letter: "A",
+    });
+    expect((await db.items.get(p.id))!.letter).toBe("B");
+    // Never switched to an instruction.
+    await updateItem(db, g.id, { kind: "instruction" });
+    expect((await db.items.get(g.id))!.kind).toBe("observation");
+  });
+
+  test("keep a page's notes box (where it was put) after its last pin goes", async () => {
+    const d1 = await drawing("S-101");
+    const p = await pin(d1.id);
+    await createGeneralNote(db, inspection.id);
+    await deleteItem(db, p.id);
+    expect(await db.observationBoxes.count()).toBe(1);
   });
 });
 

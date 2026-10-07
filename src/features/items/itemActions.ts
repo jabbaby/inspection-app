@@ -3,6 +3,7 @@ import { pushUndo, relabelUndo, type UndoEntry } from "../../app/undo";
 import { db } from "../../db/db";
 import {
   addCopy,
+  createGeneralNote,
   createItem,
   deleteItem,
   removeCopy,
@@ -39,6 +40,24 @@ export async function createItemWithUndo(
   };
   addEntries.set(created.id, entry);
   pushUndo(item.inspectionId, entry);
+  return created;
+}
+
+/** Adds a general note (no pin); Undo removes it, Redo puts it back. */
+export async function createGeneralNoteWithUndo(
+  inspectionId: string,
+): Promise<Item> {
+  const created = await createGeneralNote(db, inspectionId);
+  let removed: DeletedItem | null = null;
+  pushUndo(inspectionId, {
+    label: `Add general note ${created.letter}`,
+    undo: async () => {
+      removed = await deleteItem(db, created.id);
+    },
+    redo: async () => {
+      if (removed) await restoreItem(db, removed);
+    },
+  });
   return created;
 }
 
@@ -191,6 +210,8 @@ async function updateItemsWithUndo<
 
 /** Makes several items instructions or observations (one Undo step). */
 export function setKindsWithUndo(items: Item[], kind: ItemKind) {
+  // General notes stay observations.
+  items = items.filter((item) => !item.general);
   return updateItemsWithUndo(
     items,
     "kind",

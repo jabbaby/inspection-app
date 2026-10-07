@@ -5,13 +5,15 @@
  * pages are left out; a duplicated page with pins exports as its own page.
  */
 import { PDFDocument } from "pdf-lib";
-import type { Drawing, ObservationBox } from "../../db/types";
+import type { Drawing, Item, ObservationBox } from "../../db/types";
 import { boxLines } from "../drawings/observationBox";
 import { drawPageMarkup, type MarkupFonts } from "./drawMarkup";
 import type { PinnedPage } from "./packContents";
 
 export interface DrawingPagesInput {
   pages: PinnedPage[];
+  /** General notes (no pin): every exported page's notes box lists them. */
+  generalNotes?: Item[];
   boxes: ObservationBox[];
   /** boxHeader() for the inspection. */
   header: string;
@@ -76,7 +78,7 @@ export async function appendDrawingPages(
           boxLines: boxLines({
             header: input.header,
             observationHeading: input.observationHeading,
-            items: pinned.items,
+            items: [...(input.generalNotes ?? []), ...pinned.items],
           }),
         },
         fonts,

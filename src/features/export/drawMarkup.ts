@@ -83,7 +83,10 @@ export function drawPageMarkup(
 
   drawMarks(page, markup.marks, size, fonts);
   // A page with only markup has no notes box (it lists the page's pins).
-  if (markup.pins.length > 0) drawNotesBox(page, markup, size, fonts);
+  // A page with pins, or any exported page while there are general notes
+  // (more than the header line to list).
+  if (markup.pins.length > 0 || markup.boxLines.length > 1)
+    drawNotesBox(page, markup, size, fonts);
 
   const am = arrowMetrics(size);
   for (const item of markup.pins) {

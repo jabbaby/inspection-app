@@ -125,6 +125,12 @@ export interface Item {
    * re-letter anything. Each copy has its own arrows.
    */
   copies?: PinCopy[];
+  /**
+   * A general note (engineer, 2026-10-07): an observation with no pin,
+   * listed in every page's notes box before the pinned ones and lettered
+   * first. Its drawingId is "" and page, x and y are 0.
+   */
+  general?: boolean;
 }
 
 /** Another spot an item is pinned at (any drawing and page). */

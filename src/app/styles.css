@@ -4538,7 +4538,11 @@ h1 {
   display: flex;
   align-items: center;
   gap: var(--space-3);
+  width: 100%;
+  border-radius: var(--radius);
+  background-color: var(--surface-2);
   color: var(--ink);
+  text-align: left;
   text-decoration: none;
 }
 
@@ -4564,4 +4568,74 @@ h1 {
   padding-left: 1.2em;
   color: var(--ink-muted);
   font-size: var(--text-sm);
+}
+
+/* Items panel: Add general note (a note in every notes box, no pin). */
+.item-add-general {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  align-self: flex-start;
+  margin-bottom: var(--space-3);
+}
+
+.item-add-general svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* The app's PDF viewer: full screen over everything, with Back (an iPad
+   home-screen app has no browser controls). */
+.pdf-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  padding-top: env(safe-area-inset-top);
+  background: var(--page);
+}
+
+.pdf-viewer-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--surface);
+}
+
+.pdf-viewer-bar h2 {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+.pdf-viewer-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.pdf-viewer-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: var(--space-4);
+}
+
+.pdf-viewer-pages {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-4);
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.pdf-viewer-page {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: #fff;
+  box-shadow: var(--shadow-float);
 }

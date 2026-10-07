@@ -1,3 +1,4 @@
+import { Plus } from "lucide-react";
 import { useRef, useState } from "react";
 import type { Drawing, Item } from "../../db/types";
 import {
@@ -20,6 +21,8 @@ interface Props {
   /** Items whose pins are on screen: highlighted. */
   inView: Set<string>;
   onSelect: (item: Item) => void;
+  /** Adds a general note (no pin; in every notes box) and opens it. */
+  onAddGeneral: () => void;
   onClose: () => void;
 }
 
@@ -109,6 +112,7 @@ export function ItemsPanel({
   drawings,
   inView,
   onSelect,
+  onAddGeneral,
   onClose,
 }: Props) {
   // Pages are numbered through the whole document (drawings in order).
@@ -461,8 +465,19 @@ export function ItemsPanel({
           {selecting ? "Done" : "Close"}
         </button>
       </div>
+      {!selecting && (
+        <button
+          type="button"
+          className="item-add-general"
+          onClick={onAddGeneral}
+        >
+          <Plus aria-hidden="true" /> Add general note
+        </button>
+      )}
       {sorted.length === 0 ? (
-        <p className="muted">No items yet. Use Add pin.</p>
+        <p className="muted">
+          No items yet. Turn on Pin and tap the drawing, or add a general note.
+        </p>
       ) : (
         <div className="item-groups">
           {!selecting && (
@@ -474,7 +489,10 @@ export function ItemsPanel({
             <section key={group.kind} aria-label={group.heading}>
               <h3 className="item-group-heading">{group.heading}</h3>
               {pageGroups(group.items).map((pageGroup) => {
-                const title = `Page ${pageNumbers.get(pageKey(pageGroup.drawingId, pageGroup.page)) ?? pageGroup.page}`;
+                const title =
+                  pageGroup.drawingId === ""
+                    ? "General (every notes box)"
+                    : `Page ${pageNumbers.get(pageKey(pageGroup.drawingId, pageGroup.page)) ?? pageGroup.page}`;
                 return (
                   <div key={pageGroup.key} className="item-page-group">
                     <h4 className="item-page-heading">{title}</h4>
@@ -513,7 +531,9 @@ export function ItemsPanel({
           </button>
           <button
             type="button"
-            disabled={!chosen.some((i) => i.kind !== "instruction")}
+            disabled={
+              !chosen.some((i) => i.kind !== "instruction" && !i.general)
+            }
             onClick={() => void setKindsWithUndo(chosen, "instruction")}
           >
             Make instructions

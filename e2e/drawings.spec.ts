@@ -2621,3 +2621,48 @@ test("select: the rotate handle turns a shape (handles still resize it) and a gr
   await expect(pen).not.toHaveAttribute("d", penBefore);
   await expect(rect).not.toHaveAttribute("d", level);
 });
+
+test("general notes: no pin, lettered first, listed in every notes box; export keeps only marked pages", async ({
+  page,
+}) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openDrawing(page, "S-101 Level 3");
+  const boxes = page.getByTestId("observation-box");
+  // A pinned observation on page 1.
+  await addPinAt(page, 0.4, 0.5);
+  await sheet(page)
+    .getByRole("button", { name: "Observation", exact: true })
+    .click();
+  await sheet(page).getByRole("textbox").fill("Crack at grid 4");
+  await sheet(page).getByRole("button", { name: "Done" }).first().click();
+  await expect(boxes).toHaveCount(1);
+
+  // A general note from the Items panel: lettered A, the pin moves to B.
+  await page.getByRole("button", { name: "Items", exact: true }).click();
+  await page.getByRole("button", { name: "Add general note" }).click();
+  await expect(sheet(page)).toContainText("General note: no pin");
+  await expect(
+    sheet(page).getByRole("group", { name: "Item kind" }),
+  ).toHaveCount(0);
+  await sheet(page).getByRole("textbox").fill("Inspection limited to the roof");
+  await expect(page.getByTestId("item-save-state")).toHaveText("Saved");
+  await sheet(page).getByRole("button", { name: "Done" }).first().click();
+  await expect(boxes.first()).toContainText(
+    /A\. INSPECTION LIMITED TO THE ROOF[\s\S]*B\. CRACK AT GRID 4/,
+  );
+  // Every page shows a notes box now (all three pages of the drawing).
+  await expect(boxes).toHaveCount(3);
+
+  // The Items panel lists it under General.
+  const panel = page.getByTestId("items-panel");
+  if (!(await panel.isVisible()))
+    await page.getByRole("button", { name: "Items", exact: true }).click();
+  await expect(panel).toContainText("General (every notes box)");
+  await page.getByRole("button", { name: "Items", exact: true }).click();
+
+  // Undo removes the general note, and the extra boxes go.
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(boxes).toHaveCount(1);
+  await expect(boxes.first()).toContainText("A. CRACK AT GRID 4");
+});

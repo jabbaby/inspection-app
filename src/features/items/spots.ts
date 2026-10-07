@@ -34,8 +34,12 @@ export function parseSpotKey(key: string): {
     : { itemId: key.slice(0, at), copyId: key.slice(at + 1) };
 }
 
-/** The original pin first, then the copies in the order they were placed. */
+/**
+ * The original pin first, then the copies in the order they were placed.
+ * A general note has none.
+ */
 export function itemSpots(item: Item): PinSpot[] {
+  if (item.general) return [];
   return [
     {
       key: item.id,
@@ -67,7 +71,8 @@ export function isOnPage(item: Item, drawingId: string, page: number): boolean {
   );
 }
 
-/** How many spots an item is pinned at (1 without copies). */
+/** How many spots an item is pinned at (1 without copies; 0 for a general note). */
 export function spotCount(item: Item): number {
+  if (item.general) return 0;
   return 1 + (item.copies?.length ?? 0);
 }

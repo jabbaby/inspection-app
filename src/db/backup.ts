@@ -170,7 +170,7 @@ function withNewIds(data: InspectionData): InspectionData {
       ...item,
       id: id(item.id),
       inspectionId: id(item.inspectionId),
-      drawingId: id(item.drawingId),
+      drawingId: maybe(item.drawingId) ?? "",
       photoIds: item.photoIds.map(id),
       copies: item.copies?.map((c) => ({ ...c, drawingId: id(c.drawingId) })),
     })),

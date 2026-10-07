@@ -90,6 +90,26 @@ describe("pinnedPages", () => {
   });
 });
 
+describe("pinnedPages with general notes", () => {
+  test("a general note (no pin) adds no pages: only pages with pins or markup go in", () => {
+    const d1 = drawing("d1", [{ source: 1 }, { source: 2 }, { source: 3 }]);
+    const items = [
+      item({ drawingId: "d1", page: 2, letter: "B", kind: "observation" }),
+      item({
+        drawingId: "",
+        page: 0,
+        letter: "A",
+        kind: "observation",
+        general: true,
+      }),
+    ];
+    const pages = pinnedPages([d1], items);
+    expect(pages.map((p) => p.position)).toEqual([2]);
+    // The page's own items; the general notes join its box when drawn.
+    expect(pages[0].items.map((i) => i.letter)).toEqual(["B"]);
+  });
+});
+
 describe("pinnedPages with copies", () => {
   test("a page with only a copy goes in, with the item's letter and the copy's arrows", () => {
     const d1 = drawing("d1", [{ source: 1 }, { source: 2 }]);
