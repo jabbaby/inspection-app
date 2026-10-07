@@ -2491,3 +2491,57 @@ test("draw and hold: dragging on after the shape snaps makes it bigger", async (
   const drawn = (await rect.boundingBox())!;
   expect(drawn.width).toBeGreaterThan(box.width * 0.15);
 });
+
+test("two fingers double-tapped undo; a pinch doesn't", async ({ page }) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openDrawing(page, "S-101 Level 3", false);
+  const toolbar = page.getByRole("toolbar", { name: "Markup tools" });
+  await toolbar.getByRole("button", { name: "Pen", exact: true }).click();
+  await drawLine(page, [0.2, 0.4], [0.5, 0.45]);
+  await drawLine(page, [0.2, 0.6], [0.5, 0.65]);
+  const marks = page.getByTestId("mark");
+  await expect(marks).toHaveCount(2);
+  const viewer = (await page.getByTestId("drawing-viewer").boundingBox())!;
+  const at = {
+    x: viewer.x + viewer.width / 2,
+    y: viewer.y + viewer.height / 2,
+  };
+  /** Two fingers down and straight up, `times` in a row. */
+  const twoFingerTaps = (times: number) =>
+    page.evaluate(
+      ({ at, times }) => {
+        const el = document.querySelector('[data-testid="drawing-viewer"]')!;
+        const fire = (type: string, down: boolean) => {
+          const touches = down
+            ? [
+                { clientX: at.x - 30, clientY: at.y },
+                { clientX: at.x + 30, clientY: at.y },
+              ]
+            : [];
+          const event = new Event(type, { bubbles: true, cancelable: true });
+          Object.defineProperty(event, "touches", { value: touches });
+          el.dispatchEvent(event);
+        };
+        for (let i = 0; i < times; i++) {
+          fire("touchstart", true);
+          fire("touchend", false);
+        }
+      },
+      { at, times },
+    );
+
+  // One two-finger tap does nothing; two undo the last line.
+  await twoFingerTaps(1);
+  await page.waitForTimeout(600);
+  await expect(marks).toHaveCount(2);
+  await twoFingerTaps(2);
+  await expect(marks).toHaveCount(1);
+  await expect(page.locator(".viewer-toast")).toHaveText("Undo: Draw");
+
+  // Pinching (fingers moving) never undoes.
+  await pinch(page, at, 100, 160);
+  await pinch(page, at, 160, 100);
+  await page.waitForTimeout(300);
+  await expect(marks).toHaveCount(1);
+});

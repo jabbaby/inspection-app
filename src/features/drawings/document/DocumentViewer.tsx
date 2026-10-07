@@ -185,6 +185,8 @@ interface Props {
   onSelectArrow: (itemId: string, arrowId: string) => void;
   onMoveArrow: (itemId: string, arrowId: string, to: Point) => void;
   onMoveArrowEnd: (itemId: string, arrowId: string, to: Point) => void;
+  /** Two fingers tapped twice (GoodNotes style): undo. */
+  onUndoGesture: () => void;
   /** The page at the centre of the view changed. */
   onCurrentPage: (page: PageLayout) => void;
   /** Drawings with pages on or near the screen (their PDFs are needed). */
@@ -217,6 +219,13 @@ const STILL_SLOP = 6;
 const MIN_SHAPE = 6;
 /** A stroke is simplified to within this many screen px when saved. */
 const STROKE_TOLERANCE = 0.25;
+/**
+ * A two-finger tap: both fingers down and up within this long, moving less
+ * than TWO_TAP_SLOP; two of them within TWO_TAP_GAP make an undo.
+ */
+const TWO_TAP_MS = 300;
+const TWO_TAP_SLOP = 12;
+const TWO_TAP_GAP = 450;
 /** Screen px of grab round a selected shape's handles and its box. */
 const HANDLE_REACH = 22;
 const SELECT_MARGIN = 8;
@@ -1789,8 +1798,25 @@ export function DocumentViewer(props: Props) {
       setTransform(p.target);
       releaseSnapshotWhenReady();
     };
+    // Two fingers tapped together (not a pinch or scroll): two of these in
+    // quick succession undo.
+    let twoTap: {
+      start: number;
+      at: { x: number; y: number }[];
+      moved: boolean;
+      most: number;
+    } | null = null;
+    let lastTwoTap = -Infinity;
     const onTouchStart = (e: TouchEvent) => {
       const list = fingers(e.touches);
+      if (list.length === 2 && !twoTap)
+        twoTap = {
+          start: e.timeStamp,
+          at: list.map((t) => ({ x: t.clientX, y: t.clientY })),
+          moved: false,
+          most: 2,
+        };
+      else if (twoTap) twoTap.most = Math.max(twoTap.most, list.length);
       // A second finger while drawing with one: a pinch, not a stroke.
       if (list.length >= 2 && ink.current?.pointerType === "touch")
         endInk(true);
@@ -1808,6 +1834,16 @@ export function DocumentViewer(props: Props) {
       if (!pinch.current) startPinch(list);
     };
     const onTouchMove = (e: TouchEvent) => {
+      if (twoTap && !twoTap.moved) {
+        const tap = twoTap;
+        tap.moved = fingers(e.touches).some((t, i) => {
+          const from = tap.at[i];
+          return (
+            !!from &&
+            Math.hypot(t.clientX - from.x, t.clientY - from.y) > TWO_TAP_SLOP
+          );
+        });
+      }
       // A finger dragging a callout moves it, not the page.
       if ((e.target as Element | null)?.closest?.(".callout-hit")) {
         if (e.cancelable) e.preventDefault();
@@ -1864,6 +1900,21 @@ export function DocumentViewer(props: Props) {
         else cancelHold();
       }
       const list = fingers(e.touches);
+      if (twoTap && list.length === 0) {
+        const tap = twoTap;
+        twoTap = null;
+        if (
+          e.type === "touchend" &&
+          !tap.moved &&
+          tap.most === 2 &&
+          e.timeStamp - tap.start < TWO_TAP_MS
+        ) {
+          if (e.timeStamp - lastTwoTap < TWO_TAP_GAP) {
+            lastTwoTap = -Infinity;
+            latest.current.onUndoGesture();
+          } else lastTwoTap = e.timeStamp;
+        } else lastTwoTap = -Infinity;
+      }
       if (!pinch.current) return;
       endPinch();
       // Still two fingers down (a third lifted): carry on from here.

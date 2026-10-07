@@ -39,3 +39,9 @@ Reply with the step number and what you saw (no need to edit this file).
 18. **Bigger.** Draw a circle and hold until it snaps, then (still pressing) drag away from its middle: it grows, staying round. Lift: it's saved that size.
 19. **Smaller.** Do the same with a rectangle, dragging in towards its middle: it shrinks, keeping its shape and angle.
 20. **Highlighter.** Do 18 with the highlighter: it grows too, still without fill.
+
+## Two-finger double-tap undo
+21. **Undo.** Draw a few lines, then tap the drawing twice quickly with two fingers together: the last line goes, and a note at the top says "Undo: Draw". Do it again: the one before goes.
+22. **Any tool.** Try it with no tool on, with Pin on and with Select on: it undoes each time (pins, moves and so on, not just drawing).
+23. **Not by accident.** Pinch to zoom and scroll with two fingers a few times: nothing is undone. A single two-finger tap does nothing.
+24. **Nothing left.** Keep going until there's nothing to undo: the note says "Nothing to undo".

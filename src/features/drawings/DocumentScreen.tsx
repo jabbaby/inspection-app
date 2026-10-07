@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { readPlace, writePlace } from "../../app/sessionPlace";
 import { NotFound } from "../../app/NotFound";
-import { redoLast, undoLast, useUndo } from "../../app/undo";
+import { peekUndo, redoLast, undoLast, useUndo } from "../../app/undo";
 import { db } from "../../db/db";
 import { listDrawings, setPageSizes } from "../../db/drawings";
 import { listMarkups } from "../../db/markups";
@@ -580,6 +580,21 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
     setSelection(next);
   }
 
+  // What a two-finger double-tap undid, shown briefly over the drawing.
+  const [undoNote, setUndoNote] = useState<string | null>(null);
+  const undoNoteTimer = useRef(0);
+  function undoByGesture() {
+    const entry = peekUndo(inspectionId);
+    window.clearTimeout(undoNoteTimer.current);
+    setUndoNote(entry ? `Undo: ${entry.label}` : "Nothing to undo");
+    undoNoteTimer.current = window.setTimeout(() => setUndoNote(null), 1400);
+    if (!entry) return;
+    // As the Undo button: an undone change could leave the sheet pointing
+    // at nothing.
+    select(null);
+    void undoLast(inspectionId);
+  }
+
   /** The saved records of the selected marks. */
   const selectedRecords = () =>
     (marks ?? []).filter((m) => selection?.ids.includes(m.id));
@@ -1124,6 +1139,11 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
           </div>
         ) : (
           <div className="viewer-wrap">
+            {undoNote && (
+              <p className="viewer-toast" role="status">
+                {undoNote}
+              </p>
+            )}
             <DocumentViewer
               layout={layout}
               docs={docs}
@@ -1144,6 +1164,7 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
               onPlaceText={placeText}
               selection={tool === "select" ? selection : null}
               onSelectMarks={selectMarks}
+              onUndoGesture={undoByGesture}
               onSelectTapAgain={(id) => {
                 const mark = docMarks.find((m) => m.id === id);
                 if (mark?.tool === "text") editCallout(mark);

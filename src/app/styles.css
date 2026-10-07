@@ -4443,3 +4443,20 @@ h1 {
   color: var(--ink-muted);
   font-size: var(--text-xs);
 }
+
+/* What a two-finger double-tap undid, briefly, at the top of the drawing. */
+.viewer-toast {
+  position: absolute;
+  top: var(--space-3);
+  left: 50%;
+  z-index: 6;
+  margin: 0;
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  background: #1c1817;
+  box-shadow: var(--shadow-float);
+  color: #fff;
+  font-size: var(--text-sm);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
