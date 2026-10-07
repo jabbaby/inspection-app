@@ -4624,12 +4624,23 @@ h1 {
   padding: var(--space-4);
 }
 
+/* Pages keep their sizes relative to each other: the widest fills the
+   width at 100%; the zoom widens the whole column. */
 .pdf-viewer-pages {
   display: grid;
   justify-items: center;
-  gap: var(--space-4);
-  max-width: 900px;
+  gap: var(--space-5);
+  min-width: 100%;
   margin: 0 auto;
+}
+
+.pdf-viewer-figure {
+  margin: 0;
+}
+
+.pdf-viewer-figure figcaption {
+  margin-top: var(--space-1);
+  text-align: center;
 }
 
 .pdf-viewer-page {
@@ -4638,4 +4649,11 @@ h1 {
   height: auto;
   background: #fff;
   box-shadow: var(--shadow-float);
+}
+
+.pdf-viewer-zoom {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: auto;
 }

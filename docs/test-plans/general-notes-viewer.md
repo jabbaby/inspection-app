@@ -21,3 +21,9 @@ Reply with the step number and what you saw (no need to edit this file).
 10. **About.** Settings, About, User guide: the guide opens inside the app with a **Back** button at the top; scroll through it; Back returns to Settings.
 11. **Preview.** Site memo, Export PDF, then **Preview**: the pack opens the same way, and Back returns to the Export card.
 12. **Offline.** In Airplane Mode, open the user guide again: it still opens.
+
+## Follow-up (2026-10-07): page sizes, zoom, Share
+13. **Sizes.** Export a pack with an A1 (or A3) drawing and tap Preview: the memo page shows much narrower than the drawing page, each labelled underneath, e.g. "Page 1 · A4 (210 × 297 mm)" and "Page 2 · A1 (841 × 594 mm)".
+14. **Zoom.** Pinch with two fingers on the pages, and use − and +: the pages zoom (not the whole app), and you can scroll around them.
+15. **Share.** Tap **Share…** in the viewer's bar: the iPad Share sheet opens with the PDF. Save it to Files and open it there: its pages are the same sizes.
+16. **Documents.** In Settings, About, open the User guide: Share… works there too.

@@ -4,6 +4,7 @@ import { Buddy } from "../../app/Buddy";
 import { PdfViewer } from "../../app/PdfViewer";
 import { appCommit, appVersion } from "../../app/version";
 import { CHANGELOG } from "../../content/changelog";
+import { saveFiles } from "../photos/savePhotos";
 
 /** The documents bundled with the app (npm run docs:build), so they open offline. */
 const DOCS = [
@@ -79,6 +80,13 @@ export function AboutCard() {
             })
           }
           onClose={() => setOpen(null)}
+          onShare={(bytes) =>
+            void saveFiles([
+              new File([bytes], open.href.split("/").pop()!, {
+                type: "application/pdf",
+              }),
+            ])
+          }
         />
       )}
       <h3 className="about-heading">What's new</h3>

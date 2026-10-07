@@ -416,6 +416,22 @@ test("export the PDF pack: memo then the marked-up page; warns when letters chan
     595, 2384,
   ]);
 
+  // Preview shows the pages at their sizes relative to each other (the A4
+  // memo a quarter as wide as the A1 drawing), labelled, with Share.
+  await card.getByRole("button", { name: "Preview" }).click();
+  const viewer = page.getByTestId("pdf-viewer");
+  await expect(viewer.locator("figcaption")).toHaveText([
+    /Page 1 · A4 \(210 × 297 mm\)/,
+    /Page 2 · A1 \(841 × 594 mm\)/,
+  ]);
+  const [memoPage, drawingPage] = await viewer
+    .locator("figure")
+    .evaluateAll((els) => els.map((el) => el.getBoundingClientRect().width));
+  expect(memoPage / drawingPage).toBeCloseTo(595 / 2384, 2);
+  await expect(viewer.getByRole("button", { name: "Share…" })).toBeEnabled();
+  await viewer.getByRole("button", { name: "Back" }).click();
+  await expect(viewer).toHaveCount(0);
+
   // Deleting instruction A re-letters B: the viewer says so once, and the
   // Export card lists the change until it is exported again.
   await openTab(page, "Inspection");

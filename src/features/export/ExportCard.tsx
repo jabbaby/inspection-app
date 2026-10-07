@@ -229,6 +229,7 @@ export function ExportCard({ inspectionId }: { inspectionId: string }) {
           title={previewing.name}
           load={() => previewing.arrayBuffer()}
           onClose={() => setPreviewing(null)}
+          onShare={() => void saveFiles([previewing])}
         />
       )}
     </section>
