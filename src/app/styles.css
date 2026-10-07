@@ -3429,15 +3429,14 @@ a.list-row {
   border-radius: var(--radius);
   color: #fff;
   font-weight: 700;
-  font-size: var(--text-sm);
-  letter-spacing: 0.02em;
+  font-size: var(--text-md);
 }
 
 .avatar-large {
   width: 48px;
   height: 48px;
   border-radius: 14px;
-  font-size: var(--text-md);
+  font-size: var(--text-lg);
 }
 
 .avatar-none {
