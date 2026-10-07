@@ -18,6 +18,8 @@ export const CHANGELOG: { version: string; date: string; items: string[] }[] = [
       "New name and icon: Northrop Hardhat",
       "The Dashboard opens any step of the last inspection",
       "A user guide and a features and limitations document, here in About, opening in the app with a Back button",
+      "Hold and drag: the arrowhead stays on the spot pressed and the pin or text box follows your finger",
+      "Project badges show one letter; Settings warns not to remove the app from the home screen",
     ],
   },
   {

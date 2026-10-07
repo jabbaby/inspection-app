@@ -46,7 +46,7 @@ It is a **proof of concept**, built for one engineer and tested on a real iPad t
 
 - Each item is an **instruction** (something the builder must do) or an **observation** (noted for information). Both get a lettered pin: instructions A, B, C… in red, observations A, B, C… in blue.
 - Letters follow the document (drawing, page, then order on the page) and re-letter automatically when items are added, deleted, switched or reordered, so there are never gaps.
-- GoodNotes-style gestures: tap for an instruction, double-tap for an observation, tap-hold-drag for a pin with an arrow. Several arrows per pin are possible.
+- GoodNotes-style gestures: tap for an instruction, double-tap for an observation, tap-hold on the spot then drag the pin out, for a pin with an arrow. Several arrows per pin are possible.
 - **Copy pin** puts the same item at several spots, on any page.
 - Instructions can require **photo confirmation** before the builder proceeds; the memo says so against each one.
 - Each page with pins gets a **notes box** listing its instructions and observations, dragged into a clear spot and burned into the exported page.
@@ -98,7 +98,7 @@ These are the known limits of the proof of concept, stated plainly so they can b
 ## Data and devices
 
 - **No sync between devices.** Work moves only by exporting and importing inspection files. My details, the Settings signature and projects with no inspections don't travel with them.
-- **Data lives in one browser on one device.** iOS can clear a web app's storage, for example if it goes unused for a long time. Backups are the protection; the app asks the iPad to keep its data and reminds the user to back up.
+- **Data lives in one browser on one device.** iOS can clear a web app's storage, for example if it goes unused for a long time. Removing the app from the home screen deletes its data too (Settings warns about this). Backups are the protection; the app asks the iPad to keep its data and reminds the user to back up.
 - **One device at a time per inspection.** Importing an inspection that already exists asks to Replace it (overwriting that device's copy) or Keep both.
 - **Memo references can clash** if two devices create memos for the same job without importing each other's work. References stay editable.
 

@@ -105,12 +105,17 @@ function parse(markdown: string) {
       };
     return null;
   };
+  // A blank line ends a bullet, step or note: text after it is a paragraph.
+  let afterBlank = false;
   for (const raw of body.split("\n")) {
     const line = raw.trim();
     if (!line) {
       flush();
+      afterBlank = true;
       continue;
     }
+    const gap = afterBlank;
+    afterBlank = false;
     const block = opens(line);
     if (block) {
       flush();
@@ -121,6 +126,7 @@ function parse(markdown: string) {
     const last = blocks[blocks.length - 1];
     if (
       !para.length &&
+      !gap &&
       last &&
       (last.kind === "bullet" || last.kind === "step" || last.kind === "note")
     )

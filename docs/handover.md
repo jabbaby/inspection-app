@@ -28,7 +28,7 @@ STATUS
   - docs/test-plans/general-notes-viewer.md steps 1-16: general notes, the in-app PDF viewer (sizes, zoom, Share).
   - docs/test-plans/about-and-docs.md steps 1-8 (step 8: I read both PDFs before they go to the team).
   - docs/test-plans/dashboard-steps.md steps 1-4.
-- Last commit 5397085 (rename to Northrop Hardhat, hard-hat roundel icon). iOS caches home-screen icons and names: to see the new icon and "Hardhat" label I must remove the app from the home screen and add it again (data is kept by Safari for the same site, but back up first to be safe).
+- Last commit 5397085 (rename to Northrop Hardhat, hard-hat roundel icon). iOS caches home-screen icons and names: to see the new icon and "Hardhat" label I must remove the app from the home screen and add it again. Removing it DELETES its data (a home-screen app has its own storage): Back up all first, then import the backups after re-adding.
 
 NEXT (agreed order; plan + mockup each before building)
 1. Fix anything from the waiting iPad test plans.

@@ -24,6 +24,8 @@ audience: For engineers: how to run an inspection, from loading drawings to send
 
 Your work is stored only on this iPad, and iOS can clear a web app's storage. **Back up each inspection** when you finish it (see Backing up), and use **Back up all** in Settings now and then.
 
+> **Never remove Hardhat from the home screen.** Removing it deletes every inspection, drawing and photo in it. If you ever have to, use **Back up all** first and keep the files somewhere safe.
+
 # Before you go to site
 
 ## Start an inspection
@@ -57,7 +59,7 @@ Turn on the **Pin** tool (first in the toolbar), then:
 
 - **Tap** for an **instruction** (red pin).
 - **Double-tap** for an **observation** (blue pin), or to switch an existing pin's kind.
-- **Tap, hold, then drag** for a pin with an **arrow** to the spot you mean.
+- **Tap and hold on the spot you mean, then drag** for a pin with an **arrow**: the arrowhead stays on the spot and the pin follows your finger to a clear place.
 
 The item's editor opens: type the instruction or observation. For an instruction the builder must prove, turn on **Photo confirmation required**. Tap **Done**, or tap the drawing to close it.
 
@@ -98,7 +100,7 @@ Each tool is a toggle: tap it to turn it on, tap again to turn it off. With a dr
 - **Shapes:** line, arrow, rectangle, ellipse, revision cloud. Drag from corner to corner.
 - **Draw and hold:** draw a shape freehand and hold the Pencil still at the end: it snaps to a clean line, circle, rectangle, triangle or polygon. Keep pressing and drag to make it bigger or smaller.
 - **Eraser:** rub over a mark to remove it. Tap inside a filled shape to take its fill off.
-- **Text:** tap for a text box, or tap, hold and drag for a box with an arrow. Type in capitals as you like; tap elsewhere to finish.
+- **Text:** tap for a text box, or tap and hold on the spot you mean, then drag the box out to a clear place: its arrow points back to the spot. Type in capitals as you like; tap elsewhere to finish.
 
 ![Markup on the drawing|210](shots/markup.jpg)
 
@@ -161,12 +163,12 @@ Turn on **Select** (the dotted lasso), then tap a mark or draw a loop round seve
 
 - **Tap:** instruction pin.
 - **Double-tap:** observation pin (or switch a pin's kind).
-- **Tap, hold, drag:** pin with an arrow.
-- **Double-tap, hold, drag:** observation with an arrow.
+- **Tap, hold, drag:** pin with an arrow (hold on the spot, drag the pin out).
+- **Double-tap, hold, drag:** observation with an arrow (the same way).
 
 ## Pencil
 
 - **Draw and hold:** straight line, or a clean shape from a closed stroke; keep dragging to resize it.
-- **Text tool:** tap for a box; tap, hold and drag for a box with an arrow.
+- **Text tool:** tap for a box; tap, hold on the spot and drag the box out for one with an arrow.
 - **Select tool:** tap a mark, or loop round several; drag inside the box to move; drag the round handle to rotate.
 - **Eraser:** rub to remove; tap inside a shape to take its fill off.
