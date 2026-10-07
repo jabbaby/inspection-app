@@ -1940,6 +1940,11 @@ details[open] > summary .summary-chevron {
   text-overflow: ellipsis;
 }
 
+/* Don't remove the app from the Home Screen (its data goes with it). */
+.keep-app-warning {
+  margin-bottom: var(--space-4);
+}
+
 .storage-line {
   display: flex;
   flex-wrap: wrap;

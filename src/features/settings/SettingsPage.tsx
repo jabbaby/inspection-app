@@ -126,6 +126,17 @@ export function SettingsPage() {
               </span>
               Storage and backup
             </h2>
+            <div
+              className="notice keep-app-warning"
+              data-testid="keep-app-warning"
+            >
+              <p>
+                <strong>Don't remove Hardhat from the Home Screen.</strong>{" "}
+                Removing it deletes every inspection, drawing and photo stored
+                in it. Back up first (Back up all, below), and keep the files
+                somewhere safe.
+              </p>
+            </div>
             <div className="storage-line">
               <span data-testid="storage-used">
                 {storage === null
