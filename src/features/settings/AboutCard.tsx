@@ -1,5 +1,7 @@
 import { BookOpen, FileText, Info } from "lucide-react";
+import { useState } from "react";
 import { Buddy } from "../../app/Buddy";
+import { PdfViewer } from "../../app/PdfViewer";
 import { appCommit, appVersion } from "../../app/version";
 import { CHANGELOG } from "../../content/changelog";
 
@@ -24,6 +26,8 @@ const DOCS = [
  * built it, the bundled documents, and what's new by milestone.
  */
 export function AboutCard() {
+  // The document open in the app's PDF viewer (it has a Back button).
+  const [open, setOpen] = useState<(typeof DOCS)[number] | null>(null);
   return (
     <section
       id="about"
@@ -47,25 +51,36 @@ export function AboutCard() {
         </div>
       </div>
       <ul className="about-docs">
-        {DOCS.map(({ href, label, note, Icon }) => (
-          <li key={href}>
-            {/* A plain link: iPadOS opens it straight from the tap, and the
-                app's offline cache serves it. */}
-            <a
+        {DOCS.map((doc) => (
+          <li key={doc.href}>
+            {/* Opened in the app (the offline cache serves the file). */}
+            <button
+              type="button"
               className="list-row"
-              href={`${import.meta.env.BASE_URL}${href}`}
-              target="_blank"
-              rel="noopener"
+              data-href={`${import.meta.env.BASE_URL}${doc.href}`}
+              onClick={() => setOpen(doc)}
             >
-              <Icon aria-hidden="true" />
+              <doc.Icon aria-hidden="true" />
               <span className="list-row-main">
-                <span>{label}</span>
-                <span className="list-row-meta">{note} · PDF</span>
+                <span>{doc.label}</span>
+                <span className="list-row-meta">{doc.note} · PDF</span>
               </span>
-            </a>
+            </button>
           </li>
         ))}
       </ul>
+      {open && (
+        <PdfViewer
+          title={open.label}
+          load={() =>
+            fetch(`${import.meta.env.BASE_URL}${open.href}`).then((r) => {
+              if (!r.ok) throw new Error(`HTTP ${r.status}`);
+              return r.arrayBuffer();
+            })
+          }
+          onClose={() => setOpen(null)}
+        />
+      )}
       <h3 className="about-heading">What's new</h3>
       {CHANGELOG.map((release) => (
         <div key={release.version} className="about-release">

@@ -307,12 +307,20 @@ test("Settings, About: version, documents (bundled) and what's new", async ({
   await expect(about).toContainText("Built by David Samson");
   await expect(about).toContainText(/Version \d+\.\d+\.\d+/);
   for (const name of ["User guide", "Features and limitations"]) {
-    const link = about.getByRole("link", { name: new RegExp(`^${name}`) });
-    const href = (await link.getAttribute("href"))!;
+    const button = about.getByRole("button", { name: new RegExp(`^${name}`) });
+    const href = (await button.getAttribute("data-href"))!;
     const response = await page.request.get(href);
     expect(response.status()).toBe(200);
     expect(response.headers()["content-type"]).toContain("application/pdf");
   }
+  // Opened in the app's viewer, with Back to return.
+  await about.getByRole("button", { name: /^User guide/ }).click();
+  const viewer = page.getByRole("dialog", { name: "User guide" });
+  await expect(viewer.getByRole("img", { name: "Page 1" })).toBeVisible({
+    timeout: 20_000,
+  });
+  await viewer.getByRole("button", { name: "Back" }).click();
+  await expect(viewer).toHaveCount(0);
   await expect(
     about.getByRole("heading", { name: "What's new" }),
   ).toBeVisible();

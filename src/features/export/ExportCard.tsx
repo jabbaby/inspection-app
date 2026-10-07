@@ -1,6 +1,7 @@
 import { useLiveQuery } from "dexie-react-hooks";
+import { PdfViewer } from "../../app/PdfViewer";
 import { FileDown, FileText } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { db } from "../../db/db";
 import { markMemoExported } from "../../db/memos";
 import { formatBytes } from "../../db/storage";
@@ -31,14 +32,8 @@ export function ExportCard({ inspectionId }: { inspectionId: string }) {
     [inspectionId],
   );
   const [state, setState] = useState<State>({ status: "idle" });
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-
-  useEffect(
-    () => () => {
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
-    },
-    [previewUrl],
-  );
+  // The pack shown in the app's PDF viewer (it has a Back button).
+  const [previewing, setPreviewing] = useState<File | null>(null);
 
   if (data === undefined) return null;
 
@@ -90,7 +85,7 @@ export function ExportCard({ inspectionId }: { inspectionId: string }) {
         letterSnapshot(fresh.items),
         at,
       );
-      setPreviewUrl(null);
+      setPreviewing(null);
       setState({
         status: "done",
         file: new File([pack.bytes.slice().buffer], pack.filename, {
@@ -110,12 +105,6 @@ export function ExportCard({ inspectionId }: { inspectionId: string }) {
           : "The PDF couldn't be made. Your work is still saved; try again.",
       });
     }
-  }
-
-  function preview(file: File) {
-    const url = previewUrl ?? URL.createObjectURL(file);
-    if (!previewUrl) setPreviewUrl(url);
-    window.open(url, "_blank");
   }
 
   return (
@@ -162,7 +151,7 @@ export function ExportCard({ inspectionId }: { inspectionId: string }) {
             >
               {changes.length > 0 ? "Share old PDF…" : "Share…"}
             </button>
-            <button type="button" onClick={() => preview(state.file)}>
+            <button type="button" onClick={() => setPreviewing(state.file)}>
               Preview
             </button>
             <button
@@ -234,6 +223,13 @@ export function ExportCard({ inspectionId }: { inspectionId: string }) {
             </div>
           )}
         </>
+      )}
+      {previewing && (
+        <PdfViewer
+          title={previewing.name}
+          load={() => previewing.arrayBuffer()}
+          onClose={() => setPreviewing(null)}
+        />
       )}
     </section>
   );
