@@ -1,6 +1,6 @@
 ---
 title: User Guide
-subtitle: Site Inspection Companion
+subtitle: Northrop Hardhat
 audience: For engineers: how to run an inspection, from loading drawings to sending the memo.
 ---
 

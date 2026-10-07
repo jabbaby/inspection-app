@@ -698,7 +698,7 @@ export async function writeMemo(
   doc.setTitle(title);
   doc.setSubject(northrop.memoTitle);
   doc.setAuthor(input.fields.inspector || northrop.name);
-  doc.setCreator("Site Inspection Companion");
+  doc.setCreator("Northrop Hardhat");
 
   const w = new MemoWriter(doc, fonts, wordmark, icon);
   w.addPage();

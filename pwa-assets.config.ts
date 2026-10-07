@@ -11,11 +11,13 @@ export default defineConfig({
     ...minimal2023Preset,
     maskable: {
       ...minimal2023Preset.maskable,
-      resizeOptions: { background: "#DA1A32" },
+      resizeOptions: { background: "#FFFFFF" },
     },
     apple: {
       ...minimal2023Preset.apple,
-      resizeOptions: { background: "#DA1A32" },
+      // The roundel already has its own margin: little extra padding.
+      padding: 0.06,
+      resizeOptions: { background: "#FFFFFF" },
     },
   },
   images: ["public/icon.svg"],

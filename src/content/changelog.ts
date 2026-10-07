@@ -15,6 +15,7 @@ export const CHANGELOG: { version: string; date: string; items: string[] }[] = [
       "Eraser, and undo with a two-finger double-tap",
       "Markup in the PDF pack and in inspection files",
       "Photo confirmation shown against each instruction in the memo",
+      "New name and icon: Northrop Hardhat",
       "The Dashboard opens any step of the last inspection",
       "A user guide and a features and limitations document, here in About, opening in the app with a Back button",
     ],

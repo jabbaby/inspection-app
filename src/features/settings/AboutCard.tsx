@@ -42,14 +42,21 @@ export function AboutCard() {
         About
       </h2>
       <div className="about-app">
-        <Buddy size={56} />
+        <img
+          className="about-icon"
+          src={`${import.meta.env.BASE_URL}pwa-192x192.png`}
+          alt=""
+          width={56}
+          height={56}
+        />
         <div>
-          <p className="about-name">Inspection Companion</p>
+          <p className="about-name">Northrop Hardhat</p>
           <p className="muted">
             Version {appVersion} ({appCommit})
           </p>
           <p className="muted">Built by David Samson</p>
         </div>
+        <Buddy size={56} />
       </div>
       <ul className="about-docs">
         {DOCS.map((doc) => (

@@ -445,7 +445,7 @@ function footers(pdf: PDFDocument, fonts: Fonts, title: string) {
       thickness: 0.5,
       color: RULE,
     });
-    page.drawText(`Site Inspection Companion · ${title}`, {
+    page.drawText(`Northrop Hardhat · ${title}`, {
       x: MARGIN,
       y: 30,
       size: 8.5,
@@ -476,9 +476,9 @@ async function build(source: string, target: string) {
   };
   const red = await pdf.embedPng(file(a.wordmarkRed));
   const cream = await pdf.embedPng(file(a.wordmarkCream));
-  pdf.setTitle(`Site Inspection Companion – ${meta.title}`);
+  pdf.setTitle(`Northrop Hardhat – ${meta.title}`);
   pdf.setAuthor("David Samson");
-  pdf.setCreator("Site Inspection Companion");
+  pdf.setCreator("Northrop Hardhat");
   cover(pdf, fonts, cream, meta);
   const writer = new Writer(pdf, fonts, meta.title ?? "", red, dirname(source));
   writer.newPage();

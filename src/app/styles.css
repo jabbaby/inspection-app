@@ -4521,6 +4521,15 @@ h1 {
   margin: 0;
 }
 
+.about-icon {
+  flex: none;
+  border-radius: 13px;
+}
+
+.about-app .buddy {
+  margin-left: auto;
+}
+
 .about-name {
   font-size: var(--text-lg);
   font-weight: 700;

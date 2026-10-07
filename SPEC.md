@@ -1,4 +1,4 @@
-# Site Inspection Companion: Project Spec
+# Northrop Hardhat (Site Inspection Companion): Project Spec
 
 Status: DRAFT v1.3 (planning complete enough to start build)
 Owner: [your name]
@@ -7,6 +7,8 @@ Audience: me, Claude Code, and later the digital innovation team (proof of conce
 ---
 
 ## 1. What this is
+
+**Name (engineer, 2026-10-07):** the app is **Northrop Hardhat** ("Hardhat" under its home-screen icon). Its icon is the Northrop roundel (red, on white) whose white N wears a white hard hat (`public/icon.svg`, the N from Figtree Bold; `npm run icons:build` makes the PNGs). The side rail keeps the plain Northrop N.
 
 An iPad-first, offline-capable inspection companion for a structural engineer. On site the engineer opens the drawing PDF, drops lettered markers on the areas of concern, attaches photos, writes instructions, and the app generates a **Site Instruction Memo** (editable in-app, exported as a single PDF) with the marked-up drawing and a photo appendix attached.
 

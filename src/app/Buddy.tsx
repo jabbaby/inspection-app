@@ -1,5 +1,5 @@
 /**
- * The Inspection Companion buddy (engineer's mascot, 2026-10-07): a little
+ * The Northrop Hardhat buddy (engineer's mascot, 2026-10-07): a little
  * inspector in a hard hat holding a clipboard. The app's own mark, used in
  * the app only (About, first run), never on anything that goes to a client.
  * Lines in the current text colour; the clipboard and hand are filled with

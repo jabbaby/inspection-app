@@ -1,12 +1,12 @@
 ---
 title: Features and Limitations
-subtitle: Site Inspection Companion
+subtitle: Northrop Hardhat
 audience: For the digital innovation team: what the proof of concept does, what it doesn't, and how it is built.
 ---
 
 # Summary
 
-Site Inspection Companion is an iPad app for a structural engineer's site inspections. On site, the engineer opens the drawings, drops lettered pins on the areas of concern, marks the drawing up with the Apple Pencil, takes photos and writes instructions. Back in the car or the office, the app turns that into a Northrop **Site Instruction Memo** and exports one PDF pack: the memo, the marked-up drawing pages and a photo appendix.
+Northrop Hardhat is an iPad app for a structural engineer's site inspections. On site, the engineer opens the drawings, drops lettered pins on the areas of concern, marks the drawing up with the Apple Pencil, takes photos and writes instructions. Back in the car or the office, the app turns that into a Northrop **Site Instruction Memo** and exports one PDF pack: the memo, the marked-up drawing pages and a photo appendix.
 
 It is a **proof of concept**, built for one engineer and tested on a real iPad through a full set of manual test plans.
 

@@ -303,7 +303,7 @@ test("Settings, About: version, documents (bundled) and what's new", async ({
     .getByRole("link", { name: "Settings" })
     .click();
   const about = page.getByRole("region", { name: "About" });
-  await expect(about).toContainText("Inspection Companion");
+  await expect(about).toContainText("Northrop Hardhat");
   await expect(about).toContainText("Built by David Samson");
   await expect(about).toContainText(/Version \d+\.\d+\.\d+/);
   for (const name of ["User guide", "Features and limitations"]) {

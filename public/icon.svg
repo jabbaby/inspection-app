@@ -1,6 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- Placeholder app icon (red/cream map pin). Replaced with brand assets in Spike A. -->
-  <rect width="512" height="512" fill="#DA1A32"/>
-  <path d="M256 104c-62 0-112 50-112 112 0 84 112 192 112 192s112-108 112-192c0-62-50-112-112-112z" fill="#FFF2DF"/>
-  <circle cx="256" cy="216" r="44" fill="#DA1A32"/>
+  <!-- Northrop Hardhat (engineer, 2026-10-07): the Northrop roundel, its N
+       (Figtree Bold) wearing a hard hat, both white, on white. Run npm run
+       icons:build after changing it. -->
+  <rect width="512" height="512" fill="#fff"/>
+  <circle cx="256" cy="256" r="226" fill="#DA1A32"/>
+  <g transform="translate(256 262) scale(0.74) translate(-256 -256)">
+    <!-- The N, from the Figtree Bold glyph (font units, y up). -->
+    <path transform="translate(134.52 441) scale(0.3143 -0.3143)" fill="#fff"
+      d="M76 0L76 700L219 700L561 230L561 700L697 700L697 0L561 0L213 479L213 0Z"/>
+    <!-- Hard hat: dome, ridge (outlined in red to stand out) and brim, with
+         a red gap above the N. -->
+    <path d="M146 196 Q146 92 256 86 Q366 92 366 196 Z" fill="#fff"/>
+    <rect x="236" y="70" width="40" height="76" rx="13" fill="#fff" stroke="#DA1A32" stroke-width="9"/>
+    <rect x="120" y="182" width="272" height="27" rx="13.5" fill="#fff"/>
+  </g>
 </svg>

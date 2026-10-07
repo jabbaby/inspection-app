@@ -41,8 +41,10 @@ export default defineConfig({
       // public/ is already matched by globPatterns below.
       includeManifestIcons: false,
       manifest: {
-        name: "Site Inspection Companion",
-        short_name: "Inspections",
+        // Northrop Hardhat (engineer, 2026-10-07); "Hardhat" fits under
+        // the home-screen icon (iOS cuts labels at about 12 letters).
+        name: "Northrop Hardhat",
+        short_name: "Hardhat",
         description: "Offline site inspection and Site Instruction Memo tool",
         start_url: ".",
         scope: ".",
