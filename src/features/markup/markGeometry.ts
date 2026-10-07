@@ -30,7 +30,7 @@ export const WEIGHT_RANGE: Record<MarkupTool, [number, number]> = {
 };
 
 /** How see-through the highlighter is (drawn with multiply in the PDF). */
-export const HIGHLIGHTER_OPACITY = 0.4;
+export const HIGHLIGHTER_OPACITY = 0.55;
 
 /** Line width in page units. */
 export function markWidth(weight: number, page: Size): number {

@@ -1908,7 +1908,7 @@ test("markup: no tool places nothing; pen draws, eraser erases, both undo", asyn
   await expect(marks).toHaveCount(2);
   await expect(page.locator('[data-tool="highlighter"]')).toHaveAttribute(
     "data-colour",
-    "#FFD400",
+    "#FFFF00",
   );
 
   // Undo and Redo the highlight.

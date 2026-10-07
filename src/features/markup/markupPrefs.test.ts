@@ -68,12 +68,33 @@ describe("markup colour slots", () => {
 
   test("Remove takes the slot in use; one always stays", () => {
     const p = fresh();
-    selectSlot(p, "highlighter", 2);
+    // The last slot: its neighbour takes over.
+    selectSlot(p, "highlighter", 3);
     removeSlot(p, "highlighter");
-    expect(p.palettes.highlighter).toEqual(["#FFD400", "#7CE38B"]);
-    expect(p.selected.highlighter).toBe(1);
+    expect(p.palettes.highlighter).toEqual(["#FFFF00", "#39FF14", "#FF2DB4"]);
+    expect(p.selected.highlighter).toBe(2);
     removeSlot(p, "highlighter");
     removeSlot(p, "highlighter");
-    expect(p.palettes.highlighter).toEqual(["#FFD400"]);
+    removeSlot(p, "highlighter");
+    expect(p.palettes.highlighter).toEqual(["#FFFF00"]);
+  });
+
+  test("pastel highlighter slots start again from the fluoro set; pen slots stay", () => {
+    const old = JSON.stringify({
+      palettes: {
+        pen: ["#DA1A32", "#123456"],
+        highlighter: ["#FFD400", "#7CE38B", "#FF9EC4"],
+      },
+      selected: { pen: 1, highlighter: 2, shapes: 0, text: 0 },
+    });
+    const prefs = parsePrefs(old);
+    expect(prefs.palettes.pen).toEqual(["#DA1A32", "#123456"]);
+    expect(prefs.selected.pen).toBe(1);
+    expect(prefs.palettes.highlighter).toEqual(
+      DEFAULT_PREFS.palettes.highlighter,
+    );
+    expect(prefs.selected.highlighter).toBe(0);
+    // Once fluoro, they're kept.
+    expect(parsePrefs(JSON.stringify(prefs))).toEqual(prefs);
   });
 });

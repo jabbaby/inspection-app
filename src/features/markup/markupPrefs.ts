@@ -35,6 +35,11 @@ export interface MarkupPrefs {
   fingerDraw: boolean;
   /** Draw the stroke on to the iPad's predicted Pencil points (Settings). */
   predict: boolean;
+  /**
+   * Which highlighter colour set the slots came from: 2 is fluoro
+   * (2026-10-07). Older (pastel) slots start again from the fluoro defaults.
+   */
+  highlighterSet: number;
 }
 
 const KEY = "markup-prefs";
@@ -49,7 +54,8 @@ export const DEFAULT_PREFS: MarkupPrefs = {
       "#FF8A00",
       "#8A4FFF",
     ],
-    highlighter: ["#FFD400", "#7CE38B", "#FF9EC4"],
+    // Fluoro (engineer, 2026-10-07): yellow, green, pink, red.
+    highlighter: ["#FFFF00", "#39FF14", "#FF2DB4", "#FF1744"],
   },
   selected: { pen: 0, highlighter: 0, shapes: 0, text: 0 },
   weight: {
@@ -61,6 +67,7 @@ export const DEFAULT_PREFS: MarkupPrefs = {
   shape: "cloud",
   fingerDraw: false,
   predict: false,
+  highlighterSet: 2,
 };
 
 /** The colours the Pen colour (or Highlighter colour) panel offers. */
@@ -79,19 +86,21 @@ export const PRESET_COLOURS: Record<PaletteKey, string[]> = {
     "#6B6B6B",
     "#B0B0B0",
   ],
+  // Fluoro, so highlights read as highlighter on the drawing (engineer,
+  // 2026-10-07: the pastel set's "red" came out brown).
   highlighter: [
-    "#FFD400",
-    "#FFB300",
-    "#FF8A65",
-    "#FF9EC4",
-    "#C9A7FF",
-    "#9FC5FF",
-    "#5BD3E6",
-    "#7CE38B",
-    "#C6E86B",
-    "#FFE57F",
-    "#D7CCC8",
-    "#CFD8DC",
+    "#FFFF00",
+    "#FFC400",
+    "#FF7A00",
+    "#FF1744",
+    "#FF2DB4",
+    "#E100FF",
+    "#9D4BFF",
+    "#2979FF",
+    "#00C3FF",
+    "#00E5C0",
+    "#39FF14",
+    "#C6FF00",
   ],
 };
 
@@ -110,10 +119,13 @@ export function parsePrefs(raw: string | null): MarkupPrefs {
   // Colours saved before slots (no "selected") start again from the
   // defaults: the old palette added a colour for every move of the picker.
   const slotted = typeof stored.selected === "object" && stored.selected;
+  // Highlighter slots from before the fluoro set start again too.
+  const fluoro = stored.highlighterSet === DEFAULT_PREFS.highlighterSet;
   for (const key of ["pen", "highlighter"] as const) {
     const palette = stored.palettes?.[key];
     if (
       slotted &&
+      (key === "pen" || fluoro) &&
       Array.isArray(palette) &&
       palette.length &&
       palette.every(isColour)
@@ -122,7 +134,10 @@ export function parsePrefs(raw: string | null): MarkupPrefs {
   }
   for (const tool of ["pen", "highlighter", "shapes", "text"] as const) {
     const slots = prefs.palettes[paletteOf(tool)];
-    const selected = slotted ? stored.selected?.[tool] : undefined;
+    const selected =
+      slotted && (tool !== "highlighter" || fluoro)
+        ? stored.selected?.[tool]
+        : undefined;
     if (
       typeof selected === "number" &&
       Number.isInteger(selected) &&
