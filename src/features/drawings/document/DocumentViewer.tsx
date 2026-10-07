@@ -44,6 +44,8 @@ import {
 } from "../../markup/selectGeometry";
 import { isInkTool, type DocMark, type ViewerTool } from "../../markup/tools";
 import { DocPage, type SettledView } from "./DocPage";
+import { DiagnosticsPanel } from "./DiagnosticsPanel";
+import { diagnostics, noteScroll } from "./diagnostics";
 import { DOUBLE_TAP_MS, DOUBLE_TAP_SLOP } from "./gestures";
 import { PinchSnapshot } from "./pinchSnapshot";
 import {
@@ -109,6 +111,8 @@ interface Props {
   fingerDraw: boolean;
   /** Extend the stroke being drawn to the iPad's predicted Pencil points. */
   predict: boolean;
+  /** Show the diagnostics panel (Settings, Drawing; step 10). */
+  diagnostics?: boolean;
   /** Saved pen and highlighter marks (for the eraser and the pinch snapshot). */
   marks: DocMark[];
   /** The tool's look while drawing; `shape` when the Shapes tool is on. */
@@ -468,6 +472,12 @@ export function DocumentViewer(props: Props) {
     const t = transform.current;
     const { top, bottom } = visibleDocRange(t);
     const dpr = window.devicePixelRatio || 1;
+    const visible = pagesInRange(currentLayout(), top.y, bottom.y);
+    diagnostics.view = {
+      zoom: t.scale / fitWidthScale.current,
+      dpr,
+      visibleKeys: visible.map((p) => p.key),
+    };
     setSettled({
       docRect: {
         x: top.x,
@@ -477,10 +487,7 @@ export function DocumentViewer(props: Props) {
       },
       devicePxPerDocUnit: t.scale * dpr,
       fitDevicePxPerDocUnit: fitWidthScale.current * dpr,
-      visibleCount: Math.max(
-        1,
-        pagesInRange(currentLayout(), top.y, bottom.y).length,
-      ),
+      visibleCount: Math.max(1, visible.length),
     });
   }
 
@@ -1867,6 +1874,7 @@ export function DocumentViewer(props: Props) {
     const container = containerRef.current!;
     const onScroll = () => {
       lastScroll.current = performance.now();
+      noteScroll();
       if (hold.current && !hold.current.held) cancelHold();
       readScroll();
     };
@@ -2339,6 +2347,7 @@ export function DocumentViewer(props: Props) {
         data-testid="pinch-snapshot"
         aria-hidden="true"
       />
+      {props.diagnostics && <DiagnosticsPanel viewerRef={containerRef} />}
     </>
   );
 }

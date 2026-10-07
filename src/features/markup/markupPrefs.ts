@@ -35,6 +35,8 @@ export interface MarkupPrefs {
   fingerDraw: boolean;
   /** Draw the stroke on to the iPad's predicted Pencil points (Settings). */
   predict: boolean;
+  /** Show the drawing viewer's diagnostics panel (Settings; step 10). */
+  diagnostics: boolean;
   /**
    * Which highlighter colour set the slots came from: 2 is fluoro
    * (2026-10-07). Older (pastel) slots start again from the fluoro defaults.
@@ -67,6 +69,7 @@ export const DEFAULT_PREFS: MarkupPrefs = {
   shape: "cloud",
   fingerDraw: false,
   predict: false,
+  diagnostics: false,
   highlighterSet: 2,
 };
 
@@ -152,6 +155,8 @@ export function parsePrefs(raw: string | null): MarkupPrefs {
   if (typeof stored.fingerDraw === "boolean")
     prefs.fingerDraw = stored.fingerDraw;
   if (typeof stored.predict === "boolean") prefs.predict = stored.predict;
+  if (typeof stored.diagnostics === "boolean")
+    prefs.diagnostics = stored.diagnostics;
   if (stored.shape && SHAPES.includes(stored.shape)) prefs.shape = stored.shape;
   return prefs;
 }

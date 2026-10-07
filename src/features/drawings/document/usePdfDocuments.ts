@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { db } from "../../../db/db";
 import type { PDFDocumentProxy } from "../pdf/pdfjs";
+import { diagnostics, recordError } from "./diagnostics";
 
 /** PDFs kept open beyond the ones currently needed, most recent first. */
 const KEEP_EXTRA = 2;
@@ -52,6 +53,7 @@ export function usePdfDocuments(
       if (!blobId) continue;
       loading.current.add(id);
       void (async () => {
+        const started = performance.now();
         try {
           const stored = await db.blobs.get(blobId);
           if (!stored)
@@ -63,9 +65,14 @@ export function usePdfDocuments(
             void doc.loadingTask.destroy();
             return;
           }
+          diagnostics.pdfs.set(id, {
+            ms: performance.now() - started,
+            bytes: stored.data.byteLength,
+          });
           open.current.set(id, doc);
           setDocs(new Map(open.current));
         } catch (e) {
+          recordError("PDF open failed", e);
           setErrors((old) =>
             new Map(old).set(id, e instanceof Error ? e.message : String(e)),
           );

@@ -1243,6 +1243,7 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
               tool={tool}
               fingerDraw={prefs.fingerDraw}
               predict={prefs.predict}
+              diagnostics={prefs.diagnostics}
               marks={docMarks}
               ink={{
                 colour: toolColour(prefs, inkTool),

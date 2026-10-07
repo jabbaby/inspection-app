@@ -2744,3 +2744,30 @@ test("a tap on a drawn mark picks it and turns Select on; letting go goes back",
   await page.mouse.click(off.x, off.y);
   await expect(page.getByTestId("mark")).toHaveCount(2);
 });
+
+test("diagnostics: off by default, switched on in Settings, shows each page on screen", async ({
+  page,
+}) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openDrawing(page, "S-101 Level 3", false);
+  const panel = page.getByTestId("diagnostics");
+  await expect(panel).toHaveCount(0);
+
+  const rail = page.getByRole("navigation", { name: "Main" });
+  await rail.getByRole("link", { name: "Settings" }).click();
+  await page.getByLabel(/Show diagnostics/).check();
+  // The Inspections tab returns to the drawing.
+  await rail.getByRole("link", { name: "Inspections" }).click();
+  await expect(panel).toBeVisible();
+  await expect(panel).toContainText(/Zoom 1\.0× fit/);
+  await expect(panel).toContainText(/Page 1 · A1 \(841 × 594 mm\)/);
+  await expect(panel).toContainText(/Base \d\.\d\d/);
+  await expect(panel).toContainText("Errors none");
+
+  // Hide folds it to a chip; the chip opens it again.
+  await panel.getByRole("button", { name: "Hide diagnostics" }).click();
+  await expect(panel).toHaveCount(0);
+  await page.getByRole("button", { name: "Diagnostics" }).click();
+  await expect(panel).toBeVisible();
+});

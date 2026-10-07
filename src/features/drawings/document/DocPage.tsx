@@ -2,6 +2,13 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { PDFDocumentProxy, PDFPageProxy, RenderTask } from "../pdf/pdfjs";
 import type { Rect } from "../viewer/viewTransform";
 import { ViewerCoordsContext, type ViewerCoords } from "../viewer/viewerCoords";
+import {
+  diagnostics,
+  endRender,
+  pageStat,
+  recordError,
+  startRender,
+} from "./diagnostics";
 import { visiblePart, type PageLayout } from "./documentLayout";
 
 // iPad Safari limits total canvas memory, and several pages can be live.
@@ -101,14 +108,25 @@ export function DocPage({
   useEffect(() => {
     if (!proxy || !fitQuality) return;
     const area = page.size.width * page.size.height;
-    const scale = Math.min(
-      fitQuality * page.scale,
-      Math.sqrt(MAX_BASE_PIXELS / area),
-    );
+    const wanted = fitQuality * page.scale;
+    const scale = Math.min(wanted, Math.sqrt(MAX_BASE_PIXELS / area));
     const canvas = document.createElement("canvas");
     canvas.width = Math.round(page.size.width * scale);
     canvas.height = Math.round(page.size.height * scale);
     canvas.className = "viewer-base";
+    const diag = startRender(
+      scale,
+      wanted,
+      scale < wanted * 0.999 ? "cap" : null,
+      canvas.width * canvas.height,
+    );
+    pageStat(
+      page.key,
+      page.drawingId,
+      page.number,
+      page.size.width,
+      page.size.height,
+    ).base = diag;
     const task = proxy.render({
       canvas,
       viewport: proxy.getViewport({ scale }),
@@ -116,6 +134,7 @@ export function DocPage({
     let current = true;
     task.promise.then(
       () => {
+        endRender(diag, "done");
         if (!current) return releaseCanvas(canvas);
         clearHost(baseHost.current);
         baseHost.current?.appendChild(canvas);
@@ -125,7 +144,10 @@ export function DocPage({
       },
       (error: unknown) => {
         releaseCanvas(canvas);
-        if (!isCancel(error)) console.error("Page render failed", error);
+        if (isCancel(error)) return endRender(diag, "cancelled");
+        endRender(diag, "failed");
+        recordError(`Page ${page.number} render failed`, error);
+        console.error("Page render failed", error);
       },
     );
     return () => {
@@ -140,6 +162,8 @@ export function DocPage({
     page.scale,
     page.size.width,
     page.size.height,
+    page.drawingId,
+    page.number,
   ]);
 
   // Release everything when the page goes inactive or unmounts.
@@ -148,15 +172,17 @@ export function DocPage({
     clearHost(baseHost.current);
     clearHost(tileHost.current);
     baseScale.current = 0;
-  }, [active]);
+    diagnostics.pages.delete(page.key);
+  }, [active, page.key]);
   useEffect(() => {
     const base = baseHost.current;
     const tile = tileHost.current;
     return () => {
       clearHost(base);
       clearHost(tile);
+      diagnostics.pages.delete(page.key);
     };
-  }, []);
+  }, [page.key]);
 
   // Sharpen the visible part after each gesture settles.
   const tileTask = useRef<RenderTask | null>(null);
@@ -164,9 +190,17 @@ export function DocPage({
     tileTask.current?.cancel();
     if (!proxy || !view || !rendered) return;
     const part = visiblePart(page, view.docRect);
-    let scale = view.devicePxPerDocUnit * page.scale;
+    const wanted = view.devicePxPerDocUnit * page.scale;
+    let scale = wanted;
     if (!part || scale <= baseScale.current * 1.1) {
       clearHost(tileHost.current);
+      pageStat(
+        page.key,
+        page.drawingId,
+        page.number,
+        page.size.width,
+        page.size.height,
+      ).sharp = null;
       return;
     }
     const pad = 40 / (view.devicePxPerDocUnit * page.scale);
@@ -186,6 +220,19 @@ export function DocPage({
     const canvas = document.createElement("canvas");
     canvas.width = Math.ceil(rect.width * scale);
     canvas.height = Math.ceil(rect.height * scale);
+    const diag = startRender(
+      scale,
+      wanted,
+      scale < wanted * 0.999 ? "budget" : null,
+      canvas.width * canvas.height,
+    );
+    pageStat(
+      page.key,
+      page.drawingId,
+      page.number,
+      page.size.width,
+      page.size.height,
+    ).sharp = diag;
     Object.assign(canvas.style, {
       left: `${rect.x}px`,
       top: `${rect.y}px`,
@@ -206,6 +253,7 @@ export function DocPage({
     task.promise.then(
       () => {
         unregister();
+        endRender(diag, "done");
         if (tileTask.current !== task) return releaseCanvas(canvas);
         clearHost(tileHost.current);
         tileHost.current?.appendChild(canvas);
@@ -214,7 +262,10 @@ export function DocPage({
       (error: unknown) => {
         unregister();
         releaseCanvas(canvas);
-        if (!isCancel(error)) console.error("Tile render failed", error);
+        if (isCancel(error)) return endRender(diag, "cancelled");
+        endRender(diag, "failed");
+        recordError(`Page ${page.number} sharp render failed`, error);
+        console.error("Tile render failed", error);
       },
     );
     return () => {

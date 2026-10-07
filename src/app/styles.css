@@ -4685,3 +4685,95 @@ h1 {
   gap: var(--space-1);
   margin-left: auto;
 }
+
+/* Diagnostics (Settings, Drawing; step 10): a charcoal card at the top
+   left of the drawing, for a screenshot from the iPad. */
+.diagnostics,
+.diagnostics-chip {
+  position: absolute;
+  z-index: 4;
+  top: 12px;
+  left: 12px;
+  color: #f2f2f2;
+  background: var(--selected);
+  box-shadow: var(--shadow-float);
+}
+
+.diagnostics {
+  width: min(340px, calc(100% - 96px));
+  max-height: calc(100% - 24px);
+  overflow: auto;
+  padding: var(--space-2) var(--space-3) var(--space-3);
+  border-radius: 14px;
+}
+
+.diagnostics header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.diagnostics h2 {
+  flex: 1;
+  margin: 0;
+  color: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.diagnostics header button,
+.diagnostics-chip {
+  min-width: 0;
+  min-height: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid #666;
+  border-radius: var(--radius-pill);
+  color: inherit;
+  background: transparent;
+  font-size: var(--text-xs);
+}
+
+.diagnostics-chip {
+  padding: 6px 12px;
+  border-color: transparent;
+  background: var(--selected);
+}
+
+.diagnostics header .lucide,
+.diagnostics-chip .lucide {
+  width: 14px;
+  height: 14px;
+}
+
+.diagnostics ul {
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.diagnostics li.heading {
+  margin-top: var(--space-2);
+  color: #bbb;
+}
+
+.diagnostics li.indent {
+  padding-left: 1.5ch;
+}
+
+.diagnostics li.tone-ok {
+  color: #97c459;
+}
+
+.diagnostics li.tone-warn {
+  color: #fac775;
+}
+
+.diagnostics li.tone-bad {
+  color: #f09595;
+}
