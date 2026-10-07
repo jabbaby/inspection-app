@@ -145,6 +145,14 @@ interface Props {
   selection: MarkSelection | null;
   /** A tap or loop picked these marks (none: let go). */
   onSelectMarks: (selection: MarkSelection | null) => void;
+  /**
+   * A tap on a mark with no tool, the pen, highlighter or a shape tool
+   * (engineer, 2026-10-07): pick it, switching to Select. `hit` is the spot.
+   */
+  onTapMark: (
+    selection: MarkSelection,
+    hit: { page: PageLayout; at: Point },
+  ) => void;
   /** The one mark selected was tapped again (a callout: edit its text). */
   onSelectTapAgain: (markId: string) => void;
   /**
@@ -1177,6 +1185,9 @@ export function DocumentViewer(props: Props) {
       return;
     }
     if (cancelled) return clearInk();
+    // A tap (no stroke) on a mark picks it instead of leaving a dot.
+    if (!stroke.held && stroke.travel < TAP_SLOP && tapMarkAt(stroke.start))
+      return clearInk();
     if (stroke.shape) {
       // Too small to mean anything: dropped (a held shape is never small).
       if (!stroke.held && stroke.travel < MIN_SHAPE) return clearInk();
@@ -1254,6 +1265,30 @@ export function DocumentViewer(props: Props) {
       { x: n.x * size.width, y: n.y * size.height },
       ERASER_REACH / pxPerUnit(page),
     );
+  }
+
+  /** Whether a tap on a mark picks it (no tool, or a drawing tool). */
+  function tapsSelect() {
+    const tool = latest.current.tool;
+    return (
+      tool === null ||
+      tool === "pen" ||
+      tool === "highlighter" ||
+      tool === "shapes"
+    );
+  }
+
+  /**
+   * A tap at `p` (viewer px) with no tool or a drawing tool: if it lands on
+   * a mark, that mark is picked (Select comes on) and true is returned.
+   */
+  function tapMarkAt(p: Point): boolean {
+    if (!tapsSelect()) return false;
+    const hit = hitPage(currentLayout(), screenToPage(currentTransform(), p));
+    const mark = hit && markAt(hit.page, p);
+    if (!hit || !mark) return false;
+    latest.current.onTapMark({ pageKey: hit.page.key, ids: [mark.id] }, hit);
+    return true;
   }
 
   /** A tap at `p` (viewer px): the mark under it, else nothing selected. */
@@ -1600,9 +1635,9 @@ export function DocumentViewer(props: Props) {
       // A finger's tap with Select on picks the mark under it.
       latest.current.onTapDrawing(hit);
       selectAt(local(e));
-    } else {
+    } else if (!tapMarkAt(local(e))) {
       // A tap on the drawing itself (pins, arrow tips and the notes box
-      // handle their own taps).
+      // handle their own taps; a mark is picked above).
       latest.current.onTapDrawing(hit);
     }
   }

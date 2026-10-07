@@ -2666,3 +2666,49 @@ test("general notes: no pin, lettered first, listed in every notes box; export k
   await expect(boxes).toHaveCount(1);
   await expect(boxes.first()).toContainText("A. CRACK AT GRID 4");
 });
+
+test("a tap on a drawn mark picks it and turns Select on; letting go goes back", async ({
+  page,
+}) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openDrawing(page, "S-101 Level 3", false);
+  const toolbar = page.getByRole("toolbar", { name: "Markup tools" });
+  const tool = (name: string) =>
+    toolbar.getByRole("button", { name, exact: true });
+  const selection = page.getByTestId("selection");
+  const box = await stageBox(page);
+  const at = (fx: number, fy: number) => ({
+    x: box.x + box.width * fx,
+    y: box.y + box.height * fy,
+  });
+
+  // Draw a rectangle, then tap it with the Rectangle tool still on.
+  await tool("Rectangle").click();
+  await drawLine(page, [0.35, 0.4], [0.55, 0.5]);
+  await expect(page.locator('[data-tool="rect"]')).toHaveCount(1);
+  const on = at(0.45, 0.45);
+  await page.mouse.click(on.x, on.y);
+  await expect(tool("Select")).toHaveAttribute("aria-pressed", "true");
+  await expect(selection).toHaveAttribute("data-count", "1");
+  await expect(page.getByTestId("handle-rotate")).toBeVisible();
+  await expect(page.getByTestId("handle-se")).toBeVisible();
+  // A tap on open space lets go: the Rectangle tool is back.
+  const off = at(0.85, 0.85);
+  await page.mouse.click(off.x, off.y);
+  await expect(selection).toHaveCount(0);
+  await expect(tool("Rectangle")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator('[data-tool="rect"]')).toHaveCount(1);
+
+  // With no tool on, a finger tap picks it too.
+  await tool("Rectangle").click();
+  await touchTap(page, on);
+  await expect(selection).toHaveAttribute("data-count", "1");
+  await page.mouse.click(off.x, off.y);
+  await expect(tool("Select")).toHaveAttribute("aria-pressed", "false");
+
+  // With the Pen, a tap on blank paper still makes a dot.
+  await tool("Pen").click();
+  await page.mouse.click(off.x, off.y);
+  await expect(page.getByTestId("mark")).toHaveCount(2);
+});

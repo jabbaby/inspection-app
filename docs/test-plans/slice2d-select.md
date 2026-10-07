@@ -53,3 +53,9 @@ Reply with the step number and what you saw (no need to edit this file).
 28. **Group.** Loop round a few marks (a pen line, a shape, a callout with an arrow) and drag the rotate handle: they turn together; the callout's text stays level while its box and arrow move round.
 29. **Held shapes.** Draw and hold a rectangle at an angle: it can now be resized and rotated like any rectangle.
 30. **Undo and PDF.** Undo takes each turn back. Export: turned shapes are turned in the PDF.
+
+## Follow-up (2026-10-07): tap a mark to pick it
+31. **Straight after drawing.** Draw a rectangle with the Rectangle tool, then tap it (Pencil or finger): Select comes on with it picked, handles and rotate grip showing. Tap open space: the Rectangle tool is back on.
+32. **No tool.** With no tool on, tap a line you drew: it's picked. Tap open space: no tool is on again.
+33. **Pen.** With the Pen on, tap a mark: it's picked (no dot left on it). Tap blank paper: a dot, as before.
+34. **Pin still pins.** With Pin on, tap inside a cloud: a pin goes there (the cloud isn't picked).

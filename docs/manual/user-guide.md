@@ -104,7 +104,7 @@ Each tool is a toggle: tap it to turn it on, tap again to turn it off. With a dr
 
 ## Select
 
-Turn on **Select** (the dotted lasso), then tap a mark or draw a loop round several.
+Turn on **Select** (the dotted lasso), then tap a mark or draw a loop round several. Quicker still: just **tap any mark you've drawn** (with no tool, the Pen, Highlighter or a shape tool on). Select comes on with it picked, and tapping open space takes you back to your tool.
 
 - **Drag** inside the dashed box to move them.
 - The bar above changes the **colour** or **weight**, **duplicates** or **deletes** them.

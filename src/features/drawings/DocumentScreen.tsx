@@ -250,8 +250,11 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
   const [selectedCallout, setSelectedCallout] = useState<string | null>(null);
   // The tool on before a tapped callout turned Text on, to go back to.
   const toolBeforeText = useRef<ViewerTool | null>(null);
+  // The tool on before a tapped mark turned Select on, to go back to.
+  const toolBeforeSelect = useRef<{ tool: ViewerTool | null } | null>(null);
   function changeTool(next: ViewerTool | null) {
     toolBeforeText.current = null;
+    toolBeforeSelect.current = null;
     setTool(next);
     setSelectedCallout(null);
     setSelection(null);
@@ -615,10 +618,33 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
     selectionPage,
   ]);
 
-  /** A tap or loop with Select on: a callout being typed closes first. */
+  /**
+   * A tap or loop with Select on: a callout being typed closes first. When
+   * Select came on by tapping a mark, letting go goes back to the tool
+   * that was on.
+   */
   function selectMarks(next: MarkSelection | null) {
     if (draftRef.current) return void commitDraft();
     setSelection(next);
+    const back = toolBeforeSelect.current;
+    if (!next && back) {
+      toolBeforeSelect.current = null;
+      setTool(back.tool);
+    }
+  }
+
+  /**
+   * A tap on a drawn mark with no tool or a drawing tool on (engineer,
+   * 2026-10-07): it's picked and Select comes on, so it can be resized,
+   * rotated or changed straight away. Something open closes first, as with
+   * any tap on the drawing.
+   */
+  function tapMark(sel: MarkSelection, hit: { page: PageLayout; at: Point }) {
+    if (draftRef.current || pendingOpen.current || selectedId || itemsOpen)
+      return tapDrawing(hit);
+    if (tool !== "select") toolBeforeSelect.current = { tool };
+    setTool("select");
+    setSelection(sel);
   }
 
   // What a two-finger double-tap undid, shown briefly over the drawing.
@@ -1217,6 +1243,7 @@ function InspectionDocument({ inspectionId }: { inspectionId: string }) {
               onPlaceText={placeText}
               selection={tool === "select" ? selection : null}
               onSelectMarks={selectMarks}
+              onTapMark={tapMark}
               onUndoGesture={undoByGesture}
               onSelectTapAgain={(id) => {
                 const mark = docMarks.find((m) => m.id === id);
