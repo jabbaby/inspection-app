@@ -74,6 +74,15 @@ Tap **Items** on the right to list every item by page. Tap one to jump to it, sw
 
 ![The Items panel](shots/items.jpg)
 
+## General notes
+
+For something about the whole inspection rather than one spot, such as "Inspection limited to the roof framing, grids 1–4 / A–C":
+
+1. Open **Items** and tap **Add general note**.
+2. Type the note and tap **Done**.
+
+General notes are observations with no pin. They're lettered first (A, B…), before the pinned observations, and every page's notes box lists them. Edit or delete them from the Items panel like any item.
+
 ## Photos
 
 - In an item's editor: **Take photo** (camera) or **Choose photos** (library).
@@ -100,6 +109,7 @@ Turn on **Select** (the dotted lasso), then tap a mark or draw a loop round seve
 - **Drag** inside the dashed box to move them.
 - The bar above changes the **colour** or **weight**, **duplicates** or **deletes** them.
 - One shape shows **handles** to resize it. Tap a selected callout again to edit its text.
+- Drag the **round handle** above the selection to **rotate** it (one shape, or a group together). It snaps to level and 45°.
 - Tap open space to let go.
 
 ![Two marks selected, with the bar|210](shots/select.jpg)
@@ -158,5 +168,5 @@ Turn on **Select** (the dotted lasso), then tap a mark or draw a loop round seve
 
 - **Draw and hold:** straight line, or a clean shape from a closed stroke; keep dragging to resize it.
 - **Text tool:** tap for a box; tap, hold and drag for a box with an arrow.
-- **Select tool:** tap a mark, or loop round several; drag inside the box to move.
+- **Select tool:** tap a mark, or loop round several; drag inside the box to move; drag the round handle to rotate.
 - **Eraser:** rub to remove; tap inside a shape to take its fill off.

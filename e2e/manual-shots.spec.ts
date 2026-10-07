@@ -201,8 +201,21 @@ test("manual screenshots @shots", async ({ page }) => {
   await shot(page, "select");
   await tool("Select").click();
 
-  // The Items panel and the Pages view.
+  // A general note, then the Items panel and the Pages view.
   await page.getByRole("button", { name: "Items", exact: true }).click();
+  await page.getByRole("button", { name: "Add general note" }).click();
+  await page
+    .getByTestId("item-sheet")
+    .getByRole("textbox")
+    .fill("Inspection limited to the level 3 slab, grids 1-4 / A-D");
+  await expect(page.getByTestId("item-save-state")).toHaveText("Saved");
+  await page
+    .getByTestId("item-sheet")
+    .getByRole("button", { name: "Done" })
+    .first()
+    .click();
+  if (!(await page.getByTestId("items-panel").isVisible()))
+    await page.getByRole("button", { name: "Items", exact: true }).click();
   await page.waitForTimeout(500);
   await shot(page, "items");
   await page.getByRole("button", { name: "Items", exact: true }).click();

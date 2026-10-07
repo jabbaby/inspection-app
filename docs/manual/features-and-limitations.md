@@ -50,6 +50,7 @@ It is a **proof of concept**, built for one engineer and tested on a real iPad t
 - **Copy pin** puts the same item at several spots, on any page.
 - Instructions can require **photo confirmation** before the builder proceeds; the memo says so against each one.
 - Each page with pins gets a **notes box** listing its instructions and observations, dragged into a clear spot and burned into the exported page.
+- **General notes** are observations with no pin, for things that apply to the whole inspection (such as its extent). They're lettered first and listed in every page's notes box.
 - The Items panel lists everything by page: tap one to jump to its pin, swipe to delete, drag to reorder and multi-select.
 
 ## Markup (Apple Pencil)
@@ -58,7 +59,7 @@ It is a **proof of concept**, built for one engineer and tested on a real iPad t
 - Strokes follow the Pencil exactly. Colours come in editable slots (fluoro for the highlighter); three weights per tool.
 - **Draw and hold:** a stroke held still at its end becomes a straight line, or a clean circle, ellipse, rectangle, triangle or polygon, which can be resized before lifting.
 - **Text callouts** with a drafting-style dog-leg arrow, placed and moved like pins.
-- **Select** by tap or loop: move, resize, recolour, change weight, duplicate or delete; callouts can be edited from Select.
+- **Select** by tap or loop: move, resize, **rotate** (one shape or a group), recolour, change weight, duplicate or delete; callouts can be edited from Select.
 - Undo and Redo for everything, including a two-finger double-tap.
 - Markup is exported as vector, so it stays sharp at any zoom in the PDF.
 
@@ -86,6 +87,7 @@ It is a **proof of concept**, built for one engineer and tested on a real iPad t
 
 - **PDF pack:** the memo, then each drawing page with pins or markup (at its native sheet size, original vector content kept, pins, arrows, notes box and markup burned in), then the photo appendix. Page numbers run through the pack.
 - If letters change after a memo was exported, the app says what changed before it is sent again.
+- Exported PDFs and these documents open inside the app with a Back button.
 - **Inspection files:** one file per inspection holding its drawings, photos, items, markup and memo, to back up or move to another device. Import never silently overwrites.
 - Backup reminders on the Dashboard; **Back up all** in Settings; a storage meter.
 
@@ -115,7 +117,7 @@ These are the known limits of the proof of concept, stated plainly so they can b
 
 - No re-inspections, and items have no open or closed status.
 - Undo lasts until the app closes, and doesn't cover moving pins or the notes box, or page operations.
-- Shapes can't be rotated; tilted shapes made by drawing and holding can be moved but not resized.
+- Callout text always stays level (callouts move when a group is rotated, but don't turn).
 - No user accounts, sign-in or permissions; one engineer per device.
 - The planned calculators (AS 3600) and standard details library aren't built yet.
 
@@ -142,4 +144,4 @@ The app was built by David Samson with an AI coding assistant (Anthropic's Claud
 - **Wider use:** decide on hosting (company server or sign-in), and whether syncing between devices is needed. Sync would need a server and accounts, and changes how data is protected.
 - **Calculators:** an AS 3600 calculators area (concrete checks, area of steel, development and lap lengths), kept separate from inspections and never in the memo.
 - **Standard details library:** searchable details that can be attached to a memo item.
-- **Later:** general notes in the notes box without a pin, and more undo coverage.
+- **Later:** more undo coverage (moving pins and the notes box, page operations).
