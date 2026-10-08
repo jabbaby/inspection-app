@@ -10,10 +10,13 @@ import {
   startRender,
 } from "./diagnostics";
 import { visiblePart, type PageLayout } from "./documentLayout";
-import { keepPageImage, queuePageDrawing, takePageImage } from "./pageImages";
-
-// iPad Safari limits total canvas memory, and several pages can be live.
-const MAX_BASE_PIXELS = 4_000_000;
+import {
+  baseTarget,
+  keepPageImage,
+  queuePageDrawing,
+  takePageImage,
+} from "./pageImages";
+import { loadSavedPage, savePageSoon } from "./savedPages";
 /** A preview while scrolling: this fraction of the base's width (1/16 the pixels). */
 const PREVIEW_FRACTION = 0.25;
 
@@ -94,6 +97,9 @@ export function DocPage({
   // The pdf.js page whose full base image is showing.
   const [renderedProxy, setRenderedProxy] = useState<PDFPageProxy | null>(null);
   const rendered = proxy !== null && renderedProxy === proxy;
+  // The pdf.js page for which no saved image was found (so it's drawn).
+  const [savedChecked, setSavedChecked] = useState<PDFPageProxy | null>(null);
+  const noSavedImage = proxy !== null && savedChecked === proxy;
   /** The full base image's scale (0 while only a preview, or nothing, shows). */
   const baseScale = useRef(0);
   const onRenderedRef = useRef(onRendered);
@@ -118,21 +124,12 @@ export function DocPage({
       // pdf.js hands back the same page object next time: its image is
       // gone, so it must be shown again.
       setRenderedProxy(null);
+      setSavedChecked(null);
       fetched?.cleanup();
     };
   }, [active, doc, page.source]);
 
   const fitQuality = view?.fitDevicePxPerDocUnit ?? 0;
-
-  /** The base image's scale for this page, and what it wanted. */
-  function baseTarget(quality: number) {
-    const area = page.size.width * page.size.height;
-    const wanted = quality * page.scale;
-    return {
-      wanted,
-      scale: Math.min(wanted, Math.sqrt(MAX_BASE_PIXELS / area)),
-    };
-  }
 
   /** Shows a finished full base image (replacing any preview). */
   function showBase(
@@ -147,11 +144,13 @@ export function DocPage({
     onRenderedRef.current(page.key);
   }
 
-  // The full base image at fit-width quality: kept from earlier if it can
-  // be, else drawn once the document stops moving, one page at a time.
+  // The full base image at fit-width quality: kept from earlier, or its
+  // saved image (savedPages.ts), else drawn once the document stops moving,
+  // one page at a time, then saved.
   useEffect(() => {
     if (!proxy || !fitQuality || rendered) return;
-    const { wanted, scale } = baseTarget(fitQuality);
+    const target = baseTarget(page.size, page.scale, fitQuality);
+    const { wanted, scale } = target;
     const limit = scale < wanted * 0.999 ? "cap" : null;
     const stat = pageStat(
       page.key,
@@ -167,6 +166,7 @@ export function DocPage({
         wanted,
         limit,
         kept.width * kept.height,
+        "base",
         true,
       );
       // Shown straight after this effect; the preview needn't start.
@@ -180,6 +180,42 @@ export function DocPage({
         current = false;
       };
     }
+    if (!noSavedImage) {
+      // Looked for even while scrolling: no PDF drawing, decoded off the
+      // main thread.
+      const diag = startRender(
+        scale,
+        wanted,
+        limit,
+        target.width * target.height,
+        "saved image",
+      );
+      stat.base = diag;
+      let current = true;
+      loadSavedPage(page.drawingId, page.source, target.width, target.height)
+        .then((canvas) => {
+          if (!current) {
+            if (canvas) releaseCanvas(canvas);
+            return endRender(diag, "cancelled");
+          }
+          if (canvas) {
+            canvas.className = "viewer-base";
+            endRender(diag, "saved");
+            return showBase(canvas, scale, proxy);
+          }
+          endRender(diag, "cancelled");
+          stat.base = null;
+          setSavedChecked(proxy);
+        })
+        .catch((error: unknown) => {
+          endRender(diag, "failed");
+          recordError(`Page ${page.number} saved image failed`, error);
+          if (current) setSavedChecked(proxy);
+        });
+      return () => {
+        current = false;
+      };
+    }
     if (moving) return;
     // Pages on screen first, then the ones just off it.
     const onScreen =
@@ -188,14 +224,15 @@ export function DocPage({
     let current = true;
     const cancelQueued = queuePageDrawing(onScreen ? 0 : 1, (done) => {
       const canvas = document.createElement("canvas");
-      canvas.width = Math.round(page.size.width * scale);
-      canvas.height = Math.round(page.size.height * scale);
+      canvas.width = target.width;
+      canvas.height = target.height;
       canvas.className = "viewer-base";
       const diag = startRender(
         scale,
         wanted,
         limit,
         canvas.width * canvas.height,
+        "base",
       );
       stat.base = diag;
       const t = proxy.render({
@@ -209,6 +246,8 @@ export function DocPage({
           done();
           if (!current) return releaseCanvas(canvas);
           showBase(canvas, scale, proxy);
+          // Next time it shows at once (savedPages.ts).
+          savePageSoon(canvas, page.drawingId, page.source);
         },
         (error: unknown) => {
           done();
@@ -236,6 +275,7 @@ export function DocPage({
     fitQuality,
     moving,
     rendered,
+    noSavedImage,
     page.key,
     page.source,
     page.scale,
@@ -245,11 +285,16 @@ export function DocPage({
     page.number,
   ]);
 
-  // A quick low-detail preview until the full base image is ready, so a
-  // page coming on screen mid-scroll isn't blank (step 10b).
+  // A quick low-detail preview until the full base image is drawn, so a
+  // page coming on screen mid-scroll isn't blank (step 10b); not needed
+  // when it has a saved image.
   useEffect(() => {
-    if (!proxy || !fitQuality || baseScale.current > 0) return;
-    const { wanted, scale: full } = baseTarget(fitQuality);
+    if (!proxy || !fitQuality || !noSavedImage || baseScale.current > 0) return;
+    const { wanted, scale: full } = baseTarget(
+      page.size,
+      page.scale,
+      fitQuality,
+    );
     const scale = full * PREVIEW_FRACTION;
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(page.size.width * scale));
@@ -260,6 +305,7 @@ export function DocPage({
       wanted,
       "preview",
       canvas.width * canvas.height,
+      "preview",
     );
     pageStat(
       page.key,
@@ -296,6 +342,7 @@ export function DocPage({
   }, [
     proxy,
     fitQuality,
+    noSavedImage,
     page.key,
     page.scale,
     page.size.width,
@@ -368,6 +415,7 @@ export function DocPage({
       wanted,
       scale < wanted * 0.999 ? "budget" : null,
       canvas.width * canvas.height,
+      "sharp",
     );
     pageStat(
       page.key,

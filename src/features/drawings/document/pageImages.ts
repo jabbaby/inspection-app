@@ -74,51 +74,95 @@ export function clearPageImages() {
 // --- one full-detail drawing at a time ---------------------------------------
 
 interface Job {
-  /** 0 for a page on screen, 1 for one just off it. */
+  /** 0 for a page on screen, 1 for one just off it, 2 background saving. */
   priority: number;
   order: number;
   run: (done: () => void) => () => void;
   cancel: (() => void) | null;
+  /** The current run (a paused job runs again from the start). */
+  token: number;
 }
 
 const waiting: Job[] = [];
 let running: Job | null = null;
 let counter = 0;
+let tokens = 0;
+
+function start(job: Job) {
+  const token = ++tokens;
+  job.token = token;
+  running = job;
+  job.cancel = job.run(() => {
+    // Only this run's end counts (not one paused and since restarted).
+    if (running !== job || job.token !== token) return;
+    running = null;
+    next();
+  });
+}
 
 function next() {
   if (running || waiting.length === 0) return;
   waiting.sort((a, b) => a.priority - b.priority || a.order - b.order);
-  const job = waiting.shift()!;
-  running = job;
-  let finished = false;
-  const done = () => {
-    if (finished) return;
-    finished = true;
-    if (running === job) running = null;
-    next();
-  };
-  job.cancel = job.run(done);
+  start(waiting.shift()!);
+}
+
+/** Stops the running job without finishing it. */
+function stopRunning() {
+  const job = running;
+  if (!job) return null;
+  running = null;
+  job.token = -1;
+  job.cancel?.();
+  return job;
 }
 
 /**
  * Queues a full-detail page drawing. `run` starts it, calls `done` when it
- * ends either way, and returns a way to stop it. The result cancels it,
- * whether waiting or running.
+ * ends either way, and returns a way to stop it. A more urgent job (a page
+ * on screen) pauses a less urgent one that's running, which starts again
+ * after. The result cancels it, whether waiting or running.
  */
 export function queuePageDrawing(
   priority: number,
   run: (done: () => void) => () => void,
 ): () => void {
-  const job: Job = { priority, order: counter++, run, cancel: null };
+  const job: Job = { priority, order: counter++, run, cancel: null, token: 0 };
   waiting.push(job);
+  if (running && priority < running.priority) waiting.push(stopRunning()!);
   queueMicrotask(next);
   return () => {
     const i = waiting.indexOf(job);
     if (i >= 0) waiting.splice(i, 1);
     if (running === job) {
-      running = null;
-      job.cancel?.();
+      stopRunning();
       next();
     }
+  };
+}
+
+// --- sizes -------------------------------------------------------------------
+
+/** iPad Safari limits total canvas memory, and several pages can be live. */
+export const MAX_BASE_PIXELS = 4_000_000;
+
+/**
+ * A page's base image: device pixels per point wanted at fit width, what
+ * it gets (capped at MAX_BASE_PIXELS), and the canvas size.
+ */
+export function baseTarget(
+  size: { width: number; height: number },
+  pageScale: number,
+  fitQuality: number,
+) {
+  const wanted = fitQuality * pageScale;
+  const scale = Math.min(
+    wanted,
+    Math.sqrt(MAX_BASE_PIXELS / (size.width * size.height)),
+  );
+  return {
+    wanted,
+    scale,
+    width: Math.round(size.width * scale),
+    height: Math.round(size.height * scale),
   };
 }

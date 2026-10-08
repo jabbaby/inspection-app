@@ -47,6 +47,7 @@ import { DocPage, type SettledView } from "./DocPage";
 import { DiagnosticsPanel } from "./DiagnosticsPanel";
 import { diagnostics, noteScroll } from "./diagnostics";
 import { clearPageImages } from "./pageImages";
+import { useSavePagesAhead } from "./savedPages";
 import { DOUBLE_TAP_MS, DOUBLE_TAP_SLOP } from "./gestures";
 import { PinchSnapshot } from "./pinchSnapshot";
 import {
@@ -345,6 +346,16 @@ export function DocumentViewer(props: Props) {
     () => new Set(),
   );
   const [currentPageKey, setCurrentPageKey] = useState<string | null>(null);
+  // Saved page images: the pages not saved yet are drawn and saved ahead
+  // while the document is still (savedPages.ts).
+  useSavePagesAhead({
+    layout,
+    docs,
+    fitQuality: settled?.fitDevicePxPerDocUnit ?? 0,
+    moving,
+    currentKey: currentPageKey,
+    activeKeys,
+  });
 
   const pagesByKey = useMemo(
     () => new Map(layout.pages.map((p) => [p.key, p])),

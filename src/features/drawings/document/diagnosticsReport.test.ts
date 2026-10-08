@@ -10,6 +10,7 @@ const render = (r: Partial<RenderStat>): RenderStat => ({
   ms: 210,
   state: "done",
   started: 0,
+  kind: "base",
   ...r,
 });
 
@@ -38,7 +39,13 @@ function state(over: Partial<DiagnosticsState> = {}): DiagnosticsState {
       ],
     ]),
     view: { zoom: 3.2, dpr: 2, visibleKeys: ["d1:4"] },
-    scroll: { seconds: 2.1, fps: 41, worstMs: 96, drawingShare: 0.4 },
+    scroll: {
+      seconds: 2.1,
+      fps: 41,
+      worstMs: 96,
+      drawingShare: 0.4,
+      worstDuring: "2 preview",
+    },
     pdfs: new Map([["d1", { ms: 1200, bytes: 18_400_000 }]]),
     errors: [],
     ...over,
@@ -67,7 +74,7 @@ describe("diagnosticsReport", () => {
     expect(text).toContain("Canvases 5 live · 21.3 MP total");
     expect(text).toContain("Markup 312 marks on screen · 4,820 segments");
     expect(text).toContain(
-      "Scroll last 2.1 s · 41 fps · worst frame 96 ms · pages drawing 40% of it",
+      "Scroll last 2.1 s · 41 fps · worst frame 96 ms (during 2 preview) · pages drawing 40% of it",
     );
     expect(text).toContain("PDF opened 1.2 s · 18.4 MB file");
     expect(text).toContain("Errors none");
@@ -87,6 +94,20 @@ describe("diagnosticsReport", () => {
     const error = lines.find((l) => l.text.startsWith("Error "));
     expect(error?.text).toMatch(/Page 4 render failed: boom$/);
     expect(error?.tone).toBe("bad");
+  });
+
+  it("says when a page came from its saved image", () => {
+    const s = state();
+    s.pages.get("d1:4")!.base = render({
+      scale: 0.42,
+      wanted: 0.42,
+      state: "saved",
+      ms: 48,
+    });
+    const text = diagnosticsReport(s, live, 1000).map((l) => l.text);
+    expect(text).toContain(
+      "Base 0.42 (as wanted) · 4.0 MP · from saved image · 48 ms",
+    );
   });
 
   it("waits for the view before listing pages", () => {

@@ -2771,3 +2771,43 @@ test("diagnostics: off by default, switched on in Settings, shows each page on s
   await page.getByRole("button", { name: "Diagnostics" }).click();
   await expect(panel).toBeVisible();
 });
+
+test("saved page images: drawn from the PDF once, then shown from the saved image", async ({
+  page,
+}) => {
+  await setupInspection(page);
+  await uploadDrawings(page, [await typicalPdf()]);
+  await openDrawing(page, "S-101 Level 3", false);
+  // Saved after drawing (the pages on screen) and ahead (the rest).
+  const savedCount = () =>
+    page.evaluate(
+      () =>
+        new Promise<number>((resolve, reject) => {
+          const open = indexedDB.open("inspection-app");
+          open.onerror = () => reject(open.error);
+          open.onsuccess = () => {
+            const req = open.result
+              .transaction("pageImages")
+              .objectStore("pageImages")
+              .count();
+            req.onsuccess = () => {
+              resolve(req.result);
+              open.result.close();
+            };
+          };
+        }),
+    );
+  await expect.poll(savedCount, { timeout: 15_000 }).toBe(3);
+
+  // Opened again: from the saved images, no PDF drawing.
+  const rail = page.getByRole("navigation", { name: "Main" });
+  await rail.getByRole("link", { name: "Settings" }).click();
+  await page.getByLabel(/Show diagnostics/).check();
+  await rail.getByRole("link", { name: "Inspections" }).click();
+  const panel = page.getByTestId("diagnostics");
+  await expect(panel).toContainText("from saved image");
+  await expect(panel).not.toContainText("Preview");
+  await expect(
+    page.locator('[data-testid="drawing-viewer"][data-ready="true"]'),
+  ).toBeVisible();
+});

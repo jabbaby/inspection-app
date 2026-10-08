@@ -21,10 +21,14 @@ export interface RenderStat {
   pixels: number;
   /** How long pdf.js took (until now, while drawing). */
   ms: number;
-  /** "kept": the image was kept from earlier, nothing drawn. */
-  state: "drawing" | "done" | "cancelled" | "failed" | "kept";
+  /**
+   * "kept": kept in memory from earlier; "saved": shown from its saved
+   * image (no PDF drawing).
+   */
+  state: "drawing" | "done" | "cancelled" | "failed" | "kept" | "saved";
   /** When it started (performance.now()). */
   started: number;
+  kind: Activity;
 }
 
 export interface PageStat {
@@ -54,6 +58,8 @@ export interface ScrollStat {
   worstMs: number;
   /** Share of its frames during which a page was being drawn (0..1). */
   drawingShare: number;
+  /** What was busy around the worst frame ("" for nothing). */
+  worstDuring: string;
 }
 
 export interface DiagnosticsState {
@@ -111,8 +117,40 @@ export function pageStat(
   return stat;
 }
 
-/** Page drawings in progress (to see whether they coincide with scrolling). */
-let drawing = 0;
+/**
+ * What can be busy while the document scrolls, to find what a long frame
+ * coincided with (step 10b).
+ */
+export type Activity =
+  "preview" | "base" | "sharp" | "saved image" | "saving" | "background";
+
+const busy = new Map<Activity, number>();
+/** Activities that ended since the last frame (a long one may be theirs). */
+const endedSinceFrame = new Set<Activity>();
+
+export function beginActivity(kind: Activity) {
+  busy.set(kind, (busy.get(kind) ?? 0) + 1);
+}
+
+export function endActivity(kind: Activity) {
+  busy.set(kind, Math.max(0, (busy.get(kind) ?? 0) - 1));
+  endedSinceFrame.add(kind);
+}
+
+function anyBusy() {
+  for (const n of busy.values()) if (n > 0) return true;
+  return false;
+}
+
+/** What is busy now or ended since the last frame, e.g. "2 base, saving". */
+function busySummary(): string {
+  const parts: string[] = [];
+  for (const [kind, n] of busy)
+    if (n > 0) parts.push(n > 1 ? `${n} ${kind}` : kind);
+  for (const kind of endedSinceFrame)
+    if (!busy.get(kind)) parts.push(`${kind} ending`);
+  return parts.join(", ");
+}
 
 /** A render starting now (or, `kept`, an image kept from earlier). */
 export function startRender(
@@ -120,34 +158,27 @@ export function startRender(
   wanted: number,
   limit: RenderStat["limit"],
   pixels: number,
+  kind: Activity,
   kept = false,
 ): RenderStat {
-  if (kept)
-    return {
-      scale,
-      wanted,
-      limit,
-      pixels,
-      ms: 0,
-      state: "kept",
-      started: performance.now(),
-    };
-  drawing += 1;
-  return {
+  const stat: RenderStat = {
     scale,
     wanted,
     limit,
     pixels,
     ms: 0,
-    state: "drawing",
+    state: kept ? "kept" : "drawing",
     started: performance.now(),
+    kind,
   };
+  if (!kept) beginActivity(kind);
+  return stat;
 }
 
 /** Marks a render finished (or cancelled, or failed). */
 export function endRender(stat: RenderStat, state: RenderStat["state"]) {
   if (stat.state !== "drawing") return;
-  drawing = Math.max(0, drawing - 1);
+  endActivity(stat.kind);
   stat.state = state;
   stat.ms = performance.now() - stat.started;
 }
@@ -163,17 +194,28 @@ let scrolling: {
   lastEvent: number;
   frames: number;
   worst: number;
+  worstDuring: string;
   /** Frames during which a page was being drawn. */
   busy: number;
+  /** What was busy at the last frame. */
+  lastBusy: string;
 } | null = null;
 
 function scrollFrame(now: number) {
   const s = scrolling;
   if (!s) return;
-  s.worst = Math.max(s.worst, now - s.last);
+  const nowBusy = busySummary();
+  endedSinceFrame.clear();
+  if (now - s.last > s.worst) {
+    s.worst = now - s.last;
+    s.worstDuring = [...new Set([s.lastBusy, nowBusy].join(", ").split(", "))]
+      .filter(Boolean)
+      .join(", ");
+  }
+  s.lastBusy = nowBusy;
   s.last = now;
   s.frames += 1;
-  if (drawing > 0) s.busy += 1;
+  if (anyBusy()) s.busy += 1;
   if (now - s.lastEvent > SCROLL_END_MS) {
     // Over: the frames up to the last scroll event.
     const seconds = (s.lastEvent - s.start) / 1000;
@@ -183,6 +225,7 @@ function scrollFrame(now: number) {
         fps: s.frames / ((now - s.start) / 1000),
         worstMs: s.worst,
         drawingShare: s.frames ? s.busy / s.frames : 0,
+        worstDuring: s.worstDuring,
       };
     scrolling = null;
     return;
@@ -204,7 +247,9 @@ export function noteScroll() {
     lastEvent: now,
     frames: 0,
     worst: 0,
+    worstDuring: "",
     busy: 0,
+    lastBusy: busySummary(),
   };
   requestAnimationFrame(scrollFrame);
 }

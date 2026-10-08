@@ -48,7 +48,9 @@ function renderLine(
       ? `drawing ${ms(now - r.started)}`
       : r.state === "kept"
         ? "kept from earlier"
-        : ms(r.ms);
+        : r.state === "saved"
+          ? `from saved image · ${ms(r.ms)}`
+          : ms(r.ms);
   const state =
     r.state === "failed"
       ? " · FAILED"
@@ -107,7 +109,7 @@ export function diagnosticsReport(
   const scroll = state.scroll;
   lines.push({
     text: scroll
-      ? `Scroll last ${scroll.seconds.toFixed(1)} s · ${Math.round(scroll.fps)} fps · worst frame ${ms(scroll.worstMs)} · pages drawing ${Math.round(scroll.drawingShare * 100)}% of it`
+      ? `Scroll last ${scroll.seconds.toFixed(1)} s · ${Math.round(scroll.fps)} fps · worst frame ${ms(scroll.worstMs)}${scroll.worstDuring ? ` (during ${scroll.worstDuring})` : ""} · pages drawing ${Math.round(scroll.drawingShare * 100)}% of it`
       : "Scroll not measured yet (scroll the drawing)",
     tone:
       scroll && (scroll.fps < 45 || scroll.worstMs > 50) ? "warn" : undefined,

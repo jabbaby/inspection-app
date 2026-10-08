@@ -77,6 +77,28 @@ describe("page drawing queue", () => {
     expect(order).toEqual(["first", "cancel first", "second"]);
   });
 
+  it("pauses background work for a page on screen, then runs it again", async () => {
+    const order: string[] = [];
+    const finish = new Map<string, () => void>();
+    const job = (name: string) => (done: () => void) => {
+      order.push(name);
+      finish.set(name, done);
+      return () => order.push(`pause ${name}`);
+    };
+    queuePageDrawing(2, job("background"));
+    await tick();
+    queuePageDrawing(0, job("visible"));
+    expect(order).toEqual(["background", "pause background"]);
+    await tick();
+    expect(order).toEqual(["background", "pause background", "visible"]);
+    // The paused run ending late changes nothing.
+    finish.get("background")!();
+    expect(order.at(-1)).toBe("visible");
+    finish.get("visible")!();
+    expect(order.at(-1)).toBe("background");
+    finish.get("background")!();
+  });
+
   it("drops a waiting drawing that's cancelled before it starts", async () => {
     const order: string[] = [];
     let finishFirst = () => {};
