@@ -4777,3 +4777,8 @@ h1 {
 .diagnostics li.tone-bad {
   color: #f09595;
 }
+
+/* Settings cards with several switches (Drawing): space between them. */
+.settings-card .checkbox.switch + .checkbox.switch {
+  margin-top: var(--space-4);
+}

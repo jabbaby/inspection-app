@@ -3,6 +3,7 @@ import {
   Database,
   Info,
   MessageSquareText,
+  PenLine,
   ShieldAlert,
   ShieldCheck,
   Signature,
@@ -38,6 +39,7 @@ const SECTIONS = [
     label: "Prefilled messages",
     Icon: MessageSquareText,
   },
+  { id: "drawing", label: "Drawing", Icon: PenLine },
   { id: "storage", label: "Storage and backup", Icon: Database },
   { id: "about", label: "About", Icon: Info },
 ];
