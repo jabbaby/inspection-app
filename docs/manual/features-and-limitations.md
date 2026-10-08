@@ -111,7 +111,7 @@ These are the known limits of the proof of concept, stated plainly so they can b
 ## Performance
 
 - **Large real drawings** (many A1 sheets, large file sizes) haven't been performance-tested yet; that is the next step.
-- Scrolling slows on pages with a lot of markup.
+- Flicking fast through busy drawings, pages look soft until scrolling stops.
 
 ## Not in the proof of concept
 
@@ -140,7 +140,7 @@ The app was built by David Samson with an AI coding assistant (Anthropic's Claud
 
 # What's next
 
-- **Hardening:** offline and storage tests, performance with large real drawing sets, and smoother scrolling on heavily marked-up pages.
+- **Hardening:** offline tests, performance with large real drawing sets, and storage limits.
 - **Wider use:** decide on hosting (company server or sign-in), and whether syncing between devices is needed. Sync would need a server and accounts, and changes how data is protected.
 - **Calculators:** an AS 3600 calculators area (concrete checks, area of steel, development and lap lengths), kept separate from inspections and never in the memo.
 - **Standard details library:** searchable details that can be attached to a memo item.

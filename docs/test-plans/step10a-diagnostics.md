@@ -4,7 +4,7 @@ Device: iPad [model], iPadOS [version]
 Build/commit:
 Tester / date:
 
-Reply with the step number and what you saw (no need to edit this file). For steps 6 to 8, send the screenshot (or tap **Copy** and paste the text into chat). The panel shows page numbers and paper sizes only, never drawing names, so screenshots of a real drawing are fine to send; crop the drawing itself out if you prefer.
+Reply with the step number and what you saw (no need to edit this file). For steps 6 to 8, tap **Copy** and paste the text into chat (it holds page numbers and paper sizes only, never drawing names). Don't send screenshots of real drawings: chats stay synthetic. A screenshot cropped to the panel alone is fine.
 
 The panel
 
