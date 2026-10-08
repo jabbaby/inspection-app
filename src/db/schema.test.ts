@@ -24,6 +24,7 @@ describe("InspectionDb", () => {
       "memoTemplates",
       "memos",
       "observationBoxes",
+      "pageImages",
       "photos",
       "projects",
       "settings",

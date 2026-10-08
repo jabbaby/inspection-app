@@ -13,6 +13,7 @@ import type {
   MemoCounter,
   MemoTemplate,
   ObservationBox,
+  PageImage,
   Photo,
   Project,
   Settings,
@@ -46,6 +47,7 @@ export class InspectionDb extends Dexie {
   settings!: EntityTable<Settings, "id">;
   observationBoxes!: EntityTable<ObservationBox, "id">;
   markups!: EntityTable<Markup, "id">;
+  pageImages!: EntityTable<PageImage, "id">;
 
   constructor(name = DB_NAME) {
     super(name);
@@ -250,6 +252,10 @@ export class InspectionDb extends Dexie {
     // Slice 2: pen and highlighter marks, one record per mark.
     this.version(12).stores({
       markups: "id, inspectionId, drawingId",
+    });
+    // Step 10b: drawing pages' saved base images (PNG), shown at once.
+    this.version(13).stores({
+      pageImages: "id, drawingId",
     });
   }
 }

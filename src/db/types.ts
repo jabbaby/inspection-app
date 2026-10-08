@@ -192,6 +192,26 @@ export interface StoredBlob {
   size: number;
 }
 
+/**
+ * A drawing page's base image, saved losslessly (PNG) the first time it is
+ * drawn so it shows at once next time (step 10b; SPEC section 12). Exactly
+ * the image the viewer would draw; never in inspection files (remade after
+ * an import) and tidied away when its drawing is deleted.
+ */
+export interface PageImage {
+  /** `${drawingId}:${source}:${width}x${height}` */
+  id: string;
+  drawingId: string;
+  /** The PDF page it shows (1-based). */
+  source: number;
+  width: number;
+  height: number;
+  /** PNG bytes. */
+  data: ArrayBuffer;
+  size: number;
+  createdAt: number;
+}
+
 export type SentVia = "Aconex" | "Email";
 
 export interface Recipient {
