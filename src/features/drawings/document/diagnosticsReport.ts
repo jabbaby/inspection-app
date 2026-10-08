@@ -44,7 +44,11 @@ function renderLine(
       ? `${fixed(r.scale)} of ${fixed(r.wanted)} (${Math.round(share * 100)}%, ${r.limit ?? "less"})`
       : `${fixed(r.scale)} (as wanted)`;
   const time =
-    r.state === "drawing" ? `drawing ${ms(now - r.started)}` : ms(r.ms);
+    r.state === "drawing"
+      ? `drawing ${ms(now - r.started)}`
+      : r.state === "kept"
+        ? "kept from earlier"
+        : ms(r.ms);
   const state =
     r.state === "failed"
       ? " · FAILED"
@@ -79,11 +83,14 @@ export function diagnosticsReport(
       text: `Page ${page.number} · ${paperLabel(page.widthPt, page.heightPt)}`,
       heading: true,
     });
-    lines.push(
-      page.base
-        ? { ...renderLine("Base", page.base, now), indent: true }
-        : { text: "Base not drawn yet", indent: true },
-    );
+    if (page.base)
+      lines.push({ ...renderLine("Base", page.base, now), indent: true });
+    else if (page.preview)
+      lines.push(
+        { ...renderLine("Preview", page.preview, now), indent: true },
+        { text: "Base waits for scrolling to stop", indent: true },
+      );
+    else lines.push({ text: "Base not drawn yet", indent: true });
     lines.push(
       page.sharp
         ? { ...renderLine("Sharp", page.sharp, now), indent: true }
@@ -100,7 +107,7 @@ export function diagnosticsReport(
   const scroll = state.scroll;
   lines.push({
     text: scroll
-      ? `Scroll last ${scroll.seconds.toFixed(1)} s · ${Math.round(scroll.fps)} fps · worst frame ${ms(scroll.worstMs)}`
+      ? `Scroll last ${scroll.seconds.toFixed(1)} s · ${Math.round(scroll.fps)} fps · worst frame ${ms(scroll.worstMs)} · pages drawing ${Math.round(scroll.drawingShare * 100)}% of it`
       : "Scroll not measured yet (scroll the drawing)",
     tone:
       scroll && (scroll.fps < 45 || scroll.worstMs > 50) ? "warn" : undefined,

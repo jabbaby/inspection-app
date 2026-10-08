@@ -26,6 +26,7 @@ function state(over: Partial<DiagnosticsState> = {}): DiagnosticsState {
           widthPt: 2384,
           heightPt: 1684,
           base: render({ scale: 0.42, wanted: 0.42 }),
+          preview: null,
           sharp: render({
             scale: 1.71,
             wanted: 2.8,
@@ -37,7 +38,7 @@ function state(over: Partial<DiagnosticsState> = {}): DiagnosticsState {
       ],
     ]),
     view: { zoom: 3.2, dpr: 2, visibleKeys: ["d1:4"] },
-    scroll: { seconds: 2.1, fps: 41, worstMs: 96 },
+    scroll: { seconds: 2.1, fps: 41, worstMs: 96, drawingShare: 0.4 },
     pdfs: new Map([["d1", { ms: 1200, bytes: 18_400_000 }]]),
     errors: [],
     ...over,
@@ -65,7 +66,9 @@ describe("diagnosticsReport", () => {
     expect(lines.find((l) => l.text.startsWith("Base"))?.tone).toBe("ok");
     expect(text).toContain("Canvases 5 live · 21.3 MP total");
     expect(text).toContain("Markup 312 marks on screen · 4,820 segments");
-    expect(text).toContain("Scroll last 2.1 s · 41 fps · worst frame 96 ms");
+    expect(text).toContain(
+      "Scroll last 2.1 s · 41 fps · worst frame 96 ms · pages drawing 40% of it",
+    );
     expect(text).toContain("PDF opened 1.2 s · 18.4 MB file");
     expect(text).toContain("Errors none");
   });

@@ -10,9 +10,12 @@ import {
   startRender,
 } from "./diagnostics";
 import { visiblePart, type PageLayout } from "./documentLayout";
+import { keepPageImage, queuePageDrawing, takePageImage } from "./pageImages";
 
 // iPad Safari limits total canvas memory, and several pages can be live.
 const MAX_BASE_PIXELS = 4_000_000;
+/** A preview while scrolling: this fraction of the base's width (1/16 the pixels). */
+const PREVIEW_FRACTION = 0.25;
 
 export interface SettledView {
   /** Visible document rectangle (document units). */
@@ -31,6 +34,11 @@ interface Props {
   /** On or near the screen: render it. Otherwise release its memory. */
   active: boolean;
   view: SettledView | null;
+  /**
+   * The document is scrolling or zooming: no full-detail drawing starts
+   * (a quick preview stands in) until it stops (step 10b).
+   */
+  moving: boolean;
   overlay?: ReactNode;
   clientToNormalised: (
     clientX: number,
@@ -58,17 +66,23 @@ function clearHost(host: HTMLElement | null) {
   host?.querySelectorAll("canvas").forEach((c) => releaseCanvas(c));
 }
 
+/** The kept-images key: the page's place and the PDF page it shows. */
+const imageKey = (page: PageLayout) => `${page.key}@${page.source}`;
+
 /**
  * One page of the inspection document. Drawn in its own points inside a box
  * scaled to the document width, so overlays (the notes box) use page units.
- * Renders once at fit-width quality while active, then sharpens the visible
- * part after each gesture settles. Releases its canvases when inactive.
+ * While active it shows a quick preview, then (once scrolling stops, one
+ * page at a time, pages on screen first) its base image at fit-width
+ * quality, then sharpens the visible part after each gesture settles. Its
+ * base image is kept for a while when it goes off screen (pageImages.ts).
  */
 export function DocPage({
   page,
   doc,
   active,
   view,
+  moving,
   overlay,
   clientToNormalised,
   onRendered,
@@ -77,13 +91,16 @@ export function DocPage({
   const baseHost = useRef<HTMLDivElement>(null);
   const tileHost = useRef<HTMLDivElement>(null);
   const [proxy, setProxy] = useState<PDFPageProxy | null>(null);
-  // The pdf.js page whose base render has finished.
+  // The pdf.js page whose full base image is showing.
   const [renderedProxy, setRenderedProxy] = useState<PDFPageProxy | null>(null);
   const rendered = proxy !== null && renderedProxy === proxy;
+  /** The full base image's scale (0 while only a preview, or nothing, shows). */
   const baseScale = useRef(0);
   const onRenderedRef = useRef(onRendered);
+  const viewRef = useRef(view);
   useEffect(() => {
     onRenderedRef.current = onRendered;
+    viewRef.current = view;
   });
 
   // Fetch the pdf.js page while active.
@@ -98,26 +115,150 @@ export function DocPage({
     return () => {
       current = false;
       setProxy(null);
+      // pdf.js hands back the same page object next time: its image is
+      // gone, so it must be shown again.
+      setRenderedProxy(null);
       fetched?.cleanup();
     };
   }, [active, doc, page.source]);
 
   const fitQuality = view?.fitDevicePxPerDocUnit ?? 0;
 
-  // Base render at fit-width quality.
-  useEffect(() => {
-    if (!proxy || !fitQuality) return;
+  /** The base image's scale for this page, and what it wanted. */
+  function baseTarget(quality: number) {
     const area = page.size.width * page.size.height;
-    const wanted = fitQuality * page.scale;
-    const scale = Math.min(wanted, Math.sqrt(MAX_BASE_PIXELS / area));
+    const wanted = quality * page.scale;
+    return {
+      wanted,
+      scale: Math.min(wanted, Math.sqrt(MAX_BASE_PIXELS / area)),
+    };
+  }
+
+  /** Shows a finished full base image (replacing any preview). */
+  function showBase(
+    canvas: HTMLCanvasElement,
+    scale: number,
+    shown: PDFPageProxy,
+  ) {
+    clearHost(baseHost.current);
+    baseHost.current?.appendChild(canvas);
+    baseScale.current = scale;
+    setRenderedProxy(shown);
+    onRenderedRef.current(page.key);
+  }
+
+  // The full base image at fit-width quality: kept from earlier if it can
+  // be, else drawn once the document stops moving, one page at a time.
+  useEffect(() => {
+    if (!proxy || !fitQuality || rendered) return;
+    const { wanted, scale } = baseTarget(fitQuality);
+    const limit = scale < wanted * 0.999 ? "cap" : null;
+    const stat = pageStat(
+      page.key,
+      page.drawingId,
+      page.number,
+      page.size.width,
+      page.size.height,
+    );
+    const kept = takePageImage(imageKey(page), scale);
+    if (kept) {
+      stat.base = startRender(
+        scale,
+        wanted,
+        limit,
+        kept.width * kept.height,
+        true,
+      );
+      // Shown straight after this effect; the preview needn't start.
+      baseScale.current = scale;
+      let current = true;
+      queueMicrotask(() => {
+        if (current) showBase(kept, scale, proxy);
+        else keepPageImage(imageKey(page), kept, scale);
+      });
+      return () => {
+        current = false;
+      };
+    }
+    if (moving) return;
+    // Pages on screen first, then the ones just off it.
+    const onScreen =
+      viewRef.current && visiblePart(page, viewRef.current.docRect) !== null;
+    let task: RenderTask | null = null;
+    let current = true;
+    const cancelQueued = queuePageDrawing(onScreen ? 0 : 1, (done) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(page.size.width * scale);
+      canvas.height = Math.round(page.size.height * scale);
+      canvas.className = "viewer-base";
+      const diag = startRender(
+        scale,
+        wanted,
+        limit,
+        canvas.width * canvas.height,
+      );
+      stat.base = diag;
+      const t = proxy.render({
+        canvas,
+        viewport: proxy.getViewport({ scale }),
+      });
+      task = t;
+      t.promise.then(
+        () => {
+          endRender(diag, "done");
+          done();
+          if (!current) return releaseCanvas(canvas);
+          showBase(canvas, scale, proxy);
+        },
+        (error: unknown) => {
+          done();
+          releaseCanvas(canvas);
+          if (isCancel(error)) return endRender(diag, "cancelled");
+          endRender(diag, "failed");
+          recordError(`Page ${page.number} render failed`, error);
+          console.error("Page render failed", error);
+        },
+      );
+      return () => t.cancel();
+    });
+    // A pinch pauses drawing too; the next settled view starts it again.
+    const unregister = registerRender(() => cancelQueued());
+    return () => {
+      current = false;
+      unregister();
+      cancelQueued();
+      task?.cancel();
+    };
+    // Re-render only when the page, its quality target or motion changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    proxy,
+    fitQuality,
+    moving,
+    rendered,
+    page.key,
+    page.source,
+    page.scale,
+    page.size.width,
+    page.size.height,
+    page.drawingId,
+    page.number,
+  ]);
+
+  // A quick low-detail preview until the full base image is ready, so a
+  // page coming on screen mid-scroll isn't blank (step 10b).
+  useEffect(() => {
+    if (!proxy || !fitQuality || baseScale.current > 0) return;
+    const { wanted, scale: full } = baseTarget(fitQuality);
+    const scale = full * PREVIEW_FRACTION;
     const canvas = document.createElement("canvas");
-    canvas.width = Math.round(page.size.width * scale);
-    canvas.height = Math.round(page.size.height * scale);
-    canvas.className = "viewer-base";
+    canvas.width = Math.max(1, Math.round(page.size.width * scale));
+    canvas.height = Math.max(1, Math.round(page.size.height * scale));
+    canvas.className = "viewer-base viewer-preview";
     const diag = startRender(
       scale,
       wanted,
-      scale < wanted * 0.999 ? "cap" : null,
+      "preview",
       canvas.width * canvas.height,
     );
     pageStat(
@@ -126,7 +267,7 @@ export function DocPage({
       page.number,
       page.size.width,
       page.size.height,
-    ).base = diag;
+    ).preview = diag;
     const task = proxy.render({
       canvas,
       viewport: proxy.getViewport({ scale }),
@@ -135,26 +276,23 @@ export function DocPage({
     task.promise.then(
       () => {
         endRender(diag, "done");
-        if (!current) return releaseCanvas(canvas);
+        // Not over a full image that arrived first.
+        if (!current || baseScale.current > 0) return releaseCanvas(canvas);
         clearHost(baseHost.current);
         baseHost.current?.appendChild(canvas);
-        baseScale.current = scale;
-        setRenderedProxy(proxy);
-        onRenderedRef.current(page.key);
       },
       (error: unknown) => {
         releaseCanvas(canvas);
         if (isCancel(error)) return endRender(diag, "cancelled");
         endRender(diag, "failed");
-        recordError(`Page ${page.number} render failed`, error);
-        console.error("Page render failed", error);
+        recordError(`Page ${page.number} preview failed`, error);
       },
     );
     return () => {
       current = false;
       task.cancel();
     };
-    // Re-render only when the page or its quality target changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     proxy,
     fitQuality,
@@ -162,17 +300,22 @@ export function DocPage({
     page.scale,
     page.size.width,
     page.size.height,
-    page.drawingId,
-    page.number,
   ]);
 
-  // Release everything when the page goes inactive or unmounts.
+  // Off screen: keep the full base image a while (pageImages.ts) and let
+  // the rest go. Unmounting lets everything go.
   useEffect(() => {
     if (active) return;
+    const base = baseHost.current?.querySelector<HTMLCanvasElement>(
+      "canvas.viewer-base:not(.viewer-preview)",
+    );
+    if (base && baseScale.current > 0)
+      keepPageImage(imageKey(page), base, baseScale.current);
     clearHost(baseHost.current);
     clearHost(tileHost.current);
     baseScale.current = 0;
     diagnostics.pages.delete(page.key);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, page.key]);
   useEffect(() => {
     const base = baseHost.current;

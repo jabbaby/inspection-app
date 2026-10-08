@@ -46,6 +46,7 @@ import { isInkTool, type DocMark, type ViewerTool } from "../../markup/tools";
 import { DocPage, type SettledView } from "./DocPage";
 import { DiagnosticsPanel } from "./DiagnosticsPanel";
 import { diagnostics, noteScroll } from "./diagnostics";
+import { clearPageImages } from "./pageImages";
 import { DOUBLE_TAP_MS, DOUBLE_TAP_SLOP } from "./gestures";
 import { PinchSnapshot } from "./pinchSnapshot";
 import {
@@ -337,6 +338,9 @@ export function DocumentViewer(props: Props) {
   }, []);
   const [activeKeys, setActiveKeys] = useState<Set<string>>(() => new Set());
   const [settled, setSettled] = useState<SettledView | null>(null);
+  /** Scrolling or zooming: pages hold off full-detail drawing (step 10b). */
+  const [moving, setMoving] = useState(false);
+  const movingRef = useRef(false);
   const [renderedKeys, setRenderedKeys] = useState<Set<string>>(
     () => new Set(),
   );
@@ -469,6 +473,8 @@ export function DocumentViewer(props: Props) {
   }
 
   function settle() {
+    movingRef.current = false;
+    setMoving(false);
     const t = transform.current;
     const { top, bottom } = visibleDocRange(t);
     const dpr = window.devicePixelRatio || 1;
@@ -509,6 +515,10 @@ export function DocumentViewer(props: Props) {
 
   /** Reads the view from the scroll position (the browser keeps it in range). */
   function readScroll() {
+    if (!movingRef.current) {
+      movingRef.current = true;
+      setMoving(true);
+    }
     currentTransform();
     requestLayout();
     window.clearTimeout(settleTimer.current);
@@ -705,6 +715,8 @@ export function DocumentViewer(props: Props) {
       window.clearTimeout(settleTimer.current);
       cancelAnimationFrame(frame.current);
       window.clearTimeout(visiblePinsTimer.current);
+      // Pages' kept images (pageImages.ts) go with the drawings screen.
+      clearPageImages();
     },
     [],
   );
@@ -2242,6 +2254,7 @@ export function DocumentViewer(props: Props) {
                 doc={docs.get(page.drawingId)}
                 active={activeKeys.has(page.key)}
                 view={settled}
+                moving={moving}
                 overlay={
                   activeKeys.has(page.key)
                     ? props.renderPageOverlay(page)

@@ -12,13 +12,17 @@ export interface RenderStat {
   scale: number;
   /** The scale the view asked for. */
   wanted: number;
-  /** Why it got less: the base image's pixel cap, or the sharp budget. */
-  limit: "cap" | "budget" | null;
+  /**
+   * Why it got less: the base image's pixel cap, the sharp budget, or a
+   * quick preview while scrolling.
+   */
+  limit: "cap" | "budget" | "preview" | null;
   /** Canvas pixels. */
   pixels: number;
   /** How long pdf.js took (until now, while drawing). */
   ms: number;
-  state: "drawing" | "done" | "cancelled" | "failed";
+  /** "kept": the image was kept from earlier, nothing drawn. */
+  state: "drawing" | "done" | "cancelled" | "failed" | "kept";
   /** When it started (performance.now()). */
   started: number;
 }
@@ -30,6 +34,8 @@ export interface PageStat {
   widthPt: number;
   heightPt: number;
   base: RenderStat | null;
+  /** The quick low-detail image shown until the base is drawn. */
+  preview: RenderStat | null;
   /** The sharp render of the visible part; null when the base is enough. */
   sharp: RenderStat | null;
 }
@@ -46,6 +52,8 @@ export interface ScrollStat {
   seconds: number;
   fps: number;
   worstMs: number;
+  /** Share of its frames during which a page was being drawn (0..1). */
+  drawingShare: number;
 }
 
 export interface DiagnosticsState {
@@ -88,20 +96,43 @@ export function pageStat(
 ): PageStat {
   let stat = diagnostics.pages.get(key);
   if (!stat) {
-    stat = { drawingId, number, widthPt, heightPt, base: null, sharp: null };
+    stat = {
+      drawingId,
+      number,
+      widthPt,
+      heightPt,
+      base: null,
+      preview: null,
+      sharp: null,
+    };
     diagnostics.pages.set(key, stat);
   }
   stat.number = number;
   return stat;
 }
 
-/** A render starting now. */
+/** Page drawings in progress (to see whether they coincide with scrolling). */
+let drawing = 0;
+
+/** A render starting now (or, `kept`, an image kept from earlier). */
 export function startRender(
   scale: number,
   wanted: number,
   limit: RenderStat["limit"],
   pixels: number,
+  kept = false,
 ): RenderStat {
+  if (kept)
+    return {
+      scale,
+      wanted,
+      limit,
+      pixels,
+      ms: 0,
+      state: "kept",
+      started: performance.now(),
+    };
+  drawing += 1;
   return {
     scale,
     wanted,
@@ -115,6 +146,8 @@ export function startRender(
 
 /** Marks a render finished (or cancelled, or failed). */
 export function endRender(stat: RenderStat, state: RenderStat["state"]) {
+  if (stat.state !== "drawing") return;
+  drawing = Math.max(0, drawing - 1);
   stat.state = state;
   stat.ms = performance.now() - stat.started;
 }
@@ -130,6 +163,8 @@ let scrolling: {
   lastEvent: number;
   frames: number;
   worst: number;
+  /** Frames during which a page was being drawn. */
+  busy: number;
 } | null = null;
 
 function scrollFrame(now: number) {
@@ -138,6 +173,7 @@ function scrollFrame(now: number) {
   s.worst = Math.max(s.worst, now - s.last);
   s.last = now;
   s.frames += 1;
+  if (drawing > 0) s.busy += 1;
   if (now - s.lastEvent > SCROLL_END_MS) {
     // Over: the frames up to the last scroll event.
     const seconds = (s.lastEvent - s.start) / 1000;
@@ -146,6 +182,7 @@ function scrollFrame(now: number) {
         seconds,
         fps: s.frames / ((now - s.start) / 1000),
         worstMs: s.worst,
+        drawingShare: s.frames ? s.busy / s.frames : 0,
       };
     scrolling = null;
     return;
@@ -161,6 +198,13 @@ export function noteScroll() {
     scrolling.lastEvent = now;
     return;
   }
-  scrolling = { start: now, last: now, lastEvent: now, frames: 0, worst: 0 };
+  scrolling = {
+    start: now,
+    last: now,
+    lastEvent: now,
+    frames: 0,
+    worst: 0,
+    busy: 0,
+  };
   requestAnimationFrame(scrollFrame);
 }
