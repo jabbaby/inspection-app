@@ -111,7 +111,7 @@ These are the known limits of the proof of concept, stated plainly so they can b
 ## Performance
 
 - **Large real drawings** (many A1 sheets, large file sizes) haven't been performance-tested yet; that is the next step.
-- Flicking fast through busy drawings, pages look soft until scrolling stops.
+- First time through a busy set, pages look soft while flicking; then they're saved images.
 
 ## Not in the proof of concept
 

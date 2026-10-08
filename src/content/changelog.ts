@@ -21,7 +21,7 @@ export const CHANGELOG: { version: string; date: string; items: string[] }[] = [
       "Hold and drag: the arrowhead stays on the spot pressed and the pin or text box follows your finger",
       "Project badges show one letter; Settings warns not to remove the app from the home screen",
       "Diagnostics panel for the drawings (Settings, Drawing), to measure performance on the iPad",
-      "Smoother scrolling through busy drawings: pages sharpen when scrolling stops, and pages just viewed come back at once",
+      "Smoother scrolling through busy drawings: each page is saved as an image the first time it's drawn, so it appears at once after that",
     ],
   },
   {
