@@ -7,6 +7,8 @@
  * are kept so scrolling back doesn't draw them again.
  */
 
+import type { Rect } from "../viewer/viewTransform";
+
 // --- recently shown pages' images ------------------------------------------
 
 /** Canvas pixels kept for pages that went off screen (about four A1 pages). */
@@ -165,4 +167,50 @@ export function baseTarget(
     width: Math.round(size.width * scale),
     height: Math.round(size.height * scale),
   };
+}
+
+/** Device pixels for the sharp images of the pages on screen, shared. */
+export const SHARP_BUDGET = 12_000_000;
+
+/** Whether `outer` contains `inner` (page units). */
+export function covers(outer: Rect, inner: Rect) {
+  const e = 0.5;
+  return (
+    outer.x <= inner.x + e &&
+    outer.y <= inner.y + e &&
+    outer.x + outer.width >= inner.x + inner.width - e &&
+    outer.y + outer.height >= inner.y + inner.height - e
+  );
+}
+
+/**
+ * The sharp image for the visible part of a page: as detailed as wanted
+ * (within the budget), covering a margin of up to half the view on each
+ * side so small scrolls stay sharp; the margin shrinks before the detail.
+ */
+export function sharpTarget(
+  page: { width: number; height: number },
+  part: Rect,
+  wanted: number,
+  budget: number,
+): { rect: Rect; scale: number } {
+  const around = (margin: number): Rect => {
+    const mx = part.width * margin;
+    const my = part.height * margin;
+    const x = Math.max(0, part.x - mx);
+    const y = Math.max(0, part.y - my);
+    return {
+      x,
+      y,
+      width: Math.min(page.width, part.x + part.width + mx) - x,
+      height: Math.min(page.height, part.y + part.height + my) - y,
+    };
+  };
+  for (const margin of [0.5, 0.25, 0.1, 0]) {
+    const rect = around(margin);
+    if (rect.width * rect.height * wanted * wanted <= budget)
+      return { rect, scale: wanted };
+  }
+  const rect = around(0);
+  return { rect, scale: Math.sqrt(budget / (rect.width * rect.height)) };
 }

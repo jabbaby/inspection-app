@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
   clearPageImages,
+  covers,
+  sharpTarget,
   keepPageImage,
   queuePageDrawing,
   takePageImage,
@@ -115,5 +117,39 @@ describe("page drawing queue", () => {
     cancelSecond();
     finishFirst();
     expect(order).toEqual(["first"]);
+  });
+});
+
+describe("sharp image area", () => {
+  // A B1 sheet in points, a quarter of it on screen.
+  const page = { width: 2835, height: 2004 };
+  const part = { x: 1000, y: 700, width: 700, height: 500 };
+
+  it("covers half a view round what's on screen when the budget allows", () => {
+    const { rect, scale } = sharpTarget(page, part, 2, 12_000_000);
+    expect(scale).toBe(2);
+    expect(rect).toEqual({ x: 650, y: 450, width: 1400, height: 1000 });
+    expect(covers(rect, part)).toBe(true);
+  });
+
+  it("gives up margin before detail", () => {
+    // 3 MP at 2 px/pt allows 750,000 pt²: half a view (1400 x 1000) and a
+    // quarter (1050 x 750) are too big; a tenth (840 x 600) fits.
+    const { rect, scale } = sharpTarget(page, part, 2, 3_000_000);
+    expect(scale).toBe(2);
+    expect(rect.width).toBeCloseTo(840);
+  });
+
+  it("lowers the detail only when even the view alone is too big", () => {
+    const { rect, scale } = sharpTarget(page, part, 4, 2_000_000);
+    expect(rect).toEqual(part);
+    expect(scale).toBeCloseTo(Math.sqrt(2_000_000 / (700 * 500)));
+  });
+
+  it("stays within the page", () => {
+    const corner = { x: 0, y: 0, width: 700, height: 500 };
+    const { rect } = sharpTarget(page, corner, 1, 12_000_000);
+    expect(rect.x).toBe(0);
+    expect(rect.y).toBe(0);
   });
 });

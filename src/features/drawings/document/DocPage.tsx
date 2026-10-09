@@ -11,9 +11,12 @@ import {
 } from "./diagnostics";
 import { visiblePart, type PageLayout } from "./documentLayout";
 import {
+  SHARP_BUDGET,
   baseTarget,
+  covers,
   keepPageImage,
   queuePageDrawing,
+  sharpTarget,
   takePageImage,
 } from "./pageImages";
 import { loadSavedPage, savePageSoon } from "./savedPages";
@@ -374,96 +377,108 @@ export function DocPage({
     };
   }, [page.key]);
 
-  // Sharpen the visible part after each gesture settles.
-  const tileTask = useRef<RenderTask | null>(null);
+  // Sharpen the visible part once the view settles (step 10b, from the
+  // iPad diagnostics: a busy B1 sheet took over 4 s, and redrawing on every
+  // settle, alongside scrolling, froze frames for seconds and kept it
+  // soft). The sharp image covers a margin round the view and is kept
+  // while it still covers what's on screen at the right detail; it is drawn
+  // one page at a time, never while the document moves.
+  const shownTile = useRef<{ rect: Rect; scale: number } | null>(null);
   useEffect(() => {
-    tileTask.current?.cancel();
     if (!proxy || !view || !rendered) return;
-    const part = visiblePart(page, view.docRect);
-    const wanted = view.devicePxPerDocUnit * page.scale;
-    let scale = wanted;
-    if (!part || scale <= baseScale.current * 1.1) {
-      clearHost(tileHost.current);
-      pageStat(
-        page.key,
-        page.drawingId,
-        page.number,
-        page.size.width,
-        page.size.height,
-      ).sharp = null;
-      return;
-    }
-    const pad = 40 / (view.devicePxPerDocUnit * page.scale);
-    const rect: Rect = {
-      x: Math.max(0, part.x - pad),
-      y: Math.max(0, part.y - pad),
-      width: 0,
-      height: 0,
-    };
-    rect.width = Math.min(page.size.width, part.x + part.width + pad) - rect.x;
-    rect.height =
-      Math.min(page.size.height, part.y + part.height + pad) - rect.y;
-    const budget = 12_000_000 / Math.max(1, view.visibleCount);
-    const area = rect.width * rect.height;
-    if (area * scale * scale > budget) scale = Math.sqrt(budget / area);
-
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.ceil(rect.width * scale);
-    canvas.height = Math.ceil(rect.height * scale);
-    const diag = startRender(
-      scale,
-      wanted,
-      scale < wanted * 0.999 ? "budget" : null,
-      canvas.width * canvas.height,
-      "sharp",
-    );
-    pageStat(
+    const stat = pageStat(
       page.key,
       page.drawingId,
       page.number,
       page.size.width,
       page.size.height,
-    ).sharp = diag;
-    Object.assign(canvas.style, {
-      left: `${rect.x}px`,
-      top: `${rect.y}px`,
-      width: `${rect.width}px`,
-      height: `${rect.height}px`,
-    });
-    const task = proxy.render({
-      canvas,
-      viewport: proxy.getViewport({
-        scale,
-        offsetX: -rect.x * scale,
-        offsetY: -rect.y * scale,
-      }),
-    });
-    tileTask.current = task;
-    // A pinch cancels it; the next settled view draws it again.
-    const unregister = registerRender(() => task.cancel());
-    task.promise.then(
-      () => {
-        unregister();
-        endRender(diag, "done");
-        if (tileTask.current !== task) return releaseCanvas(canvas);
-        clearHost(tileHost.current);
-        tileHost.current?.appendChild(canvas);
-        tileTask.current = null;
-      },
-      (error: unknown) => {
-        unregister();
-        releaseCanvas(canvas);
-        if (isCancel(error)) return endRender(diag, "cancelled");
-        endRender(diag, "failed");
-        recordError(`Page ${page.number} sharp render failed`, error);
-        console.error("Tile render failed", error);
-      },
     );
+    const part = visiblePart(page, view.docRect);
+    const wanted = view.devicePxPerDocUnit * page.scale;
+    if (!part || wanted <= baseScale.current * 1.1) {
+      if (!moving) {
+        clearHost(tileHost.current);
+        shownTile.current = null;
+        stat.sharp = null;
+      }
+      return;
+    }
+    const budget = SHARP_BUDGET / Math.max(1, view.visibleCount);
+    const target = sharpTarget(page.size, part, wanted, budget);
+    // Still good: nothing to draw.
+    const shown = shownTile.current;
+    if (
+      shown &&
+      Math.abs(shown.scale - target.scale) <= target.scale * 0.02 &&
+      covers(shown.rect, part)
+    )
+      return;
+    if (moving) return;
+    const { rect, scale } = target;
+    // On screen: before off-screen base drawing and background saving.
+    let task: RenderTask | null = null;
+    let current = true;
+    const cancelQueued = queuePageDrawing(0, (done) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.ceil(rect.width * scale);
+      canvas.height = Math.ceil(rect.height * scale);
+      const diag = startRender(
+        scale,
+        wanted,
+        scale < wanted * 0.999 ? "budget" : null,
+        canvas.width * canvas.height,
+        "sharp",
+      );
+      stat.sharp = diag;
+      Object.assign(canvas.style, {
+        left: `${rect.x}px`,
+        top: `${rect.y}px`,
+        width: `${rect.width}px`,
+        height: `${rect.height}px`,
+      });
+      const t = proxy.render({
+        canvas,
+        viewport: proxy.getViewport({
+          scale,
+          offsetX: -rect.x * scale,
+          offsetY: -rect.y * scale,
+        }),
+      });
+      task = t;
+      t.promise.then(
+        () => {
+          endRender(diag, "done");
+          done();
+          if (!current) return releaseCanvas(canvas);
+          clearHost(tileHost.current);
+          tileHost.current?.appendChild(canvas);
+          shownTile.current = { rect, scale };
+        },
+        (error: unknown) => {
+          done();
+          releaseCanvas(canvas);
+          if (isCancel(error)) return endRender(diag, "cancelled");
+          endRender(diag, "failed");
+          recordError(`Page ${page.number} sharp render failed`, error);
+          console.error("Tile render failed", error);
+        },
+      );
+      return () => t.cancel();
+    });
+    // A pinch cancels it; the next settled view draws it again.
+    const unregister = registerRender(() => cancelQueued());
     return () => {
+      current = false;
       unregister();
-      task.cancel();
+      cancelQueued();
+      task?.cancel();
     };
-  }, [proxy, view, rendered, page, registerRender]);
+  }, [proxy, view, moving, rendered, page, registerRender]);
+
+  // Off screen, its sharp image went with the page's canvases.
+  useEffect(() => {
+    if (!active) shownTile.current = null;
+  }, [active]);
 
   const coords = useMemo<ViewerCoords>(
     () => ({ pageSize: page.size, clientToNormalised }),
