@@ -30,7 +30,7 @@ Reply with the step number and what you saw (no need to edit this file).
 13. **Settings.** Settings › Storage and backup: **Back up all (N inspections)** prepares one file per inspection, then **Share N files…**: Save to Files into a folder. Every inspection then counts as backed up.
 
 ## Desktop
-14. **Move to desktop.** Open the app on a desktop browser (https://jabbaby.github.io/inspection-app/), **Import inspection…** the file from iCloud Drive: it opens with drawings, pins and the memo. **Export PDF** works there too.
+14. **Move to desktop.** Open the app on a desktop browser (https://nhardhat.github.io/inspection-app/), **Import inspection…** the file from iCloud Drive: it opens with drawings, pins and the memo. **Export PDF** works there too.
 15. **Back to the iPad.** On the desktop, edit something, **Back up now** (it downloads), get the file to the iPad (iCloud Drive) and import it with **Replace**.
 
 ## Offline

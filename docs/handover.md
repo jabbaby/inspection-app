@@ -3,7 +3,7 @@
 You're picking up an in-progress build. Read CLAUDE.md, then SPEC.md (source of truth), then docs/decisions/log.md before doing anything.
 
 PROJECT
-- **Northrop Hardhat** (renamed 2026-10-07 from "Site Inspection Companion"; "Hardhat" under the home-screen icon): an offline-first iPad PWA for a structural engineer's site inspections at Northrop. Repo: C:\Users\dsamson\Desktop\CODING\inspection-app, remote github.com/jabbaby/inspection-app (public). Every push to main runs CI (typecheck, lint, format, unit, e2e, build) and deploys to GitHub Pages at https://jabbaby.github.io/inspection-app/
+- **Northrop Hardhat** (renamed 2026-10-07 from "Site Inspection Companion"; "Hardhat" under the home-screen icon): an offline-first iPad PWA for a structural engineer's site inspections at Northrop. Repo: C:\Users\dsamson\Desktop\CODING\inspection-app, remote github.com/nhardhat/inspection-app (public). Every push to main runs CI (typecheck, lint, format, unit, e2e, build) and deploys to GitHub Pages at https://nhardhat.github.io/inspection-app/
 - Stack: React 19 + TypeScript + Vite, vite-plugin-pwa, Dexie (IndexedDB, schema v12), pdfjs-dist (viewer, thumbnails, memo preview, Dashboard thumbnail, the in-app PDF viewer), pdf-lib (memo PDF, export, the manual PDFs), lucide-react (icons, bundled), Vitest, Playwright (iPad Pro 11 viewport; WebKit, plus Chromium for @offline tests).
 - Version 0.2.0 (package.json; bumped per milestone, with an entry in src/content/changelog.ts). The app shows "Version 0.2.0 (<commit>)" on the Dashboard, in Settings and in About; the commit identifies a build.
 - Local git identity is set (noreply 310427615+jabbaby@users.noreply.github.com). End commit messages with: Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
